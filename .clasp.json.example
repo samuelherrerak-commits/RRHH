@@ -1,0 +1,12 @@
+{
+  "scriptId": "PEGA_AQUI_EL_ID_DEL_SCRIPT",
+  "rootDir": ".",
+  "filePushOrder": [
+    "core/calculo.js",
+    "core/empleados.js",
+    "core/prestaciones.js",
+    "core/exportes.js",
+    "core/servicio.js",
+    "apps-script/Code.gs"
+  ]
+}

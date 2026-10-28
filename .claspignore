@@ -1,0 +1,5 @@
+**/**
+!appsscript.json
+!apps-script/appsscript.json
+!apps-script/Code.gs
+!core/*.js
