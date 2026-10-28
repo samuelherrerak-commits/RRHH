@@ -1,0 +1,11 @@
+{
+  "name": "rrhh-prosein",
+  "private": true,
+  "description": "Sistema de RRHH Prosein / Austral: aporte trimestral al fideicomiso y portal del trabajador. El cálculo vive en core/ y lo usan el servidor, el navegador y las pruebas.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
