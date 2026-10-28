@@ -75,6 +75,7 @@ test('flujo completo del anticipo: solicitar → aprobar → archivo TIPO T 5 �
   const arch = S.generarArchivoAnticipos(repo, ctx, a, 'PCA').data;
   assert.deepEqual(arch.filas[1], [5847, 'V', '12345678', 5, 'A', 2000, 'Esther Rodríguez']);
   assert.match(arch.csv, /^FIDEICOMISO;Cedula;;TIPO T;FORMA;MONTO;NS/);
+  assert.match(arch.csv, /5847;V;12345678;5;A;2000\.00;Esther Rodríguez/);
   assert.equal(repo.anticipoPorId(sol.data.id).estado, 'EN_ARCHIVO');
 
   assert.equal(S.marcarAnticiposPagados(repo, ctx, a, [sol.data.id]).data.cambiados, 1);

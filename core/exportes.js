@@ -20,10 +20,13 @@
     return [ENCABEZADO].concat(filas);
   }
 
-  function aCsv(filas) {
-    return filas.map(function (f) {
-      return f.map(function (c) {
+  /** opciones.decimales = { indiceColumna: n } fuerza n decimales en esa columna (no en el encabezado). */
+  function aCsv(filas, opciones) {
+    var dec = (opciones && opciones.decimales) || {};
+    return filas.map(function (f, i) {
+      return f.map(function (c, j) {
         var s = String(c == null ? '' : c);
+        if (i > 0 && dec[j] != null && typeof c === 'number') s = c.toFixed(dec[j]);
         return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
       }).join(';');
     }).join('\r\n');

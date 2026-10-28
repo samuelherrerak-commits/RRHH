@@ -39,6 +39,9 @@ function doPost(e) {
   try {
     lock.waitLock(20000);
     var d = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    // Filtro básico: el sitio envía este token. No es un secreto (va en config.js), solo frena visitas al azar.
+    var esperado = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
+    if (esperado && d.api_token !== esperado) return salida_({ ok: false, code: 'TOKEN', message: 'Acceso no autorizado.' });
     var ruta = RUTAS_TRABAJADOR[d.action] || RUTAS_RRHH[d.action];
     if (!ruta) return salida_({ ok: false, code: 'ACCION', message: 'Acción desconocida.' });
     return salida_(ruta(crearRepo_(), crearCtx_(), d));
@@ -199,6 +202,7 @@ function configurarInicial() {
   sem('EMPRESAS', [['PCA', 5847, 1, 5, 'A'], ['AIV', 5847, 1, 5, 'A']]);
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('SECRETO')) props.setProperty('SECRETO', Utilities.getUuid() + Utilities.getUuid());
+  if (!props.getProperty('API_TOKEN')) props.setProperty('API_TOKEN', 'RRHH2026');
   ['EMPLEADOS', 'APORTES', 'USUARIOS'].forEach(function (n) {
     // cédulas y claves como texto, para que Sheets no les quite ceros ni letras
     ss.getSheetByName(n).getRange(2, 1, 1000, n === 'EMPLEADOS' ? 2 : 1).setNumberFormat('@');

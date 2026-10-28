@@ -1,0 +1,16 @@
+# Sitio estático en Render: sin build, publica la carpeta web/.
+services:
+  - type: web
+    name: rrhh-prosein
+    runtime: static
+    staticPublishPath: ./web
+    headers:
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /js/*
+        name: Cache-Control
+        value: no-cache
