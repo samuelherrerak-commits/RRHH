@@ -17,6 +17,11 @@ repo.st.aportes.push({ clave: 'V12345678', anio: 2026, trimestre: 1, empresa: 'P
 repo.st.cierres['2026-1-PCA'] = { anio: 2026, trimestre: 1, empresa: 'PCA', estado: 'ACREDITADO' };
 repo.st.cierres['2026-2-PCA'] = { anio: 2026, trimestre: 2, empresa: 'PCA', estado: 'CERRADO' };
 repo.st.cierres['2026-2-AIV'] = { anio: 2026, trimestre: 2, empresa: 'AIV', estado: 'ACREDITADO' };
+// Constancia de ejemplo emitida hace 40 días (vencida): http://localhost:8080/#v=DEMOVENCIDA00001
+{ const hace40 = Date.now() - 40 * 86400000;
+  repo.st.constancias.DEMOVENCIDA00001 = { id: 'DEMOVENCIDA00001', clave: 'V12345678', nombre: 'Esther Lilia Rodríguez Hernández', cedula: 'V-12345678', empresa: 'PCA',
+    cargo: 'Asistente Administrativo', organizacion: 'PROSEIN CENTRAL', fechaIngreso: '05/03/2025', salario: 12583.17, emision: hace40,
+    vence: require('../core/constancia.js').vencimiento(hace40), estado: 'VIGENTE', emitidaPor: 'V12345678' }; }
 repo.st.usuarios['11111111'] = { sal: 's', hash: ctx.hash('demo', 's'), rol: 'RRHH' };   // RRHH que no es empleado
 repo.st.usuarios['98765432'] = { sal: 's', hash: ctx.hash('demo', 's'), rol: 'RRHH' };   // RRHH que además es empleado (Luis)
 

@@ -218,7 +218,7 @@
 
   /**
    * El trabajador pide su constancia: se guarda una copia fija de sus datos de hoy (cargo, ingreso, sueldo),
-   * con vigencia de 3 meses y un código único para el QR. Sale sola, sin aprobación.
+   * con vigencia de 30 días y un código único para el QR. Sale sola, sin aprobación.
    */
   function emitirConstancia(repo, ctx, token) {
     var s = leerToken(ctx, token, ['TRABAJADOR']);

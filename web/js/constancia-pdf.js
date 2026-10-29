@@ -90,7 +90,8 @@ export async function construirConstanciaPdf(c, urlBase) {
   const emision = K.fechaCaracas(c.emision), vence = K.fechaCaracas(c.vence), f = c.firmante;
   y = parrafo(doc, [{ t: `Constancia que se expide a solicitud de la parte interesada en la ciudad de ${f.ciudad}, el día ${K.fechaLargaConDia(emision)}.` }], X, y + 22, ANCHO, 15);
   doc.setFontSize(9); doc.setTextColor(90, 93, 97);
-  y = parrafo(doc, [{ t: `Esta constancia tiene una vigencia de tres (3) meses, hasta el ${K.fechaLarga(vence)}. Su autenticidad puede verificarse escaneando el código QR.` }], X, y + 10, ANCHO, 13);
+  // Se escribe la fecha de vencimiento guardada (no un número de días fijo): así las constancias ya emitidas siguen siendo exactas.
+  y = parrafo(doc, [{ t: `Esta constancia es válida hasta el ${K.fechaLarga(vence)}. Su autenticidad puede verificarse escaneando el código QR.` }], X, y + 10, ANCHO, 13);
 
   doc.setTextColor(...tinta); doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Atentamente,', X, 508);
   // Firma horizontal (en el Word la imagen está girada 270°; aquí ya viene girada y recortada: 392 × 295 px).

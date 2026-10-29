@@ -655,14 +655,14 @@ var Constancia = (function () {
     var module = { exports: {} }, exports = module.exports;
     var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
-       Constancia de trabajo: textos, monto en letras y vigencia.
+       Constancia de trabajo: textos, monto en letras y vigencia (30 días).
        Funciones puras; las usan el servidor, el navegador (PDF) y las pruebas.
        Las fechas de emisión se calculan en hora de Caracas (UTC-4, sin horario de verano).
        ========================================================== */
     (function (raiz) {
       'use strict';
     
-      var VIGENCIA_MESES = 3;
+      var VIGENCIA_DIAS = 30;
       var OFFSET_CARACAS_MS = -4 * 3600 * 1000;
       var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
       var DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -736,9 +736,15 @@ var Constancia = (function () {
         return Date.UTC(f.y, f.m - 1, f.d, 23, 59, 59) - OFFSET_CARACAS_MS;
       }
     
-      /** Vencimiento: 3 meses después de la emisión, hasta el final de ese día. */
+      /** Suma días a una fecha {y,m,d}. */
+      function sumarDias(f, dias) {
+        var d = new Date(Date.UTC(f.y, f.m - 1, f.d) + dias * 86400000);
+        return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
+      }
+    
+      /** Vencimiento: 30 días después de la emisión, hasta el final de ese día (hora de Caracas). */
       function vencimiento(emisionMs) {
-        return finDelDia(sumarMeses(fechaCaracas(emisionMs), VIGENCIA_MESES));
+        return finDelDia(sumarDias(fechaCaracas(emisionMs), VIGENCIA_DIAS));
       }
     
       /** 'VIGENTE' | 'VENCIDA' | 'ANULADA' */
@@ -759,7 +765,7 @@ var Constancia = (function () {
       var NOMBRES_EMPRESA = { PCA: 'PROSEIN CENTRAL', AIV: 'AUSTRAL IMPORT DE VENEZUELA C.A' };
     
       var api = {
-        VIGENCIA_MESES: VIGENCIA_MESES, NOMBRES_EMPRESA: NOMBRES_EMPRESA,
+        VIGENCIA_DIAS: VIGENCIA_DIAS, sumarDias: sumarDias, NOMBRES_EMPRESA: NOMBRES_EMPRESA,
         enteroEnLetras: enteroEnLetras, montoEnLetras: montoEnLetras, formatoMonto: formatoMonto,
         fechaCaracas: fechaCaracas, sumarMeses: sumarMeses, vencimiento: vencimiento, estadoConstancia: estadoConstancia,
         fechaLarga: fechaLarga, fechaLargaConDia: fechaLargaConDia, fechaCorta: fechaCorta,
@@ -996,7 +1002,7 @@ var Servicio = (function () {
     
       /**
        * El trabajador pide su constancia: se guarda una copia fija de sus datos de hoy (cargo, ingreso, sueldo),
-       * con vigencia de 3 meses y un código único para el QR. Sale sola, sin aprobación.
+       * con vigencia de 30 días y un código único para el QR. Sale sola, sin aprobación.
        */
       function emitirConstancia(repo, ctx, token) {
         var s = leerToken(ctx, token, ['TRABAJADOR']);

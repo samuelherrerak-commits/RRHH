@@ -266,7 +266,7 @@ function conSueldo(extra = {}) {
   return { repo, ctx: crearCtx(Date.UTC(2026, 9, 29, 15, 0)) };
 }
 
-test('constancia: sale sola con los datos de hoy, vigencia de 3 meses y código único', () => {
+test('constancia: sale sola con los datos de hoy, vigencia de 30 días y código único', () => {
   const { repo, ctx } = conSueldo();
   const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
   const r = S.emitirConstancia(repo, ctx, t);
@@ -278,7 +278,7 @@ test('constancia: sale sola con los datos de hoy, vigencia de 3 meses y código 
   assert.equal(c.salario, 5500);
   assert.equal(c.empresa, 'PCA');
   assert.equal(c.estado, 'VIGENTE');
-  assert.equal(require('../core/constancia.js').fechaCorta(require('../core/constancia.js').fechaCaracas(c.vence)), '29/01/2027');
+  assert.equal(require('../core/constancia.js').fechaCorta(require('../core/constancia.js').fechaCaracas(c.vence)), '28/11/2026');
   assert.match(c.id, /^[A-Z0-9]{10,}$/);
   assert.equal(c.firmante.cargo, 'Gerente de Gestión Humana');
   assert.ok(repo.st.logs.some((l) => l.accion === 'CONSTANCIA_EMITIDA'));
@@ -311,9 +311,13 @@ test('verificación pública por código: vigente, vencida y anulada', () => {
   assert.equal(v.data.estado, 'VIGENTE');
   assert.equal(v.data.salario, 5500);
   assert.equal(v.data.firmante, undefined);
-  ctx.reloj.t += 100 * 86400000;                                        // 100 días después
-  assert.equal(S.verificarConstancia(repo, ctx, c.id).data.estado, 'VENCIDA');
-  ctx.reloj.t -= 100 * 86400000;
+  ctx.reloj.t += 30 * 86400000;                                         // día 30: todavía vigente
+  assert.equal(S.verificarConstancia(repo, ctx, c.id).data.estado, 'VIGENTE');
+  ctx.reloj.t += 1 * 86400000;                                          // día 31: vencida
+  const venc = S.verificarConstancia(repo, ctx, c.id);
+  assert.equal(venc.data.estado, 'VENCIDA');
+  assert.equal(venc.data.nombre, 'Samuel Herrera');                     // sigue mostrando los datos
+  ctx.reloj.t -= 31 * 86400000;
   const a = S.iniciarSesion(repo, ctx, '30580323');                       // el mismo trabajador no puede anular
   assert.equal(S.anularConstancia(repo, ctx, a.data.token, c.id).code, 'SESION');
   repo.st.usuarios['11111111'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };

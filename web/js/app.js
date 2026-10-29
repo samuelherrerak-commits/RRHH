@@ -112,7 +112,7 @@ async function vistaCuenta(cont = app, token = '') {
     </section>
     <section class="tarjeta">
       <h2>Constancia de trabajo</h2>
-      <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 3 meses.</p>
+      <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 30 días.</p>
       <div><button class="btn btn-azul" id="btn-constancia">Descargar constancia de trabajo</button></div>
       <div class="error-msg" id="err-const" hidden></div>
       ${constancias.length ? `<div class="lista">${constancias.map((c) => `
@@ -323,7 +323,7 @@ async function vistaVerificar(id) {
       <tr><th>Fecha de vencimiento</th><td>${fechaCaracas(c.vence)}</td></tr>
       <tr><th>Código</th><td>${esc(c.id)}</td></tr>
     </tbody></table></div>
-    <p class="suave">Datos tomados de los registros de Recursos Humanos al momento de emitir la constancia (vigencia de 3 meses).</p></section>`;
+    <p class="suave">Datos tomados de los registros de Recursos Humanos al momento de emitir la constancia (vigencia de 30 días).</p></section>`;
 }
 
 /* ---------- RRHH: empleados ---------- */
