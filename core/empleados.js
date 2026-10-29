@@ -208,7 +208,58 @@
     return { nuevos: nuevos, retirados: retirados };
   }
 
+  /* ---------- Excel "Detalle de Empleado" ---------- */
+
+  var COLUMNAS_DETALLE = {
+    cedula: ['CEDULA', 'CI', 'DOCUMENTO'],
+    nombre: ['NOMBRE', 'NOMBRES Y APELLIDOS', 'EMPLEADO'],
+    organizacion: ['ORGANIZACION', 'EMPRESA'],
+    departamento: ['DEPARTAMENTO'],
+    puesto: ['PUESTO', 'CARGO'],
+    estado: ['ESTADO', 'STATUS'],
+    fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
+  };
+
+  /** Convierte un serial de Excel (p. ej. 45356) o texto en "dd/mm/aaaa". */
+  function fechaDeExcel(v) {
+    if (v == null || v === '') return '';
+    var t = String(v).trim();
+    if (/^\d{4,6}(\.\d+)?$/.test(t)) {   // algunos Excel traen hora: 45721.5
+      var d = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(t)) * 86400000);
+      return ('0' + d.getUTCDate()).slice(-2) + '/' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '/' + d.getUTCFullYear();
+    }
+    return t;
+  }
+
+  /**
+   * Filas del Excel (objetos con los encabezados tal cual vienen) → filas del detalle.
+   * Reconoce los encabezados sin importar tildes, mayúsculas ni espacios. Devuelve
+   * { filas, faltantes: [columnas no encontradas], omitidas: n filas sin cédula ni nombre }.
+   */
+  function mapearDetalle(filasCrudas) {
+    var encabezados = filasCrudas.length ? Object.keys(filasCrudas[0]) : [];
+    var indice = {};
+    encabezados.forEach(function (h) { indice[normalizarNombre(h)] = h; });
+    var col = {}, faltantes = [];
+    Object.keys(COLUMNAS_DETALLE).forEach(function (campo) {
+      var hit = COLUMNAS_DETALLE[campo].filter(function (n) { return indice[n]; })[0];
+      if (hit) col[campo] = indice[hit]; else faltantes.push(campo);
+    });
+    var omitidas = 0, filas = [];
+    filasCrudas.forEach(function (f) {
+      var cedula = col.cedula ? String(f[col.cedula] == null ? '' : f[col.cedula]).trim() : '';
+      var nombre = col.nombre ? String(f[col.nombre] == null ? '' : f[col.nombre]).trim() : '';
+      if (!cedula && !nombre) { omitidas++; return; }
+      var o = { cedula: cedula, nombre: nombre };
+      ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) { o[k] = col[k] ? f[col[k]] : ''; });
+      o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
+      filas.push(o);
+    });
+    return { filas: filas, faltantes: faltantes, omitidas: omitidas };
+  }
+
   var api = {
+    mapearDetalle: mapearDetalle, fechaDeExcel: fechaDeExcel,
     normalizarNombre: normalizarNombre, parsearCedula: parsearCedula,
     empresaDesdeDetalle: empresaDesdeDetalle, empresaFideicomiso: empresaFideicomiso,
     claveCedula: claveCedula, empleadoDesdeDetalle: empleadoDesdeDetalle,

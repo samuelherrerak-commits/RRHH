@@ -77,3 +77,22 @@ test('nuevos y retirados', () => {
   assert.deepEqual(r.nuevos.map((e) => e.nombre).sort(), ['Reciente Dos', 'Sin Previo Tres']);
   assert.deepEqual(r.retirados.map((x) => x.clave), ['V99999999']);
 });
+
+test('mapearDetalle: reconoce encabezados con tildes, serial de Excel y filas vacías', () => {
+  const r = E.mapearDetalle([
+    { 'Organización': 'PROSEIN', Departamento: 'Ventas', Puesto: 'Vendedor', 'Cédula': 'V123456789', Nombre: 'Ana Uno', Estado: 'Activo', 'Fecha Inicio': 45356 },
+    { 'Organización': '', Departamento: '', Puesto: '', 'Cédula': '', Nombre: '', Estado: '', 'Fecha Inicio': '' },
+  ]);
+  assert.equal(r.filas.length, 1);
+  assert.equal(r.omitidas, 1);
+  assert.deepEqual(r.faltantes, []);
+  assert.equal(r.filas[0].fechaInicio, '05/03/2024');
+  assert.equal(E.mapearDetalle([{ Nombre: 'X' }]).faltantes.includes('cedula'), true);
+});
+
+test('fechaDeExcel: serial entero, con hora y texto sin tocar', () => {
+  assert.equal(E.fechaDeExcel(45356), '05/03/2024');
+  assert.equal(E.fechaDeExcel(45721.5), '05/03/2025');
+  assert.equal(E.fechaDeExcel('25/07/2011'), '25/07/2011');
+  assert.equal(E.fechaDeExcel(''), '');
+});

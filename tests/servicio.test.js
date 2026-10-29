@@ -121,3 +121,33 @@ test('clave de RRHH incorrecta', () => {
   const { repo, ctx } = escenario();
   assert.equal(S.iniciarSesionAdmin(repo, ctx, '11111111', 'mala').code, 'CREDENCIALES');
 });
+
+test('RRHH carga el detalle de empleados y el trabajador ya puede entrar', () => {
+  const repo = crearRepo([]), ctx = crearCtx();
+  const sal = 's'; repo.st.usuarios['11111111'] = { sal, hash: ctx.hash('k', sal), rol: 'RRHH' };
+  const a = S.iniciarSesionAdmin(repo, ctx, '11111111', 'k').data.token;
+  assert.equal(S.iniciarSesion(repo, ctx, '30580323').code, 'NO_ENCONTRADO');
+  const r = S.cargarEmpleados(repo, ctx, a, [
+    { cedula: 'V305803231', nombre: 'Ana Uno', organizacion: 'PROSEIN', fechaInicio: '01/02/2020' },
+    { cedula: 'V12345678', nombre: 'Sin Verificador', organizacion: 'PROSEIN', fechaInicio: '' },
+  ]);
+  assert.deepEqual(r.data.resumen, { agregados: 2, actualizados: 0, inactivados: 0 });
+  assert.equal(r.data.revisar.length, 1);
+  assert.equal(r.data.sinFecha, 1);
+  assert.equal(S.iniciarSesion(repo, ctx, '30580323').ok, true);
+  // un trabajador no puede cargar empleados
+  const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  assert.equal(S.cargarEmpleados(repo, ctx, t, [{ cedula: 'V1', nombre: 'x' }]).code, 'SESION');
+});
+
+test('RRHH cambia la empresa del fideicomiso y la recarga del detalle la respeta', () => {
+  const repo = crearRepo([]), ctx = crearCtx();
+  const sal = 's'; repo.st.usuarios['11111111'] = { sal, hash: ctx.hash('k', sal), rol: 'RRHH' };
+  const a = S.iniciarSesionAdmin(repo, ctx, '11111111', 'k').data.token;
+  const fila = { cedula: 'V111111111', nombre: 'Eleanne Ruiz', organizacion: 'PROSEIN', fechaInicio: '01/02/2020' };
+  S.cargarEmpleados(repo, ctx, a, [fila]);
+  assert.equal(S.fijarEmpresaFideicomiso(repo, ctx, a, 'V11111111', 'AIV').data.empresa, 'AIV');
+  S.cargarEmpleados(repo, ctx, a, [fila]);
+  assert.equal(S.listarEmpleados(repo, ctx, a, 'ruiz').data.empleados[0].empresa, 'AIV');
+  assert.equal(S.fijarEmpresaFideicomiso(repo, ctx, a, 'V11111111', 'XXX').code, 'VALIDACION');
+});

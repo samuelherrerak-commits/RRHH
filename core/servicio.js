@@ -179,6 +179,58 @@
     return ok(c);
   }
 
+  /* ---------- Base de empleados (RRHH) ---------- */
+
+  /**
+   * Recarga del "Detalle de Empleado": actualiza, agrega y conserva las correcciones
+   * manuales. filas = salida de Empleados.mapearDetalle().filas
+   */
+  function cargarEmpleados(repo, ctx, token, filas) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    if (!Array.isArray(filas) || !filas.length) return err('VALIDACION', 'El archivo no trae empleados.');
+    if (filas.length > 5000) return err('VALIDACION', 'El archivo trae demasiadas filas.');
+    var r = Empleados.fusionarDetalle(repo.todosEmpleados(), filas);
+    repo.guardarEmpleados(r.empleados);
+    var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
+      .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
+    var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
+    repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
+    return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha });
+  }
+
+  function listarEmpleados(repo, ctx, token, buscar) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var q = Empleados.normalizarNombre(buscar || '');
+    var lista = repo.todosEmpleados().filter(function (e) {
+      return !q || e.nombreNorm.indexOf(q) !== -1 || Empleados.claveCedula(e).indexOf(q.replace(/\s/g, '')) !== -1;
+    });
+    return ok({
+      total: lista.length,
+      empleados: lista.slice(0, 100).map(function (e) {
+        return {
+          clave: Empleados.claveCedula(e), nombre: e.nombre, puesto: e.puesto, estado: e.estado,
+          empresaDetalle: e.empresaDetalle, empresaFideicomiso: e.empresaFideicomiso, empresa: Empleados.empresaFideicomiso(e),
+          revisarCedula: !!e.revisarCedula, fechaIngreso: e.fechaIngreso ? e.fechaIngreso.d + '/' + e.fechaIngreso.m + '/' + e.fechaIngreso.y : '',
+        };
+      }),
+    });
+  }
+
+  /** Empresa del fideicomiso editable por empleado ('' vuelve a la regla automática). */
+  function fijarEmpresaFideicomiso(repo, ctx, token, clave, empresa) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    if (['', 'AIV', 'PCA'].indexOf(empresa) === -1) return err('VALIDACION', 'Empresa no válida.');
+    var lista = repo.todosEmpleados();
+    var e = lista.filter(function (x) { return Empleados.claveCedula(x) === clave; })[0];
+    if (!e) return err('NO_ENCONTRADO', 'No encontramos ese empleado.');
+    e.empresaFideicomiso = empresa;
+    repo.guardarEmpleados(lista);
+    repo.log('EMPRESA_FIDEICOMISO', s.clave, clave + ' → ' + (empresa || 'automática'));
+    return ok({ clave: clave, empresa: Empleados.empresaFideicomiso(e) });
+  }
+
   /* ---------- Internas ---------- */
 
   function cambiarEstado(repo, ctx, a, nuevo, actor, extra) {
@@ -205,6 +257,7 @@
     bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
     generarArchivoAnticipos: generarArchivoAnticipos, marcarAnticiposPagados: marcarAnticiposPagados,
     cambiarEstadoCierre: cambiarEstadoCierre, leerToken: leerToken,
+    cargarEmpleados: cargarEmpleados, listarEmpleados: listarEmpleados, fijarEmpresaFideicomiso: fijarEmpresaFideicomiso,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Servicio = api;

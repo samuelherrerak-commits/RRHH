@@ -8,7 +8,7 @@
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
-  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados'],
+  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
@@ -29,6 +29,9 @@ var RUTAS_RRHH = {
   decidirAnticipo: function (repo, ctx, d) { return Servicio.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo); },
   archivoAnticipos: function (repo, ctx, d) { return Servicio.generarArchivoAnticipos(repo, ctx, d.token, d.empresa); },
   pagarAnticipos: function (repo, ctx, d) { return Servicio.marcarAnticiposPagados(repo, ctx, d.token, d.ids || []); },
+  cargarEmpleados: function (repo, ctx, d) { return Servicio.cargarEmpleados(repo, ctx, d.token, d.filas); },
+  listarEmpleados: function (repo, ctx, d) { return Servicio.listarEmpleados(repo, ctx, d.token, d.buscar); },
+  fijarEmpresa: function (repo, ctx, d) { return Servicio.fijarEmpresaFideicomiso(repo, ctx, d.token, d.clave, d.empresa); },
   estadoCierre: function (repo, ctx, d) {
     return Servicio.cambiarEstadoCierre(repo, ctx, d.token, Number(d.anio), Number(d.trimestre), d.empresa, d.estado);
   },
@@ -111,12 +114,20 @@ function escribirFila_(nombre, obj) {
 function texto_(v) { return v == null ? '' : String(v); }
 
 function empleado_(f) {
+  var editados = [];
+  try { editados = f.editados ? JSON.parse(f.editados) : []; } catch (e) { /* vacío */ }
   return {
     cedulaLetra: texto_(f.cedulaLetra), cedulaNumero: texto_(f.cedulaNumero), nombre: texto_(f.nombre),
+    organizacion: texto_(f.organizacion), departamento: texto_(f.departamento), puesto: texto_(f.puesto),
     estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso),
     empresaDetalle: texto_(f.empresaDetalle) || 'PCA', empresaFideicomiso: texto_(f.empresaFideicomiso),
-    nombreNorm: Empleados.normalizarNombre(f.nombre),
+    revisarCedula: f.revisarCedula === true || f.revisarCedula === 'TRUE', motivoRevision: texto_(f.motivoRevision),
+    editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
   };
+}
+
+function fechaTexto_(f) {
+  return f ? ('0' + f.d).slice(-2) + '/' + ('0' + f.m).slice(-2) + '/' + f.y : '';
 }
 
 function anticipo_(f) {
@@ -138,6 +149,21 @@ function crearRepo_() {
       var p = {};
       leer_('PARAMETROS').forEach(function (f) { p[f.clave] = f.valor; });
       return p;
+    },
+    todosEmpleados: function () { return leer_('EMPLEADOS').map(empleado_); },
+    /** Reescribe toda la hoja EMPLEADOS de una vez (mucho más rápido que fila por fila). */
+    guardarEmpleados: function (lista) {
+      var h = hoja_('EMPLEADOS'), cab = HOJAS.EMPLEADOS;
+      var ultima = h.getLastRow();
+      if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+      if (!lista.length) return;
+      var filas = lista.map(function (e) {
+        return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
+          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || ''];
+      });
+      var rango = h.getRange(2, 1, filas.length, cab.length);
+      rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte
+      rango.setValues(filas);
     },
     empleadoPorClave: function (clave) {
       var filas = leer_('EMPLEADOS');
@@ -191,10 +217,8 @@ function configurarInicial() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   Object.keys(HOJAS).forEach(function (nombre) {
     var h = ss.getSheetByName(nombre) || ss.insertSheet(nombre);
-    if (h.getLastRow() === 0) {
-      h.getRange(1, 1, 1, HOJAS[nombre].length).setValues([HOJAS[nombre]]).setFontWeight('bold');
-      h.setFrozenRows(1);
-    }
+    h.getRange(1, 1, 1, HOJAS[nombre].length).setValues([HOJAS[nombre]]).setFontWeight('bold');
+    h.setFrozenRows(1);
   });
   var sem = function (nombre, filas) {
     var h = ss.getSheetByName(nombre);
@@ -211,13 +235,53 @@ function configurarInicial() {
   });
 }
 
-/** Crea o actualiza un usuario de RRHH. Edita los tres valores y ejecuta la función. */
+/* ---------- Menú «RRHH» dentro de la hoja ---------- */
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('RRHH')
+    .addItem('1 · Configurar hojas (primera vez)', 'configurarInicial')
+    .addItem('2 · Crear mi usuario de RRHH', 'crearUsuarioRRHH')
+    .addItem('Diagnóstico', 'diagnostico')
+    .addToUi();
+}
+
+/** Pide cédula, clave y rol en pantalla. La clave no queda escrita en ningún sitio, solo su huella. */
 function crearUsuarioRRHH() {
-  var cedula = '00000000';   // cédula sin letra ni verificador
-  var clave = 'CAMBIAME';    // clave larga; luego bórrala de aquí
-  var rol = 'RRHH';          // RRHH o ADMIN
-  if (clave === 'CAMBIAME') throw new Error('Edita la cédula y la clave antes de ejecutar.');
+  var ui = SpreadsheetApp.getUi();
+  configurarInicial();
+  var c = ui.prompt('Usuario de RRHH', 'Tu cédula, solo números (sin V ni dígito verificador):', ui.ButtonSet.OK_CANCEL);
+  if (c.getSelectedButton() !== ui.Button.OK) return;
+  var cedula = c.getResponseText().replace(/\D/g, '');
+  if (cedula.length < 5) { ui.alert('La cédula no es válida.'); return; }
+  var k = ui.prompt('Clave', 'Escribe una clave de al menos 8 caracteres (la usarás para entrar en /#rrhh):', ui.ButtonSet.OK_CANCEL);
+  if (k.getSelectedButton() !== ui.Button.OK) return;
+  var clave = k.getResponseText();
+  if (clave.length < 8) { ui.alert('La clave debe tener al menos 8 caracteres.'); return; }
+  var rol = ui.alert('Rol', '¿Administrador? Sí = ADMIN (todo). No = RRHH.', ui.ButtonSet.YES_NO) === ui.Button.YES ? 'ADMIN' : 'RRHH';
+  guardarUsuario_(cedula, clave, rol);
+  ui.alert('Listo', 'Usuario ' + rol + ' creado para la cédula ' + cedula + '.\nEntra en tu sitio con /#rrhh al final de la dirección.', ui.ButtonSet.OK);
+}
+
+function guardarUsuario_(cedula, clave, rol) {
   var sal = Utilities.getUuid();
   var existente = leer_('USUARIOS').filter(function (u) { return texto_(u.cedula) === cedula; })[0];
   escribirFila_('USUARIOS', { _fila: existente ? existente._fila : 0, cedula: cedula, sal: sal, hash: crearCtx_().hash(clave, sal), rol: rol });
+}
+
+/** Revisa que todo esté en su sitio y lo muestra en pantalla. */
+function diagnostico() {
+  var ui = SpreadsheetApp.getUi(), l = [], ss = SpreadsheetApp.getActiveSpreadsheet();
+  Object.keys(HOJAS).forEach(function (n) {
+    var h = ss.getSheetByName(n);
+    l.push((h ? '✔ ' : '✘ FALTA ') + 'hoja ' + n + (h ? ' (' + Math.max(0, h.getLastRow() - 1) + ' filas)' : ''));
+  });
+  var pr = PropertiesService.getScriptProperties();
+  l.push((pr.getProperty('SECRETO') ? '✔ ' : '✘ FALTA ') + 'clave secreta');
+  l.push((pr.getProperty('API_TOKEN') ? '✔ ' : '✘ FALTA ') + 'token de la API');
+  ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Servicio'].forEach(function (m) {
+    var ok = false; try { ok = typeof this[m] === 'object'; } catch (e) { /* no definido */ }
+    l.push((ok ? '✔ ' : '✘ FALTA ') + 'archivo core/' + m.toLowerCase() + '.js');
+  }, this);
+  var faltas = l.filter(function (x) { return x.indexOf('✘') === 0; }).length;
+  ui.alert(faltas ? 'Hay ' + faltas + ' cosas por corregir' : 'Todo en orden', l.join('\n') + (faltas ? '\n\nEjecuta «1 · Configurar hojas» y revisa que pegaste todos los archivos.' : ''), ui.ButtonSet.OK);
 }

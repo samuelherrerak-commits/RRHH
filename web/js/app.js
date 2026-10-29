@@ -168,7 +168,7 @@ async function vistaRRHH() {
   btnSalir.hidden = false;
   app.innerHTML = `
     <div class="pestanas" role="tablist">
-      ${[['solicitudes', 'Solicitudes'], ['banco', 'Archivo al banco'], ['cierres', 'Cierres']].map(([k, t]) =>
+      ${[['solicitudes', 'Solicitudes'], ['banco', 'Archivo al banco'], ['empleados', 'Empleados'], ['cierres', 'Cierres']].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel"></div>`;
@@ -176,6 +176,7 @@ async function vistaRRHH() {
   const panel = app.querySelector('#panel');
   if (pestana === 'solicitudes') return panelSolicitudes(panel);
   if (pestana === 'banco') return panelBanco(panel);
+  if (pestana === 'empleados') return panelEmpleados(panel);
   return panelCierres(panel);
 }
 
@@ -252,6 +253,103 @@ async function panelBanco(panel) {
     const r = await llamar('pagarAnticipos', { ids: ar.data.map((a) => a.id) });
     toast(r.ok ? `${r.data.cambiados} anticipos pagados.` : r.message); panelBanco(panel);
   }));
+}
+
+/* ---------- RRHH: empleados ---------- */
+
+const URL_XLSX = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+function cargarXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return new Promise((ok, no) => {
+    const sc = Object.assign(document.createElement('script'), { src: URL_XLSX, onload: () => ok(window.XLSX), onerror: () => no(new Error('No se pudo cargar el lector de Excel.')) });
+    document.head.appendChild(sc);
+  });
+}
+
+/** Lee el primer libro/hoja del archivo y devuelve las filas como objetos con los encabezados del Excel. */
+async function leerArchivoExcel(archivo) {
+  const XLSX = await cargarXlsx();
+  const bytes = await archivo.arrayBuffer();
+  let libro;
+  if (/\.csv$/i.test(archivo.name)) {
+    // Los CSV se leen como texto: UTF-8 y, si trae caracteres rotos, Windows-1252 (Excel en español).
+    let texto = new TextDecoder('utf-8').decode(bytes).replace(/^\ufeff/, '');
+    if (texto.includes('\ufffd')) texto = new TextDecoder('windows-1252').decode(bytes);
+    libro = XLSX.read(texto, { type: 'string', raw: true });   // raw: no adivinar fechas (evita confundir día y mes)
+  } else {
+    libro = XLSX.read(bytes, { type: 'array' });
+  }
+  const hoja = libro.Sheets[libro.SheetNames[0]];
+  // raw: las fechas de Excel llegan como número de serie y se convierten exactamente en core/empleados.js (fechaDeExcel)
+  return XLSX.utils.sheet_to_json(hoja, { defval: '', raw: true });
+}
+
+const COL_NOMBRES = { cedula: 'Cédula', nombre: 'Nombre', organizacion: 'Organización', departamento: 'Departamento', puesto: 'Puesto', estado: 'Estado', fechaInicio: 'Fecha Inicio' };
+
+async function panelEmpleados(panel) {
+  panel.innerHTML = `
+    <section class="tarjeta">
+      <h2>Cargar «Detalle de Empleado»</h2>
+      <p class="suave">Sube el Excel (.xlsx o .csv) con las columnas Organización, Departamento, Puesto, Cédula, Nombre, Estado y Fecha Inicio. Actualiza a los que ya existen, agrega los nuevos y respeta tus correcciones manuales.</p>
+      <label>Archivo <input type="file" id="arch" accept=".xlsx,.xls,.csv"></label>
+      <div class="error-msg" id="err" hidden></div>
+      <div id="previa"></div>
+    </section>
+    <section class="tarjeta">
+      <h2>Empleados</h2>
+      <label>Buscar por nombre o cédula <input id="q" placeholder="Escribe para buscar" autocomplete="off"></label>
+      <div id="lista"><p class="vacio">Cargando…</p></div>
+    </section>`;
+  const err = panel.querySelector('#err'), previa = panel.querySelector('#previa');
+
+  panel.querySelector('#arch').addEventListener('change', async (e) => {
+    errorEn(err, ''); previa.innerHTML = '';
+    const archivo = e.target.files[0]; if (!archivo) return;
+    try {
+      const crudas = await leerArchivoExcel(archivo);
+      const m = window.Empleados.mapearDetalle(crudas);
+      if (!m.filas.length) return errorEn(err, 'No encontré empleados en el archivo.');
+      if (m.faltantes.includes('cedula') || m.faltantes.includes('nombre')) {
+        return errorEn(err, `Faltan columnas obligatorias: ${m.faltantes.filter((c) => ['cedula', 'nombre'].includes(c)).map((c) => COL_NOMBRES[c]).join(', ')}.`);
+      }
+      previa.innerHTML = `<div class="aviso">Listo para cargar <b>${m.filas.length}</b> empleados${m.omitidas ? ` (${m.omitidas} filas vacías omitidas)` : ''}.${m.faltantes.length ? ` Columnas no encontradas: ${m.faltantes.map((c) => COL_NOMBRES[c]).join(', ')}.` : ''}</div>
+        <div><button class="btn" id="subir">Cargar empleados</button></div>`;
+      previa.querySelector('#subir').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
+        const r = await llamar('cargarEmpleados', { filas: m.filas });
+        if (!r.ok) return errorEn(err, r.message);
+        const { resumen: x, revisar, sinFecha, total } = r.data;
+        previa.innerHTML = `<div class="aviso"><b>${x.agregados}</b> agregados · <b>${x.actualizados}</b> actualizados · <b>${x.inactivados}</b> pasaron a inactivos · ${total} en total.</div>
+          ${sinFecha ? `<div class="error-msg">${sinFecha} empleados activos sin fecha de ingreso.</div>` : ''}
+          ${revisar.length ? `<div><h3>Cédulas por revisar (${revisar.length})</h3><p class="suave">Vienen con 8 dígitos: no se sabe si el último es verificador.</p>
+            <div class="lista">${revisar.slice(0, 30).map((v) => `<div class="item"><b>${esc(v.nombre)}</b><span class="suave">${esc(v.clave)}</span></div>`).join('')}</div></div>` : ''}`;
+        toast('Empleados cargados.'); listar('');
+      }));
+    } catch (x) { errorEn(err, x.message || 'No se pudo leer el archivo.'); }
+  });
+
+  let temporizador;
+  panel.querySelector('#q').addEventListener('input', (e) => { clearTimeout(temporizador); temporizador = setTimeout(() => listar(e.target.value), 300); });
+
+  async function listar(q) {
+    const caja = panel.querySelector('#lista');
+    const r = await llamar('listarEmpleados', { buscar: q });
+    if (!r.ok) { caja.innerHTML = `<div class="error-msg">${esc(r.message)}</div>`; return; }
+    const { empleados, total } = r.data;
+    if (!empleados.length) { caja.innerHTML = '<p class="vacio">No hay empleados. Sube el Detalle de Empleado arriba.</p>'; return; }
+    caja.innerHTML = `<p class="suave">${total} empleados${total > empleados.length ? ` · mostrando ${empleados.length}` : ''}</p>
+      <div class="lista">${empleados.map((e) => `<div class="item">
+        <div class="item-cab"><div><b>${esc(e.nombre)}</b><p class="suave">${esc(e.clave)} · ${esc(e.puesto)} · ingreso ${esc(e.fechaIngreso || 'sin fecha')}</p></div>
+          ${e.estado === 'Inactivo' ? '<span class="chip chip-neutro">Inactivo</span>' : e.revisarCedula ? '<span class="chip chip-espera">Revisar cédula</span>' : ''}</div>
+        <label>Empresa del fideicomiso
+          <select data-emp="${esc(e.clave)}"><option value="" ${e.empresaFideicomiso ? '' : 'selected'}>Automática (${esc(e.empresaDetalle)})</option>
+            <option value="PCA" ${e.empresaFideicomiso === 'PCA' ? 'selected' : ''}>PCA</option><option value="AIV" ${e.empresaFideicomiso === 'AIV' ? 'selected' : ''}>AIV</option></select></label>
+      </div>`).join('')}</div>`;
+    caja.querySelectorAll('[data-emp]').forEach((sel) => sel.addEventListener('change', async () => {
+      const x = await llamar('fijarEmpresa', { clave: sel.dataset.emp, empresa: sel.value });
+      toast(x.ok ? `Empresa del fideicomiso: ${x.data.empresa}` : x.message);
+    }));
+  }
+  listar('');
 }
 
 function panelCierres(panel) {

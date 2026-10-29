@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const E = require('../core/empleados.js');
 
 function crearRepo(empleadosFilas) {
-  const empleados = E.fusionarDetalle([], empleadosFilas).empleados;
+  let empleados = E.fusionarDetalle([], empleadosFilas).empleados;
   const st = { aportes: [], anticipos: {}, cierres: {}, usuarios: {}, fallos: {}, logs: [], seq: 0,
     parametros: { porcentajeAnticipoMax: 0.75 },
     empresas: { PCA: { fideicomiso: 5847, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' }, AIV: { fideicomiso: 6000, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' } } };
@@ -11,6 +11,8 @@ function crearRepo(empleadosFilas) {
   return {
     st,
     parametros: () => st.parametros,
+    todosEmpleados: () => empleados.map((e) => ({ ...e })),
+    guardarEmpleados: (lista) => { empleados = lista.map((e) => ({ ...e })); },
     empleadoPorClave: (c) => empleados.find((e) => E.claveCedula(e) === clave(c)) || null,
     aportesDe: (c) => st.aportes.filter((a) => a.clave === c).map((a) => {
       const ci = st.cierres[`${a.anio}-${a.trimestre}-${a.empresa}`];

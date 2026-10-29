@@ -24,6 +24,8 @@ const RUTAS = {
   loginAdmin: (d) => S.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave), bandejaAnticipos: (d) => S.bandejaAnticipos(repo, ctx, d.token, d.estado),
   decidirAnticipo: (d) => S.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo),
   archivoAnticipos: (d) => S.generarArchivoAnticipos(repo, ctx, d.token, d.empresa), pagarAnticipos: (d) => S.marcarAnticiposPagados(repo, ctx, d.token, d.ids || []),
+  cargarEmpleados: (d) => S.cargarEmpleados(repo, ctx, d.token, d.filas), listarEmpleados: (d) => S.listarEmpleados(repo, ctx, d.token, d.buscar),
+  fijarEmpresa: (d) => S.fijarEmpresaFideicomiso(repo, ctx, d.token, d.clave, d.empresa),
   estadoCierre: (d) => S.cambiarEstadoCierre(repo, ctx, d.token, +d.anio, +d.trimestre, d.empresa, d.estado),
 };
 const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
