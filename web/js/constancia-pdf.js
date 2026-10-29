@@ -18,24 +18,40 @@ async function comoDataUrl(ruta) {
   return new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(b); });
 }
 
-/** Párrafo con partes en negrita y salto de línea automático. Devuelve la y siguiente. */
+/**
+ * Párrafo con partes en negrita, salto de línea automático y texto JUSTIFICADO (como en el Word):
+ * cada línea, menos la última, reparte el espacio sobrante entre sus palabras. Devuelve la y siguiente.
+ */
 function parrafo(doc, partes, x, y, ancho, interlineado) {
   const palabras = [];
-  partes.forEach(({ t, b }) => t.split(/(\s+)/).filter(Boolean).forEach((w) => palabras.push({ w, b: !!b })));
+  partes.forEach(({ t, b }) => t.split(/(\s+)/).filter(Boolean).forEach((w) => palabras.push({ w, b: !!b, esp: /^\s+$/.test(w) })));
+  const medir = (p) => { doc.setFont('helvetica', p.b ? 'bold' : 'normal'); return p.esp ? doc.getTextWidth(' ') : doc.getTextWidth(p.w); };
+  const lineas = [];
   let linea = [], usado = 0;
-  const volcar = () => {
-    let cx = x;
-    linea.forEach(({ w, b }) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.text(w, cx, y); cx += doc.getTextWidth(w); });
-    y += interlineado; linea = []; usado = 0;
-  };
   palabras.forEach((p) => {
-    doc.setFont('helvetica', p.b ? 'bold' : 'normal');
-    const w = doc.getTextWidth(p.w);
-    if (/^\s+$/.test(p.w)) { if (linea.length) { linea.push(p); usado += w; } return; }
-    if (usado + w > ancho && linea.length) { while (linea.length && /^\s+$/.test(linea[linea.length - 1].w)) linea.pop(); volcar(); }
-    linea.push(p); usado += w;
+    const w = medir(p);
+    if (p.esp) { if (linea.length) { linea.push({ ...p, ancho: w }); usado += w; } return; }
+    if (usado + w > ancho && linea.length) {
+      while (linea.length && linea[linea.length - 1].esp) linea.pop();
+      lineas.push(linea); linea = []; usado = 0;
+    }
+    linea.push({ ...p, ancho: w }); usado += w;
   });
-  if (linea.length) volcar();
+  while (linea.length && linea[linea.length - 1].esp) linea.pop();
+  if (linea.length) lineas.push(linea);
+
+  lineas.forEach((ln, i) => {
+    const ultima = i === lineas.length - 1;
+    const huecos = ln.filter((p) => p.esp).length;
+    const total = ln.reduce((s, p) => s + p.ancho, 0);
+    const extra = !ultima && huecos ? (ancho - total) / huecos : 0;
+    let cx = x;
+    ln.forEach((p) => {
+      if (p.esp) { cx += p.ancho + extra; return; }
+      doc.setFont('helvetica', p.b ? 'bold' : 'normal'); doc.text(p.w, cx, y); cx += p.ancho;
+    });
+    y += interlineado;
+  });
   return y;
 }
 
@@ -77,7 +93,8 @@ export async function construirConstanciaPdf(c, urlBase) {
   y = parrafo(doc, [{ t: `Esta constancia tiene una vigencia de tres (3) meses, hasta el ${K.fechaLarga(vence)}. Su autenticidad puede verificarse escaneando el código QR.` }], X, y + 10, ANCHO, 13);
 
   doc.setTextColor(...tinta); doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Atentamente,', X, 508);
-  doc.addImage(firma, 'PNG', X - 6, 522, 100, 100);
+  // Firma horizontal (en el Word la imagen está girada 270°; aquí ya viene girada y recortada: 392 × 295 px).
+  doc.addImage(firma, 'PNG', X - 12, 530, 130, 98);
   doc.setFont('helvetica', 'bold'); doc.text(f.nombre, X, 630);
   doc.setFont('helvetica', 'normal'); doc.text(f.cargo, X, 645); doc.text(f.telefono, X, 660);
 
