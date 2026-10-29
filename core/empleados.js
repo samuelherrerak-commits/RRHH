@@ -57,6 +57,29 @@
     return /^(INACTIV|INACTIVE|RETIRAD|EGRESAD|BAJA)/.test(t) ? 'Inactivo' : 'Activo';
   }
 
+  /**
+   * Lo que escribe una persona (con o sin letra, con RIF o sin él, con ceros) → número de cédula limpio.
+   * '305803231' (RIF) → '30580323'; '09123456' → '9123456'. Devuelve '' si no parece una cédula.
+   */
+  function numeroDeCedulaTexto(texto) {
+    var d = String(texto == null ? '' : texto).replace(/\D/g, '');
+    if (d.length < 5 || d.length > 9) return '';
+    if (d.length === 9) d = d.slice(0, 8);
+    return d.replace(/^0+/, '');
+  }
+
+  /** ¿Asignar `jefeClave` como jefe de `clave` crearía un ciclo (A jefe de B y B jefe de A, o más largo)? */
+  function creaCicloDeJefes(empleados, clave, jefeClave) {
+    var porClave = {};
+    empleados.forEach(function (e) { porClave[claveCedula(e)] = e; });
+    var actual = jefeClave, pasos = 0;
+    while (actual && pasos++ < 100) {
+      if (actual === clave) return true;
+      actual = porClave[actual] ? porClave[actual].jefe : '';
+    }
+    return false;
+  }
+
   /** AUSTRAL IMPORT DE VENEZUELA C.A → AIV; todo lo demás → PCA. */
   function empresaDesdeDetalle(texto) {
     return normalizarNombre(texto).indexOf('AUSTRAL IMPORT DE VENEZUELA') === 0 ? 'AIV' : 'PCA';
@@ -93,6 +116,7 @@
       fechaIngreso: f,
       empresaDetalle: empresaDesdeDetalle(fila.organizacion),
       empresaFideicomiso: '',
+      jefe: '',            // clave de cédula del jefe directo (se asigna desde RRHH)
       editados: [],
     };
   }
@@ -286,6 +310,7 @@
 
   var api = {
     mapearDetalle: mapearDetalle, fechaDeExcel: fechaDeExcel,
+    numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
     normalizarNombre: normalizarNombre, parsearCedula: parsearCedula, verificadorRif: verificadorRif, estadoEnEspanol: estadoEnEspanol,
     empresaDesdeDetalle: empresaDesdeDetalle, empresaFideicomiso: empresaFideicomiso,
     claveCedula: claveCedula, empleadoDesdeDetalle: empleadoDesdeDetalle,

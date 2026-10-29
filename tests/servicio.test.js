@@ -165,3 +165,96 @@ test('login con la cédula real, con el RIF completo y con cédula de 7 dígitos
   assert.equal(S.iniciarSesion(repo, ctx, '9123456').data.nombre, 'Siete Digitos'); // sin el cero
   assert.equal(S.iniciarSesion(repo, ctx, '09123456').data.nombre, 'Siete Digitos');
 });
+
+/* ---------- RRHH con clave desde la misma entrada, y jefes ---------- */
+
+function conRRHH() {
+  const E = require('../core/empleados.js');
+  const repo = crearRepo([
+    { cedula: 'V305803231', nombre: 'Samuel Herrera', organizacion: 'PROSEIN CENTRAL', departamento: 'Recursos Humanos', fechaInicio: '01/02/2020' },
+    { cedula: 'V' + '09123456' + E.verificadorRif('V', '09123456'), nombre: 'Luis Paul Rojas', organizacion: 'PROSEIN CENTRAL', departamento: 'Recursos Humanos', fechaInicio: '01/02/2020' },
+    { cedula: 'V111111111', nombre: 'Ana Vendedora', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', fechaInicio: '01/02/2021' },
+    { cedula: 'V222222222', nombre: 'Beto Vendedor', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', fechaInicio: '01/02/2021' },
+    { cedula: 'V333333333', nombre: 'Carla Jefa', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', fechaInicio: '01/02/2019' },
+  ]);
+  const ctx = crearCtx();
+  for (const ced of ['30580323', '9123456']) {
+    const sal = 'x' + ced; repo.st.usuarios[ced] = { sal, hash: ctx.hash('clave-segura', sal), rol: 'RRHH' };
+  }
+  return { repo, ctx };
+}
+
+test('si la cédula es de RRHH, la entrada pide clave y no entrega sesión', () => {
+  const { repo, ctx } = conRRHH();
+  const r = S.iniciarSesion(repo, ctx, '30580323');
+  assert.deepEqual(r, { ok: true, data: { requiereClave: true } });
+  assert.equal(S.iniciarSesion(repo, ctx, 'V-305803231').data.requiereClave, true); // también con el RIF
+  assert.equal(S.iniciarSesion(repo, ctx, '09123456').data.requiereClave, true);     // y con cero inicial
+  assert.equal(S.iniciarSesion(repo, ctx, '111111111'.slice(0, 8)).data.token !== undefined, true); // un trabajador normal entra directo
+});
+
+test('RRHH entra con su clave y además recibe su sesión de empleado', () => {
+  const { repo, ctx } = conRRHH();
+  assert.equal(S.iniciarSesionAdmin(repo, ctx, '30580323', 'mala').code, 'CREDENCIALES');
+  const r = S.iniciarSesionAdmin(repo, ctx, '30580323', 'clave-segura');
+  assert.equal(r.ok, true);
+  assert.equal(r.data.nombre, 'Samuel Herrera');
+  assert.equal(S.leerToken(ctx, r.data.token, ['RRHH']).clave, '30580323');
+  assert.equal(S.miEstadoDeCuenta(repo, ctx, r.data.tokenTrabajador).ok, true);
+  assert.equal(S.miEstadoDeCuenta(repo, ctx, r.data.token).code, 'SESION'); // el token de RRHH no es de trabajador
+});
+
+test('la clave de RRHH se bloquea tras 5 intentos', () => {
+  const { repo, ctx } = conRRHH();
+  for (let i = 0; i < 5; i++) S.iniciarSesionAdmin(repo, ctx, '30580323', 'x');
+  assert.equal(S.iniciarSesionAdmin(repo, ctx, '30580323', 'clave-segura').code, 'BLOQUEADO');
+});
+
+test('jefe directo: asignar, quitar y validar', () => {
+  const { repo, ctx } = conRRHH();
+  const a = S.iniciarSesionAdmin(repo, ctx, '30580323', 'clave-segura').data.token;
+  assert.equal(S.asignarJefe(repo, ctx, a, ['V11111111'], 'V33333333').data.cambiados, 1);
+  const ana = S.listarEmpleados(repo, ctx, a, { buscar: 'ana' }).data.empleados[0];
+  assert.equal(ana.jefe, 'V33333333');
+  assert.equal(ana.jefeNombre, 'Carla Jefa');
+  assert.equal(S.asignarJefe(repo, ctx, a, ['V11111111'], 'V99999999').code, 'VALIDACION'); // jefe inexistente
+  assert.equal(S.asignarJefe(repo, ctx, a, ['V11111111'], '').data.cambiados, 1);            // quitar
+});
+
+test('jefe directo: nadie es su propio jefe ni se crean ciclos', () => {
+  const { repo, ctx } = conRRHH();
+  const a = S.iniciarSesionAdmin(repo, ctx, '30580323', 'clave-segura').data.token;
+  assert.equal(S.asignarJefe(repo, ctx, a, ['V11111111'], 'V11111111').data.cambiados, 0);
+  S.asignarJefe(repo, ctx, a, ['V11111111'], 'V22222222');                 // Beto es jefe de Ana
+  const r = S.asignarJefe(repo, ctx, a, ['V22222222'], 'V11111111');       // Ana jefa de Beto → ciclo
+  assert.equal(r.data.cambiados, 0);
+  assert.equal(r.data.omitidos.length, 1);
+});
+
+test('jefe por departamento: todos los activos menos el propio jefe', () => {
+  const { repo, ctx } = conRRHH();
+  const a = S.iniciarSesionAdmin(repo, ctx, '30580323', 'clave-segura').data.token;
+  const r = S.asignarJefeDepartamento(repo, ctx, a, 'Ventas', 'V33333333');
+  assert.equal(r.data.cambiados, 2);   // Ana y Beto; Carla (la jefa) no se toca
+  const lista = S.listarEmpleados(repo, ctx, a, { departamento: 'Ventas', sinJefe: true }).data;
+  assert.deepEqual(lista.empleados.map((e) => e.nombre), ['Carla Jefa']);
+  assert.ok(lista.departamentos.includes('Ventas'));
+  assert.equal(S.asignarJefeDepartamento(repo, ctx, a, 'Inventado', 'V33333333').code, 'VALIDACION');
+});
+
+test('recargar el detalle conserva los jefes asignados', () => {
+  const { repo, ctx } = conRRHH();
+  const a = S.iniciarSesionAdmin(repo, ctx, '30580323', 'clave-segura').data.token;
+  S.asignarJefe(repo, ctx, a, ['V11111111'], 'V33333333');
+  S.cargarEmpleados(repo, ctx, a, [
+    { cedula: 'V111111111', nombre: 'Ana Vendedora', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', fechaInicio: '01/02/2021' },
+    { cedula: 'V333333333', nombre: 'Carla Jefa', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', fechaInicio: '01/02/2019' },
+  ]);
+  assert.equal(S.listarEmpleados(repo, ctx, a, { buscar: 'ana' }).data.empleados[0].jefe, 'V33333333');
+});
+
+test('un trabajador no puede asignar jefes', () => {
+  const { repo, ctx } = conRRHH();
+  const t = S.iniciarSesion(repo, ctx, '11111111').data.token;
+  assert.equal(S.asignarJefe(repo, ctx, t, ['V11111111'], 'V33333333').code, 'SESION');
+});

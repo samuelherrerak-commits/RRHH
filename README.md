@@ -14,7 +14,7 @@ npm test
 node dev/server.js
 ```
 
-Abre http://localhost:8080. Trabajador: cédula `12345678`. RRHH: http://localhost:8080/#rrhh, cédula `11111111`, clave `demo`.
+Abre http://localhost:8080. Trabajador: cédula `12345678`. RRHH: cédula `98765432` o `11111111`, clave `demo` (el sitio pide la clave solo a las cédulas de RRHH).
 
 ## Publicar
 

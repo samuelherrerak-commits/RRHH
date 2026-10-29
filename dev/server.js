@@ -1,5 +1,6 @@
 // Servidor local de simulación: sirve web/ y responde la API con el mismo servicio, sobre datos de ejemplo en memoria.
-// Uso: node dev/server.js   →  http://localhost:8080  (RRHH: #rrhh · cédula 11111111 · clave demo)
+// Uso: node dev/server.js   →  http://localhost:8080
+// Trabajador: cédula 12345678. RRHH: cédula 98765432 (también empleado) u 11111111, clave demo; el sitio pide la clave solo a esas cédulas.
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -16,7 +17,8 @@ repo.st.aportes.push({ clave: 'V12345678', anio: 2026, trimestre: 1, empresa: 'P
 repo.st.cierres['2026-1-PCA'] = { anio: 2026, trimestre: 1, empresa: 'PCA', estado: 'ACREDITADO' };
 repo.st.cierres['2026-2-PCA'] = { anio: 2026, trimestre: 2, empresa: 'PCA', estado: 'CERRADO' };
 repo.st.cierres['2026-2-AIV'] = { anio: 2026, trimestre: 2, empresa: 'AIV', estado: 'ACREDITADO' };
-repo.st.usuarios['11111111'] = { sal: 's', hash: ctx.hash('demo', 's'), rol: 'RRHH' };
+repo.st.usuarios['11111111'] = { sal: 's', hash: ctx.hash('demo', 's'), rol: 'RRHH' };   // RRHH que no es empleado
+repo.st.usuarios['98765432'] = { sal: 's', hash: ctx.hash('demo', 's'), rol: 'RRHH' };   // RRHH que además es empleado (Luis)
 
 const RUTAS = {
   login: (d) => S.iniciarSesion(repo, ctx, d.cedula), estadoDeCuenta: (d) => S.miEstadoDeCuenta(repo, ctx, d.token),
@@ -24,7 +26,8 @@ const RUTAS = {
   loginAdmin: (d) => S.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave), bandejaAnticipos: (d) => S.bandejaAnticipos(repo, ctx, d.token, d.estado),
   decidirAnticipo: (d) => S.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo),
   archivoAnticipos: (d) => S.generarArchivoAnticipos(repo, ctx, d.token, d.empresa), pagarAnticipos: (d) => S.marcarAnticiposPagados(repo, ctx, d.token, d.ids || []),
-  cargarEmpleados: (d) => S.cargarEmpleados(repo, ctx, d.token, d.filas), listarEmpleados: (d) => S.listarEmpleados(repo, ctx, d.token, d.buscar),
+  cargarEmpleados: (d) => S.cargarEmpleados(repo, ctx, d.token, d.filas), listarEmpleados: (d) => S.listarEmpleados(repo, ctx, d.token, { buscar: d.buscar, departamento: d.departamento, sinJefe: !!d.sinJefe }),
+  asignarJefe: (d) => S.asignarJefe(repo, ctx, d.token, d.claves, d.jefe), asignarJefeDepartamento: (d) => S.asignarJefeDepartamento(repo, ctx, d.token, d.departamento, d.jefe),
   fijarEmpresa: (d) => S.fijarEmpresaFideicomiso(repo, ctx, d.token, d.clave, d.empresa),
   estadoCierre: (d) => S.cambiarEstadoCierre(repo, ctx, d.token, +d.anio, +d.trimestre, d.empresa, d.estado),
 };

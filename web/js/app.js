@@ -7,8 +7,6 @@ const dlg = document.getElementById('dlg');
 const toastEl = document.getElementById('toast');
 let toastReloj;
 
-const esRRHH = () => location.hash === '#rrhh';
-
 function toast(msg) {
   toastEl.textContent = msg; toastEl.hidden = false;
   clearTimeout(toastReloj); toastReloj = setTimeout(() => { toastEl.hidden = true; }, 3500);
@@ -27,12 +25,11 @@ function errorEn(caja, msg) { caja.textContent = msg; caja.hidden = !msg; }
 async function arrancar() {
   const s = sesion.leer();
   btnSalir.hidden = !s;
-  if (esRRHH()) return s && s.rol !== 'TRABAJADOR' ? vistaRRHH() : vistaLoginRRHH();
-  if (s && s.rol === 'TRABAJADOR') return vistaCuenta();
+  if (s && s.rol !== 'TRABAJADOR') return vistaRRHH();
+  if (s) return vistaCuenta();
   return vistaLogin();
 }
 btnSalir.addEventListener('click', () => { sesion.borrar(); arrancar(); });
-window.addEventListener('hashchange', () => { sesion.borrar(); arrancar(); });
 
 /* ---------- Trabajador: entrada ---------- */
 
@@ -40,17 +37,31 @@ function vistaLogin() {
   app.innerHTML = `
     <form class="tarjeta login" id="f" novalidate>
       <div><h2>Bienvenido</h2><p class="suave">Escribe tu cédula para ver tu estado de cuenta de prestaciones y hacer solicitudes.</p></div>
-      <label>Cédula <input name="cedula" inputmode="numeric" autocomplete="off" placeholder="Solo números" maxlength="12" required></label>
+      <label>Cédula <input name="cedula" inputmode="numeric" autocomplete="username" placeholder="Solo números" maxlength="14" required></label>
+      <label id="lbl-clave" hidden>Clave <input name="clave" type="password" autocomplete="current-password"></label>
       <div class="error-msg" id="err" hidden></div>
       <button class="btn" type="submit">Entrar</button>
+      <button class="btn btn-sec" type="button" id="otra" hidden>Usar otra cédula</button>
     </form>`;
-  const f = app.querySelector('#f'), err = app.querySelector('#err');
+  const f = app.querySelector('#f'), err = app.querySelector('#err'), lblClave = app.querySelector('#lbl-clave'), otra = app.querySelector('#otra');
+  let pideClave = false;
   f.cedula.focus();
+  otra.addEventListener('click', () => vistaLogin());
   f.addEventListener('submit', async (e) => {
     e.preventDefault(); errorEn(err, '');
-    await conBoton(f.querySelector('button'), async () => {
+    await conBoton(f.querySelector('button[type=submit]'), async () => {
+      if (pideClave) {
+        const r = await llamar('loginAdmin', { cedula: f.cedula.value, clave: f.clave.value, token: '' });
+        if (!r.ok) return errorEn(err, r.message);
+        sesion.guardar({ token: r.data.token, rol: r.data.rol, nombre: r.data.nombre, tokenTrabajador: r.data.tokenTrabajador || '' });
+        return arrancar();
+      }
       const r = await llamar('login', { cedula: f.cedula.value, token: '' });
       if (!r.ok) return errorEn(err, r.message);
+      if (r.data.requiereClave) {            // la cédula es de Recursos Humanos: pide la clave
+        pideClave = true; f.cedula.readOnly = true; lblClave.hidden = false; otra.hidden = false; f.clave.required = true; f.clave.focus();
+        return;
+      }
       sesion.guardar({ token: r.data.token, rol: 'TRABAJADOR', nombre: r.data.nombre });
       arrancar();
     });
@@ -59,16 +70,21 @@ function vistaLogin() {
 
 /* ---------- Trabajador: estado de cuenta ---------- */
 
-async function vistaCuenta() {
+// `cont` y `token` permiten mostrarla dentro del panel de RRHH con la sesión de empleado de esa persona.
+let cuenta = { cont: app, token: '' };
+const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
+
+async function vistaCuenta(cont = app, token = '') {
+  cuenta = { cont, token };
   btnSalir.hidden = false;
-  app.innerHTML = '<p class="vacio">Cargando tu estado de cuenta…</p>';
-  const r = await llamar('estadoDeCuenta');
+  cont.innerHTML = '<p class="vacio">Cargando tu estado de cuenta…</p>';
+  const r = await llamar('estadoDeCuenta', conToken());
   if (!r.ok) { toast(r.message); return arrancar(); }
   const { resumen: u, anticipos } = r.data;
   const nombre = (sesion.leer() || {}).nombre || '';
   const pct = Math.round(u.porcentajeMax * 100);
 
-  app.innerHTML = `
+  cont.innerHTML = `
     <section class="tarjeta heroe">
       <h2>Hola, ${esc(nombre.split(' ')[0] || '')}. Disponible para anticipo</h2>
       <div class="gran">${bs(u.disponible)}</div>
@@ -99,11 +115,11 @@ async function vistaCuenta() {
         </div>`).join('')}</div>` : '<p class="vacio">Todavía no has hecho solicitudes.</p>'}
     </section>`;
 
-  app.querySelector('#btn-pedir')?.addEventListener('click', () => formularioAnticipo(u));
-  app.querySelectorAll('[data-cancelar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
-    const x = await llamar('cancelarAnticipo', { id: b.dataset.cancelar });
+  cont.querySelector('#btn-pedir')?.addEventListener('click', () => formularioAnticipo(u));
+  cont.querySelectorAll('[data-cancelar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('cancelarAnticipo', { id: b.dataset.cancelar, ...conToken() });
     toast(x.ok ? 'Solicitud cancelada.' : x.message);
-    vistaCuenta();
+    vistaCuenta(cuenta.cont, cuenta.token);
   })));
 }
 
@@ -129,35 +145,12 @@ function formularioAnticipo(u) {
     if (!(monto > 0)) return errorEn(err, 'Escribe un monto mayor a cero.');
     if (monto > u.disponible) return errorEn(err, `El monto supera lo disponible (${bs(u.disponible)}).`);
     await conBoton(f.querySelector('button[type=submit]'), async () => {
-      const r = await llamar('solicitarAnticipo', { monto, motivo: f.motivo.value, detalle: f.detalle.value });
+      const r = await llamar('solicitarAnticipo', { monto, motivo: f.motivo.value, detalle: f.detalle.value, ...conToken() });
       if (!r.ok) return errorEn(err, r.message);
-      dlg.close(); toast('Solicitud enviada. Recursos Humanos la revisará.'); vistaCuenta();
+      dlg.close(); toast('Solicitud enviada. Recursos Humanos la revisará.'); vistaCuenta(cuenta.cont, cuenta.token);
     });
   });
   dlg.showModal();
-}
-
-/* ---------- RRHH: entrada ---------- */
-
-function vistaLoginRRHH() {
-  app.innerHTML = `
-    <form class="tarjeta login" id="f" novalidate>
-      <div><h2>Recursos Humanos</h2><p class="suave">Acceso del personal autorizado.</p></div>
-      <label>Cédula <input name="cedula" inputmode="numeric" autocomplete="username" required></label>
-      <label>Clave <input name="clave" type="password" autocomplete="current-password" required></label>
-      <div class="error-msg" id="err" hidden></div>
-      <button class="btn" type="submit">Entrar</button>
-    </form>`;
-  const f = app.querySelector('#f'), err = app.querySelector('#err');
-  f.addEventListener('submit', async (e) => {
-    e.preventDefault(); errorEn(err, '');
-    await conBoton(f.querySelector('button'), async () => {
-      const r = await llamar('loginAdmin', { cedula: f.cedula.value, clave: f.clave.value, token: '' });
-      if (!r.ok) return errorEn(err, r.message);
-      sesion.guardar({ token: r.data.token, rol: r.data.rol });
-      arrancar();
-    });
-  });
 }
 
 /* ---------- RRHH: panel ---------- */
@@ -166,9 +159,11 @@ let pestana = 'solicitudes';
 
 async function vistaRRHH() {
   btnSalir.hidden = false;
+  const miCuenta = !!(sesion.leer() || {}).tokenTrabajador;
+  if (pestana === 'micuenta' && !miCuenta) pestana = 'solicitudes';
   app.innerHTML = `
     <div class="pestanas" role="tablist">
-      ${[['solicitudes', 'Solicitudes'], ['banco', 'Archivo al banco'], ['empleados', 'Empleados'], ['cierres', 'Cierres']].map(([k, t]) =>
+      ${[['solicitudes', 'Solicitudes'], ['banco', 'Archivo al banco'], ['empleados', 'Empleados'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel"></div>`;
@@ -177,6 +172,7 @@ async function vistaRRHH() {
   if (pestana === 'solicitudes') return panelSolicitudes(panel);
   if (pestana === 'banco') return panelBanco(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
+  if (pestana === 'micuenta') return vistaCuenta(panel, sesion.leer().tokenTrabajador);
   return panelCierres(panel);
 }
 
@@ -296,8 +292,16 @@ async function panelEmpleados(panel) {
       <div id="previa"></div>
     </section>
     <section class="tarjeta">
+      <h2>Jefe directo por departamento</h2>
+      <p class="suave">Asigna de una vez el mismo jefe a todo un departamento. Después puedes ajustar casos individuales en la lista.</p>
+      <label>Departamento <select id="dep"><option value="">Elige un departamento</option></select></label>
+      <div><button class="btn btn-sec" id="dep-jefe" disabled>Elegir jefe del departamento</button></div>
+    </section>
+    <section class="tarjeta">
       <h2>Empleados</h2>
       <label>Buscar por nombre o cédula <input id="q" placeholder="Escribe para buscar" autocomplete="off"></label>
+      <div class="fila"><label class="grow">Departamento <select id="f-dep"><option value="">Todos</option></select></label>
+        <label style="grid-auto-flow:column;align-items:center;gap:8px"><input type="checkbox" id="f-sinjefe" style="width:20px;min-height:20px"> Solo sin jefe</label></div>
       <div id="lista"><p class="vacio">Cargando…</p></div>
     </section>`;
   const err = panel.querySelector('#err'), previa = panel.querySelector('#previa');
@@ -328,28 +332,81 @@ async function panelEmpleados(panel) {
   });
 
   let temporizador;
-  panel.querySelector('#q').addEventListener('input', (e) => { clearTimeout(temporizador); temporizador = setTimeout(() => listar(e.target.value), 300); });
+  const q = panel.querySelector('#q'), fDep = panel.querySelector('#f-dep'), fSin = panel.querySelector('#f-sinjefe'), dep = panel.querySelector('#dep'), depJefe = panel.querySelector('#dep-jefe');
+  const refrescar = () => listar(q.value);
+  q.addEventListener('input', () => { clearTimeout(temporizador); temporizador = setTimeout(refrescar, 300); });
+  fDep.addEventListener('change', refrescar); fSin.addEventListener('change', refrescar);
+  dep.addEventListener('change', () => { depJefe.disabled = !dep.value; });
+  depJefe.addEventListener('click', () => elegirJefe(`Jefe de ${dep.value}`, async (jefe) => {
+    const r = await llamar('asignarJefeDepartamento', { departamento: dep.value, jefe });
+    if (!r.ok) return r;
+    toast(`${r.data.cambiados} empleados actualizados.`); refrescar(); return r;
+  }));
+  let departamentosCargados = false;
 
-  async function listar(q) {
+  async function listar(texto) {
     const caja = panel.querySelector('#lista');
-    const r = await llamar('listarEmpleados', { buscar: q });
+    const r = await llamar('listarEmpleados', { buscar: texto, departamento: fDep.value, sinJefe: fSin.checked });
     if (!r.ok) { caja.innerHTML = `<div class="error-msg">${esc(r.message)}</div>`; return; }
+    if (!departamentosCargados && r.data.departamentos.length) {
+      departamentosCargados = true;
+      const opciones = r.data.departamentos.map((d) => `<option>${esc(d)}</option>`).join('');
+      dep.insertAdjacentHTML('beforeend', opciones); fDep.insertAdjacentHTML('beforeend', opciones);
+    }
     const { empleados, total } = r.data;
     if (!empleados.length) { caja.innerHTML = '<p class="vacio">No hay empleados. Sube el Detalle de Empleado arriba.</p>'; return; }
     caja.innerHTML = `<p class="suave">${total} empleados${total > empleados.length ? ` · mostrando ${empleados.length}` : ''}</p>
       <div class="lista">${empleados.map((e) => `<div class="item">
-        <div class="item-cab"><div><b>${esc(e.nombre)}</b><p class="suave">${esc(e.clave)} · ${esc(e.puesto)} · ingreso ${esc(e.fechaIngreso || 'sin fecha')}</p></div>
+        <div class="item-cab"><div><b>${esc(e.nombre)}</b><p class="suave">${esc(e.clave)} · ${esc(e.puesto)} · ingreso ${esc(e.fechaIngreso || 'sin fecha')}</p>
+          <p class="suave">Jefe directo: <b>${e.jefeNombre ? esc(e.jefeNombre) : 'sin asignar'}</b></p></div>
           ${e.estado === 'Inactivo' ? '<span class="chip chip-neutro">Inactivo</span>' : e.revisarCedula ? '<span class="chip chip-espera">Revisar cédula</span>' : ''}</div>
+        <div><button class="btn btn-sec btn-chico" data-jefe="${esc(e.clave)}" data-nombre="${esc(e.nombre)}">${e.jefe ? 'Cambiar jefe' : 'Asignar jefe'}</button></div>
         <label>Empresa del fideicomiso
           <select data-emp="${esc(e.clave)}"><option value="" ${e.empresaFideicomiso ? '' : 'selected'}>Automática (${esc(e.empresaDetalle)})</option>
             <option value="PCA" ${e.empresaFideicomiso === 'PCA' ? 'selected' : ''}>PCA</option><option value="AIV" ${e.empresaFideicomiso === 'AIV' ? 'selected' : ''}>AIV</option></select></label>
       </div>`).join('')}</div>`;
+    caja.querySelectorAll('[data-jefe]').forEach((b) => b.addEventListener('click', () => elegirJefe(`Jefe de ${b.dataset.nombre}`, async (jefe) => {
+      const r = await llamar('asignarJefe', { claves: [b.dataset.jefe], jefe });
+      if (!r.ok) return r;
+      if (r.data.omitidos.length) return { ok: false, message: 'Esa persona no puede ser jefe de este empleado (sería su propio jefe).' };
+      toast(jefe ? 'Jefe asignado.' : 'Jefe quitado.'); refrescar(); return r;
+    })));
     caja.querySelectorAll('[data-emp]').forEach((sel) => sel.addEventListener('change', async () => {
       const x = await llamar('fijarEmpresa', { clave: sel.dataset.emp, empresa: sel.value });
       toast(x.ok ? `Empresa del fideicomiso: ${x.data.empresa}` : x.message);
     }));
   }
   listar('');
+}
+
+/** Diálogo para buscar y elegir un jefe. `aplicar(claveJefe | '')` devuelve la respuesta de la API. */
+function elegirJefe(titulo, aplicar) {
+  dlg.innerHTML = `<form id="fj" novalidate onsubmit="return false"><h2>${esc(titulo)}</h2>
+    <label>Buscar a la persona <input id="qj" placeholder="Nombre o cédula" autocomplete="off"></label>
+    <div id="res" class="lista"><p class="vacio">Escribe al menos 2 letras.</p></div>
+    <div class="error-msg" id="err" hidden></div>
+    <div class="fila"><button class="btn btn-sec grow" type="button" id="quitar">Quitar jefe</button><button class="btn btn-sec" type="button" id="no">Cerrar</button></div></form>`;
+  const res = dlg.querySelector('#res'), err = dlg.querySelector('#err'); let t;
+  const aplicarYCerrar = async (jefe) => {
+    errorEn(err, '');
+    const r = await aplicar(jefe);
+    if (r && !r.ok) return errorEn(err, r.message);
+    dlg.close();
+  };
+  dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+  dlg.querySelector('#quitar').addEventListener('click', (e) => conBoton(e.currentTarget, () => aplicarYCerrar('')));
+  dlg.querySelector('#qj').addEventListener('input', (e) => {
+    clearTimeout(t); const texto = e.target.value.trim();
+    if (texto.length < 2) { res.innerHTML = '<p class="vacio">Escribe al menos 2 letras.</p>'; return; }
+    t = setTimeout(async () => {
+      const r = await llamar('listarEmpleados', { buscar: texto });
+      if (!r.ok) return errorEn(err, r.message);
+      const activos = r.data.empleados.filter((x) => x.estado !== 'Inactivo').slice(0, 8);
+      res.innerHTML = activos.length ? activos.map((x) => `<button type="button" class="item" data-j="${esc(x.clave)}" style="text-align:left;cursor:pointer"><b>${esc(x.nombre)}</b><span class="suave">${esc(x.puesto)} · ${esc(x.departamento)}</span></button>`).join('') : '<p class="vacio">Sin resultados.</p>';
+      res.querySelectorAll('[data-j]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => aplicarYCerrar(b.dataset.j))));
+    }, 250);
+  });
+  dlg.showModal(); dlg.querySelector('#qj').focus();
 }
 
 function panelCierres(panel) {

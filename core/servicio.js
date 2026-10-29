@@ -42,15 +42,18 @@
 
   /* ---------- Acceso ---------- */
 
-  /** Trabajador: solo cédula. Acepta con o sin letra, con o sin verificador. */
+  /**
+   * Primer paso de la entrada: la cédula. Si esa cédula tiene usuario de RRHH/administrador
+   * no se entrega sesión: se pide la clave (iniciarSesionAdmin). Si no, entra como trabajador.
+   * Acepta con o sin letra, con RIF o sin él, y con o sin ceros a la izquierda.
+   */
   function iniciarSesion(repo, ctx, cedulaTexto) {
-    var digitos = String(cedulaTexto || '').replace(/\D/g, '');
-    if (digitos.length < 5 || digitos.length > 9) return err('CEDULA', 'Escribe tu cédula, solo números.');
-    if (digitos.length === 9) digitos = digitos.slice(0, 8);   // escribió el RIF: se quita el verificador
-    digitos = digitos.replace(/^0+/, '');                       // V09123456 es la cédula 9123456
+    var digitos = Empleados.numeroDeCedulaTexto(cedulaTexto);
+    if (!digitos) return err('CEDULA', 'Escribe tu cédula, solo números.');
     if (repo.fallos('global') >= MAX_FALLOS_GLOBAL || repo.fallos(digitos) >= MAX_FALLOS_CEDULA) {
       return err('BLOQUEADO', 'Demasiados intentos. Espera unos minutos e intenta de nuevo.');
     }
+    if (repo.usuario(digitos)) return ok({ requiereClave: true });
     var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
     if (!emp || emp.estado === 'Inactivo') {
       repo.registrarFallo(digitos); repo.registrarFallo('global');
@@ -61,17 +64,24 @@
     return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, empresa: Empleados.empresaFideicomiso(emp) });
   }
 
-  /** RRHH / administrador: cédula y clave (hash con sal en USUARIOS). */
+  /**
+   * RRHH / administrador: cédula y clave (huella con sal en USUARIOS). Si además es empleado activo
+   * recibe un segundo token de trabajador para ver su propio estado de cuenta.
+   */
   function iniciarSesionAdmin(repo, ctx, cedulaTexto, claveTexto) {
-    var digitos = String(cedulaTexto || '').replace(/\D/g, '');
+    var digitos = Empleados.numeroDeCedulaTexto(cedulaTexto);
+    if (!digitos) return err('CEDULA', 'Escribe tu cédula, solo números.');
     if (repo.fallos('admin:' + digitos) >= MAX_FALLOS_CEDULA) return err('BLOQUEADO', 'Demasiados intentos. Espera unos minutos.');
     var u = repo.usuario(digitos);
     if (!u || ctx.hash(String(claveTexto || ''), u.sal) !== u.hash) {
       repo.registrarFallo('admin:' + digitos);
-      return err('CREDENCIALES', 'Cédula o clave incorrecta.');
+      return err('CREDENCIALES', 'Clave incorrecta.');
     }
+    var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
     repo.log('LOGIN_ADMIN', digitos, 'Entrada ' + u.rol);
-    return ok({ token: crearToken(ctx, digitos, u.rol), rol: u.rol });
+    var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '' };
+    if (emp && emp.estado !== 'Inactivo') data.tokenTrabajador = crearToken(ctx, Empleados.claveCedula(emp), 'TRABAJADOR');
+    return ok(data);
   }
 
   /* ---------- Trabajador ---------- */
@@ -200,22 +210,68 @@
     return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha });
   }
 
-  function listarEmpleados(repo, ctx, token, buscar) {
+  /** opciones: { buscar, departamento, sinJefe } */
+  function listarEmpleados(repo, ctx, token, opciones) {
     if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
-    var q = Empleados.normalizarNombre(buscar || '');
-    var lista = repo.todosEmpleados().filter(function (e) {
+    if (typeof opciones === 'string') opciones = { buscar: opciones };
+    opciones = opciones || {};
+    var q = Empleados.normalizarNombre(opciones.buscar || '');
+    var todos = repo.todosEmpleados(), porClave = {};
+    todos.forEach(function (e) { porClave[Empleados.claveCedula(e)] = e; });
+    var departamentos = {};
+    todos.forEach(function (e) { if (e.estado !== 'Inactivo' && e.departamento) departamentos[e.departamento] = true; });
+    var lista = todos.filter(function (e) {
+      if (opciones.departamento && e.departamento !== opciones.departamento) return false;
+      if (opciones.sinJefe && (e.jefe || e.estado === 'Inactivo')) return false;
       return !q || e.nombreNorm.indexOf(q) !== -1 || Empleados.claveCedula(e).indexOf(q.replace(/\s/g, '')) !== -1;
     });
     return ok({
       total: lista.length,
+      departamentos: Object.keys(departamentos).sort(),
       empleados: lista.slice(0, 100).map(function (e) {
+        var j = e.jefe ? porClave[e.jefe] : null;
         return {
-          clave: Empleados.claveCedula(e), nombre: e.nombre, puesto: e.puesto, estado: e.estado,
+          clave: Empleados.claveCedula(e), nombre: e.nombre, puesto: e.puesto, departamento: e.departamento, estado: e.estado,
           empresaDetalle: e.empresaDetalle, empresaFideicomiso: e.empresaFideicomiso, empresa: Empleados.empresaFideicomiso(e),
           revisarCedula: !!e.revisarCedula, fechaIngreso: e.fechaIngreso ? e.fechaIngreso.d + '/' + e.fechaIngreso.m + '/' + e.fechaIngreso.y : '',
+          jefe: e.jefe || '', jefeNombre: j ? j.nombre : '',
         };
       }),
     });
+  }
+
+  /** Asigna (o quita, con '') el jefe directo de uno o varios empleados. */
+  function asignarJefe(repo, ctx, token, claves, jefeClave) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    claves = [].concat(claves || []);
+    if (!claves.length) return err('VALIDACION', 'Elige a quién asignar el jefe.');
+    var lista = repo.todosEmpleados(), por = {};
+    lista.forEach(function (e) { por[Empleados.claveCedula(e)] = e; });
+    if (jefeClave) {
+      var j = por[jefeClave];
+      if (!j || j.estado === 'Inactivo') return err('VALIDACION', 'El jefe debe ser un empleado activo.');
+    }
+    var cambiados = 0, omitidos = [];
+    claves.forEach(function (c) {
+      var e = por[c];
+      if (!e) { omitidos.push(c); return; }
+      if (jefeClave && (jefeClave === c || Empleados.creaCicloDeJefes(lista, c, jefeClave))) { omitidos.push(e.nombre + ' (sería su propio jefe)'); return; }
+      if ((e.jefe || '') !== (jefeClave || '')) { e.jefe = jefeClave || ''; cambiados++; }
+    });
+    if (cambiados) repo.guardarEmpleados(lista);
+    repo.log('JEFE_ASIGNADO', s.clave, (jefeClave || 'sin jefe') + ' ← ' + claves.length + ' empleados');
+    return ok({ cambiados: cambiados, omitidos: omitidos });
+  }
+
+  /** Asigna el mismo jefe a todos los activos de un departamento (sin tocar al propio jefe). */
+  function asignarJefeDepartamento(repo, ctx, token, departamento, jefeClave) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var claves = repo.todosEmpleados().filter(function (e) {
+      return e.departamento === departamento && e.estado !== 'Inactivo' && Empleados.claveCedula(e) !== jefeClave;
+    }).map(Empleados.claveCedula);
+    if (!claves.length) return err('VALIDACION', 'Ese departamento no tiene empleados activos.');
+    return asignarJefe(repo, ctx, token, claves, jefeClave);
   }
 
   /** Empresa del fideicomiso editable por empleado ('' vuelve a la regla automática). */
@@ -258,7 +314,7 @@
     bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
     generarArchivoAnticipos: generarArchivoAnticipos, marcarAnticiposPagados: marcarAnticiposPagados,
     cambiarEstadoCierre: cambiarEstadoCierre, leerToken: leerToken,
-    cargarEmpleados: cargarEmpleados, listarEmpleados: listarEmpleados, fijarEmpresaFideicomiso: fijarEmpresaFideicomiso,
+    cargarEmpleados: cargarEmpleados, listarEmpleados: listarEmpleados, asignarJefe: asignarJefe, asignarJefeDepartamento: asignarJefeDepartamento, fijarEmpresaFideicomiso: fijarEmpresaFideicomiso,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Servicio = api;
