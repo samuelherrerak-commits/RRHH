@@ -52,7 +52,9 @@ function crearEntorno({ respuestasUi = [] } = {}) {
       newBlob: (arr) => ({ getDataAsString: () => Buffer.from(arr.map((b) => (b < 0 ? b + 256 : b))).toString('utf8') }),
     },
   };
-  sandbox.globalThis = sandbox;
+  // Apps Script real: asignar a `globalThis`/`this` desde dentro de un módulo no basta para crear los globales.
+  // Este señuelo reproduce ese fallo: solo los `var` de nivel superior del archivo cuentan.
+  sandbox.globalThis = {};
   const ctx = vm.createContext(sandbox);
   vm.runInContext(construir(), ctx, { filename: 'RRHH.gs' });
   const llamar = (cuerpo) => JSON.parse(vm.runInContext('doPost', ctx)({ postData: { contents: JSON.stringify({ api_token: 'RRHH2026', ...cuerpo }) } }).contenido);
@@ -142,7 +144,7 @@ test('el token de la API es obligatorio', () => {
 
 test('si falta código en Apps Script, el menú lo explica en vez de dar un error técnico', () => {
   const e = crearEntorno();
-  vm.runInContext('Empleados = undefined; delete globalThis.Empleados;', e.ctx);
+  vm.runInContext('Empleados = undefined;', e.ctx);
   assert.throws(() => e.ejecutar('ponerClaveRRHH'), /Faltan módulos: Empleados/);
   assert.match(e.ui.alertas.at(-1)[1], /RRHH\.gs/);
 });
@@ -157,7 +159,7 @@ test('abrir la URL muestra la versión y que todos los módulos cargaron', () =>
 
 test('si falta el código, el sitio recibe un mensaje claro y el error queda en LOG', () => {
   const e = crearEntorno(); e.ejecutar('configurarInicial');
-  vm.runInContext('Servicio = undefined; delete globalThis.Servicio;', e.ctx);
+  vm.runInContext('Servicio = undefined;', e.ctx);
   const doGetFalta = JSON.parse(vm.runInContext('doGet', e.ctx)().contenido);
   assert.equal(doGetFalta.modulosCompletos, false);
   assert.equal(doGetFalta.modulos.Servicio, false);

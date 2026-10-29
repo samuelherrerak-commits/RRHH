@@ -6,13 +6,16 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-29.3';
+var VERSION = '2026-10-29.4';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'];
 
+/** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
-  var r = {};
-  MODULOS.forEach(function (m) { r[m] = typeof this[m] !== 'undefined'; }, this);
-  return r;
+  return {
+    Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
+    Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
+    Constancia: typeof Constancia !== 'undefined' && !!Constancia, Servicio: typeof Servicio !== 'undefined' && !!Servicio,
+  };
 }
 
 var HOJAS = {
@@ -73,6 +76,8 @@ function doPost(e) {
     // Filtro básico: el sitio envía este token. No es un secreto (va en config.js), solo frena visitas al azar.
     var esperado = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
     if (esperado && d.api_token !== esperado) return salida_({ ok: false, code: 'TOKEN', message: 'Acceso no autorizado.' });
+    var cargados = modulosCargados_(), sinCargar = MODULOS.filter(function (k) { return !cargados[k]; });
+    if (sinCargar.length) throw new Error('Falta código en Apps Script (' + sinCargar.join(', ') + '). Pega RRHH.gs completo y publica una nueva versión de la implementación.');
     var ruta = RUTAS_TRABAJADOR[d.action] || RUTAS_RRHH[d.action];
     if (!ruta) return salida_({ ok: false, code: 'ACCION', message: 'Acción desconocida.' });
     return salida_(ruta(crearRepo_(), crearCtx_(), d));
@@ -316,10 +321,7 @@ function onOpen() {
 
 /** Avisa con claridad si falta pegar algún archivo del sistema (en vez de un error técnico). */
 function requerirModulos_() {
-  var faltan = [];
-  ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'].forEach(function (m) {
-    if (typeof this[m] === 'undefined') faltan.push(m);
-  }, this);
+  var m = modulosCargados_(), faltan = MODULOS.filter(function (k) { return !m[k]; });
   if (faltan.length) {
     SpreadsheetApp.getUi().alert('Falta código en Apps Script',
       'No se encontró: ' + faltan.join(', ') + '.\n\nBorra todos los archivos del proyecto y pega UN solo archivo: RRHH.gs (carpeta apps-script del repositorio).',
@@ -375,10 +377,8 @@ function diagnostico() {
   var pr = PropertiesService.getScriptProperties();
   l.push((pr.getProperty('SECRETO') ? '✔ ' : '✘ FALTA ') + 'clave secreta');
   l.push((pr.getProperty('API_TOKEN') ? '✔ ' : '✘ FALTA ') + 'token de la API');
-  ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'].forEach(function (m) {
-    var ok = false; try { ok = typeof this[m] === 'object'; } catch (e) { /* no definido */ }
-    l.push((ok ? '✔ ' : '✘ FALTA ') + 'archivo core/' + m.toLowerCase() + '.js');
-  }, this);
+  var cargados = modulosCargados_();
+  MODULOS.forEach(function (m) { l.push((cargados[m] ? '✔ ' : '✘ FALTA ') + 'módulo ' + m); });
   l.push('Versión del código: ' + VERSION);
   try {
     var errores = leer_('LOG').filter(function (f) { return f.accion === 'ERROR'; }).slice(-3).map(function (f) { return '· ' + texto_(f.detalle).split('\n')[0]; });
