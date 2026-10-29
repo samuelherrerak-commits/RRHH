@@ -62,7 +62,7 @@
     }
     var clave = Empleados.claveCedula(emp);
     repo.log('LOGIN', clave, 'Entrada de trabajador');
-    return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, empresa: Empleados.empresaFideicomiso(emp) });
+    return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp) });
   }
 
   /**
@@ -81,7 +81,7 @@
     }
     var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
     repo.log('LOGIN_ADMIN', digitos, 'Entrada ' + u.rol);
-    var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '' };
+    var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '' };
     if (emp && emp.estado !== 'Inactivo') data.tokenTrabajador = crearToken(ctx, Empleados.claveCedula(emp), 'TRABAJADOR');
     return ok(data);
   }

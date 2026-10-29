@@ -109,7 +109,7 @@ test('mapearDetalle: reconoce encabezados con tildes, serial de Excel y filas va
   ]);
   assert.equal(r.filas.length, 1);
   assert.equal(r.omitidas, 1);
-  assert.deepEqual(r.faltantes, ['salarioMensual']);   // este archivo de prueba no trae sueldo
+  assert.deepEqual(r.faltantes, ['genero', 'salarioMensual']);   // este archivo de prueba no trae género ni sueldo
   assert.equal(r.filas[0].fechaInicio, '05/03/2024');
   assert.equal(E.mapearDetalle([{ Nombre: 'X' }]).faltantes.includes('cedula'), true);
 });
@@ -127,4 +127,12 @@ test('nombres, cargos y departamentos sin espacios dobles (vienen así en el exp
   assert.equal(e.puesto, 'Gerente de RRHH');
   assert.equal(e.departamento, 'Recursos Humanos');
   assert.equal(e.organizacion, 'PROSEIN CENTRAL');
+});
+
+test('género del detalle (para el saludo) y se conserva si el archivo nuevo no lo trae', () => {
+  const r = E.mapearDetalle([{ 'Cédula': 'V305803231', 'Nombre Socio del Negocio': 'Ana', Genero: 'Femenino' }]);
+  assert.equal(r.filas[0].genero, 'Femenino');
+  const a = E.fusionarDetalle([], r.filas).empleados;
+  assert.equal(a[0].genero, 'Femenino');
+  assert.equal(E.fusionarDetalle(a, [{ cedula: 'V305803231', nombre: 'Ana' }]).empleados[0].genero, 'Femenino');
 });

@@ -297,14 +297,15 @@ var Empleados = (function () {
           estado: estadoEnEspanol(fila.estado),
           fechaIngreso: f,
           empresaDetalle: empresaDesdeDetalle(fila.organizacion),
-          salarioMensual: numeroDeMonto(fila.salarioMensual),   // Salario M. del detalle; lo usa la constancia de trabajo
+          salarioMensual: numeroDeMonto(fila.salarioMensual),
+          genero: espacios(fila.genero),                        // 'Femenino' / 'Masculino' (para el saludo)   // Salario M. del detalle; lo usa la constancia de trabajo
           empresaFideicomiso: '',
           jefe: '',            // clave de cédula del jefe directo (se asigna desde RRHH)
           editados: [],
         };
       }
     
-      var CAMPOS_DETALLE = ['salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
+      var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
     
       /**
        * Recarga del detalle: actualiza los existentes, agrega los nuevos y
@@ -328,6 +329,7 @@ var Empleados = (function () {
             CAMPOS_DETALLE.forEach(function (c) {
               if (actual.editados && actual.editados.indexOf(c) !== -1) return;
               if (c === 'salarioMensual' && nuevo.salarioMensual == null) return;   // el archivo no trae sueldo: se conserva el anterior
+              if (c === 'genero' && !nuevo.genero) return;
               actual[c] = nuevo[c];
             });
             if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
@@ -451,6 +453,7 @@ var Empleados = (function () {
         departamento: ['DEPARTAMENTO'],
         puesto: ['PUESTO', 'PUESTO NOMINA', 'CARGO'],
         estado: ['ESTADO', 'STATUS'],
+        genero: ['GENERO', 'SEXO'],
         salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
         fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
       };
@@ -488,6 +491,7 @@ var Empleados = (function () {
           var o = { cedula: cedula, nombre: nombre };
           ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) { o[k] = col[k] ? f[col[k]] : ''; });
           o.salarioMensual = col.salarioMensual ? f[col.salarioMensual] : '';
+          o.genero = col.genero ? f[col.genero] : '';
           o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
           filas.push(o);
         });
@@ -846,7 +850,7 @@ var Servicio = (function () {
         }
         var clave = Empleados.claveCedula(emp);
         repo.log('LOGIN', clave, 'Entrada de trabajador');
-        return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, empresa: Empleados.empresaFideicomiso(emp) });
+        return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp) });
       }
     
       /**
@@ -865,7 +869,7 @@ var Servicio = (function () {
         }
         var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
         repo.log('LOGIN_ADMIN', digitos, 'Entrada ' + u.rol);
-        var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '' };
+        var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '' };
         if (emp && emp.estado !== 'Inactivo') data.tokenTrabajador = crearToken(ctx, Empleados.claveCedula(emp), 'TRABAJADOR');
         return ok(data);
       }
@@ -1209,7 +1213,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-29.5';
+var VERSION = '2026-10-30.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'];
 
@@ -1225,7 +1229,7 @@ function modulosCargados_() {
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
-  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual'],
+  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
@@ -1371,7 +1375,7 @@ function empleado_(f) {
     estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso),
     empresaDetalle: texto_(f.empresaDetalle) || 'PCA', empresaFideicomiso: texto_(f.empresaFideicomiso),
     revisarCedula: f.revisarCedula === true || f.revisarCedula === 'TRUE', motivoRevision: texto_(f.motivoRevision),
-    salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), jefe: texto_(f.jefe), editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
+    salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), genero: texto_(f.genero), jefe: texto_(f.jefe), editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
   };
 }
 
@@ -1425,7 +1429,7 @@ function crearRepo_() {
       if (!lista.length) return;
       var filas = lista.map(function (e) {
         return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
-          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual];
+          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || ''];
       });
       var rango = h.getRange(2, 1, filas.length, cab.length);
       rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte

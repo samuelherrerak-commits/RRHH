@@ -351,3 +351,12 @@ test('el sueldo del detalle llega al empleado y se conserva si el archivo nuevo 
   const c = E.fusionarDetalle(b, [{ cedula: 'V305803231', nombre: 'Ana', organizacion: 'X', fechaInicio: '01/01/2020', salarioMensual: 6000 }]).empleados;
   assert.equal(c[0].salarioMensual, 6000);
 });
+
+test('la entrada devuelve el género para el saludo (trabajador y RRHH)', () => {
+  const repo = crearRepo([{ cedula: 'V305803231', nombre: 'Samuel Herrera', organizacion: 'X', fechaInicio: '01/01/2020', genero: 'Masculino' },
+    { cedula: 'V111111119', nombre: 'Ana', organizacion: 'X', fechaInicio: '01/01/2020', genero: 'Femenino' }]);
+  const ctx = crearCtx();
+  assert.equal(S.iniciarSesion(repo, ctx, '11111111').data.genero, 'Femenino');
+  repo.st.usuarios['30580323'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'ADMIN' };
+  assert.equal(S.iniciarSesionAdmin(repo, ctx, '30580323', 'k').data.genero, 'Masculino');
+});

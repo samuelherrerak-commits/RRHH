@@ -129,14 +129,15 @@
       estado: estadoEnEspanol(fila.estado),
       fechaIngreso: f,
       empresaDetalle: empresaDesdeDetalle(fila.organizacion),
-      salarioMensual: numeroDeMonto(fila.salarioMensual),   // Salario M. del detalle; lo usa la constancia de trabajo
+      salarioMensual: numeroDeMonto(fila.salarioMensual),
+      genero: espacios(fila.genero),                        // 'Femenino' / 'Masculino' (para el saludo)   // Salario M. del detalle; lo usa la constancia de trabajo
       empresaFideicomiso: '',
       jefe: '',            // clave de cédula del jefe directo (se asigna desde RRHH)
       editados: [],
     };
   }
 
-  var CAMPOS_DETALLE = ['salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
+  var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
 
   /**
    * Recarga del detalle: actualiza los existentes, agrega los nuevos y
@@ -160,6 +161,7 @@
         CAMPOS_DETALLE.forEach(function (c) {
           if (actual.editados && actual.editados.indexOf(c) !== -1) return;
           if (c === 'salarioMensual' && nuevo.salarioMensual == null) return;   // el archivo no trae sueldo: se conserva el anterior
+          if (c === 'genero' && !nuevo.genero) return;
           actual[c] = nuevo[c];
         });
         if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
@@ -283,6 +285,7 @@
     departamento: ['DEPARTAMENTO'],
     puesto: ['PUESTO', 'PUESTO NOMINA', 'CARGO'],
     estado: ['ESTADO', 'STATUS'],
+    genero: ['GENERO', 'SEXO'],
     salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
     fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
   };
@@ -320,6 +323,7 @@
       var o = { cedula: cedula, nombre: nombre };
       ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) { o[k] = col[k] ? f[col[k]] : ''; });
       o.salarioMensual = col.salarioMensual ? f[col.salarioMensual] : '';
+      o.genero = col.genero ? f[col.genero] : '';
       o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
       filas.push(o);
     });

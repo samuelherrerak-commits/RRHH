@@ -8,8 +8,8 @@ const S = require('../core/servicio.js');
 const { crearRepo, crearCtx } = require('../tests/memoria.js');
 
 const repo = crearRepo([
-  { cedula: 'V123456789', nombre: 'Esther Lilia Rodríguez Hernández', organizacion: 'PROSEIN CENTRAL', puesto: 'Asistente Administrativo', fechaInicio: '05/03/2025', salarioMensual: 12583.17 },
-  { cedula: 'V987654321', nombre: 'Luis Alfonso Pérez', organizacion: 'AUSTRAL IMPORT DE VENEZUELA C.A', puesto: 'Gerente de División de Gestión Humana', fechaInicio: '15/09/2022', salarioMensual: 5500 },
+  { cedula: 'V123456789', nombre: 'Esther Lilia Rodríguez Hernández', organizacion: 'PROSEIN CENTRAL', puesto: 'Asistente Administrativo', fechaInicio: '05/03/2025', salarioMensual: 12583.17, genero: 'Femenino' },
+  { cedula: 'V987654321', nombre: 'Luis Alfonso Pérez', organizacion: 'AUSTRAL IMPORT DE VENEZUELA C.A', puesto: 'Gerente de División de Gestión Humana', fechaInicio: '15/09/2022', salarioMensual: 5500, genero: 'Masculino' },
 ]);
 const ctx = crearCtx(Date.now()); ctx.ahora = () => Date.now();
 repo.st.aportes.push({ clave: 'V12345678', anio: 2026, trimestre: 1, empresa: 'PCA', total: 2883.64 }, { clave: 'V12345678', anio: 2026, trimestre: 2, empresa: 'PCA', total: 3120.5 },

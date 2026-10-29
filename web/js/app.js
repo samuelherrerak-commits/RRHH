@@ -31,10 +31,11 @@ async function arrancar() {
   const s = sesion.leer();
   btnSalir.hidden = !s;
   if (s && s.rol !== 'TRABAJADOR') return vistaRRHH();
-  if (s) return vistaCuenta();
+  if (s) return vistaCuenta(app, '', seccionDesdeHash());
   return vistaLogin();
 }
-btnSalir.addEventListener('click', () => { sesion.borrar(); arrancar(); });
+btnSalir.addEventListener('click', () => { sesion.borrar(); history.replaceState(null, '', location.pathname); arrancar(); });
+window.addEventListener('hashchange', () => arrancar());
 
 /* ---------- Trabajador: entrada ---------- */
 
@@ -58,7 +59,7 @@ function vistaLogin() {
       if (pideClave) {
         const r = await llamar('loginAdmin', { cedula: f.cedula.value, clave: f.clave.value, token: '' });
         if (!r.ok) return errorEn(err, r.message);
-        sesion.guardar({ token: r.data.token, rol: r.data.rol, nombre: r.data.nombre, tokenTrabajador: r.data.tokenTrabajador || '' });
+        sesion.guardar({ token: r.data.token, rol: r.data.rol, nombre: r.data.nombre, genero: r.data.genero || '', tokenTrabajador: r.data.tokenTrabajador || '' });
         return arrancar();
       }
       const r = await llamar('login', { cedula: f.cedula.value, token: '' });
@@ -67,7 +68,7 @@ function vistaLogin() {
         pideClave = true; f.cedula.readOnly = true; lblClave.hidden = false; otra.hidden = false; f.clave.required = true; f.clave.focus();
         return;
       }
-      sesion.guardar({ token: r.data.token, rol: 'TRABAJADOR', nombre: r.data.nombre });
+      sesion.guardar({ token: r.data.token, rol: 'TRABAJADOR', nombre: r.data.nombre, genero: r.data.genero || '' });
       arrancar();
     });
   });
@@ -76,23 +77,122 @@ function vistaLogin() {
 /* ---------- Trabajador: estado de cuenta ---------- */
 
 // `cont` y `token` permiten mostrarla dentro del panel de RRHH con la sesión de empleado de esa persona.
-let cuenta = { cont: app, token: '' };
+// En el sitio del trabajador cada sección tiene su dirección (#/constancia, #/vacaciones, #/fideicomiso),
+// así funcionan los botones Atrás/Adelante del navegador y del celular.
+let cuenta = { cont: app, token: '', seccion: 'inicio' };
 const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
+const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso'];
+const seccionDesdeHash = () => { const m = /^#\/(\w+)$/.exec(location.hash); return m && SECCIONES.includes(m[1]) ? m[1] : 'inicio'; };
 
-async function vistaCuenta(cont = app, token = '') {
-  cuenta = { cont, token };
+function navegar(seccion) {
+  if (cuenta.cont === app) {
+    const destino = seccion === 'inicio' ? '#/' : `#/${seccion}`;
+    if (location.hash !== destino) { location.hash = destino; return; }   // el cambio de dirección vuelve a dibujar
+  }
+  vistaCuenta(cuenta.cont, cuenta.token, seccion);
+}
+
+const capitalizar = (t) => t.toLocaleLowerCase('es').replace(/(^|\s)\p{L}/gu, (l) => l.toLocaleUpperCase('es'));
+const primerNombre = (nombre) => capitalizar(String(nombre || '').trim().split(/\s+/)[0] || '');
+function saludo(genero) {
+  const g = String(genero || '').trim().toUpperCase();
+  return g.startsWith('F') ? 'Bienvenida' : g.startsWith('M') ? 'Bienvenido' : 'Bienvenido(a)';
+}
+
+const ICONOS = {
+  constancia: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8"/><path d="M8 17h5"/>',
+  vacaciones: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>',
+  fideicomiso: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+  volver: '<path d="m15 18-6-6 6-6"/>',
+  ir: '<path d="m9 18 6-6-6-6"/>',
+};
+const icono = (n, clase = 'icono') => `<svg class="${clase}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[n]}</svg>`;
+const volver = () => `<button class="volver" type="button" data-ir="inicio">${icono('volver')} Volver al inicio</button>`;
+
+async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
+  cuenta = { cont, token, seccion };
   btnSalir.hidden = false;
-  cont.innerHTML = '<p class="vacio">Cargando tu estado de cuenta…</p>';
-  const [r, rc] = await Promise.all([llamar('estadoDeCuenta', conToken()), llamar('misConstancias', conToken())]);
+  window.scrollTo(0, 0);
+  if (seccion === 'constancia') await seccionConstancia(cont);
+  else if (seccion === 'vacaciones') seccionVacaciones(cont);
+  else if (seccion === 'fideicomiso') await seccionFideicomiso(cont);
+  else seccionInicio(cont);
+  cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+}
+
+/* ---------- Inicio: saludo y tres tarjetas ---------- */
+
+function seccionInicio(cont) {
+  const s = sesion.leer() || {};
+  const tarjeta = (id, titulo, texto, tono, extra = '') => `
+    <button class="acceso acceso-${tono}" type="button" data-ir="${id}">
+      <span class="acceso-icono">${icono(id)}</span>
+      <span class="acceso-texto"><b>${titulo}</b><span>${texto}</span>${extra}</span>
+      ${icono('ir', 'icono acceso-ir')}
+    </button>`;
+  cont.innerHTML = `
+    <section class="bienvenida">
+      <h1>${saludo(s.genero)}, ${esc(primerNombre(s.nombre))}</h1>
+      <p>al sistema de atención de solicitudes de Gestión Humana.</p>
+    </section>
+    <nav class="accesos" aria-label="Solicitudes">
+      ${tarjeta('constancia', 'Constancia de trabajo', 'Descárgala al instante en PDF, con código QR de verificación.', 'rojo')}
+      ${tarjeta('vacaciones', 'Vacaciones', 'Solicita tus días; tu jefe directo y Gestión Humana las aprueban.', 'azul', '<span class="chip chip-neutro">Próximamente</span>')}
+      ${tarjeta('fideicomiso', 'Fideicomiso', 'Consulta tus aportes de prestaciones y solicita anticipos.', 'carbon')}
+    </nav>`;
+}
+
+/* ---------- Constancia de trabajo ---------- */
+
+async function seccionConstancia(cont) {
+  cont.innerHTML = `${volver()}<p class="vacio">Cargando…</p>`;
+  const rc = await llamar('misConstancias', conToken());
+  if (!rc.ok && rc.code === 'SESION') { toast(rc.message); return arrancar(); }
+  const constancias = rc.ok ? rc.data : [];
+  cont.innerHTML = `${volver()}
+    <section class="tarjeta">
+      <h2>Constancia de trabajo</h2>
+      <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 30 días.</p>
+      <div><button class="btn" id="btn-constancia">Descargar constancia de trabajo</button></div>
+      <div class="error-msg" id="err-const" hidden></div>
+    </section>
+    ${constancias.length ? `<section class="tarjeta"><h2>Mis constancias</h2><div class="lista">${constancias.map((c) => `
+      <div class="item"><div class="item-cab"><div><b>Emitida el ${fechaCaracas(c.emision)}</b><p class="suave">Vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
+        ${c.estado === 'VIGENTE' ? `<div><button class="btn btn-sec btn-chico" data-pdf="${esc(c.id)}">Descargar de nuevo</button></div>` : ''}</div>`).join('')}</div></section>` : ''}`;
+
+  const errConst = cont.querySelector('#err-const');
+  const bajarPdf = async (c) => { try { await descargarConstanciaPdf(c, URL_BASE); } catch (e) { errorEn(errConst, e.message || 'No se pudo generar el PDF.'); } };
+  cont.querySelector('#btn-constancia').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    errorEn(errConst, '');
+    const x = await llamar('emitirConstancia', conToken());
+    if (!x.ok) return errorEn(errConst, x.message);
+    await bajarPdf(x.data); toast('Constancia generada.'); vistaCuenta(cuenta.cont, cuenta.token, 'constancia');
+  }));
+  cont.querySelectorAll('[data-pdf]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => bajarPdf(constancias.find((c) => c.id === b.dataset.pdf)))));
+}
+
+/* ---------- Vacaciones (próximamente) ---------- */
+
+function seccionVacaciones(cont) {
+  cont.innerHTML = `${volver()}
+    <section class="tarjeta">
+      <h2>Vacaciones</h2>
+      <p class="aviso">Muy pronto podrás solicitar tus vacaciones aquí. Tu solicitud irá primero a tu jefe directo y, cuando la apruebe, a Gestión Humana.</p>
+    </section>`;
+}
+
+/* ---------- Fideicomiso: estado de cuenta y anticipos ---------- */
+
+async function seccionFideicomiso(cont) {
+  cont.innerHTML = `${volver()}<p class="vacio">Cargando tu estado de cuenta…</p>`;
+  const r = await llamar('estadoDeCuenta', conToken());
   if (!r.ok) { toast(r.message); return arrancar(); }
   const { resumen: u, anticipos } = r.data;
-  const constancias = rc.ok ? rc.data : [];
-  const nombre = (sesion.leer() || {}).nombre || '';
   const pct = Math.round(u.porcentajeMax * 100);
 
-  cont.innerHTML = `
+  cont.innerHTML = `${volver()}
     <section class="tarjeta heroe">
-      <h2>Hola, ${esc(nombre.split(' ')[0] || '')}. Disponible para anticipo</h2>
+      <h2>Disponible para anticipo</h2>
       <div class="gran">${bs(u.disponible)}</div>
       <p class="suave" style="color:#cfd1d4">Hasta el ${pct} % de lo aportado, menos los anticipos pagados o en trámite.</p>
       <div class="fila"><button class="btn" id="btn-pedir" ${u.disponible > 0 ? '' : 'disabled'}>Solicitar anticipo</button></div>
@@ -111,15 +211,6 @@ async function vistaCuenta(cont = app, token = '') {
       </table></div>` : '<p class="vacio">Aún no tienes aportes acreditados.</p>'}
     </section>
     <section class="tarjeta">
-      <h2>Constancia de trabajo</h2>
-      <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 30 días.</p>
-      <div><button class="btn btn-azul" id="btn-constancia">Descargar constancia de trabajo</button></div>
-      <div class="error-msg" id="err-const" hidden></div>
-      ${constancias.length ? `<div class="lista">${constancias.map((c) => `
-        <div class="item"><div class="item-cab"><div><b>Emitida el ${fechaCaracas(c.emision)}</b><p class="suave">Vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
-          ${c.estado === 'VIGENTE' ? `<div><button class="btn btn-sec btn-chico" data-pdf="${esc(c.id)}">Descargar de nuevo</button></div>` : ''}</div>`).join('')}</div>` : ''}
-    </section>
-    <section class="tarjeta">
       <h2>Mis solicitudes de anticipo</h2>
       ${anticipos.length ? `<div class="lista">${anticipos.slice().sort((a, b) => b.creada - a.creada).map((a) => `
         <div class="item">
@@ -130,20 +221,11 @@ async function vistaCuenta(cont = app, token = '') {
         </div>`).join('')}</div>` : '<p class="vacio">Todavía no has hecho solicitudes.</p>'}
     </section>`;
 
-  const errConst = cont.querySelector('#err-const');
-  const bajarPdf = async (c) => { try { await descargarConstanciaPdf(c, URL_BASE); } catch (e) { errorEn(errConst, e.message || 'No se pudo generar el PDF.'); } };
-  cont.querySelector('#btn-constancia').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
-    errorEn(errConst, '');
-    const x = await llamar('emitirConstancia', conToken());
-    if (!x.ok) return errorEn(errConst, x.message);
-    await bajarPdf(x.data); toast('Constancia generada.'); vistaCuenta(cuenta.cont, cuenta.token);
-  }));
-  cont.querySelectorAll('[data-pdf]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => bajarPdf(constancias.find((c) => c.id === b.dataset.pdf)))));
   cont.querySelector('#btn-pedir')?.addEventListener('click', () => formularioAnticipo(u));
   cont.querySelectorAll('[data-cancelar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
     const x = await llamar('cancelarAnticipo', { id: b.dataset.cancelar, ...conToken() });
     toast(x.ok ? 'Solicitud cancelada.' : x.message);
-    vistaCuenta(cuenta.cont, cuenta.token);
+    vistaCuenta(cuenta.cont, cuenta.token, 'fideicomiso');
   })));
 }
 
@@ -171,7 +253,7 @@ function formularioAnticipo(u) {
     await conBoton(f.querySelector('button[type=submit]'), async () => {
       const r = await llamar('solicitarAnticipo', { monto, motivo: f.motivo.value, detalle: f.detalle.value, ...conToken() });
       if (!r.ok) return errorEn(err, r.message);
-      dlg.close(); toast('Solicitud enviada. Recursos Humanos la revisará.'); vistaCuenta(cuenta.cont, cuenta.token);
+      dlg.close(); toast('Solicitud enviada. Recursos Humanos la revisará.'); vistaCuenta(cuenta.cont, cuenta.token, 'fideicomiso');
     });
   });
   dlg.showModal();
