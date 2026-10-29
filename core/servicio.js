@@ -15,6 +15,7 @@
   var Empleados = isNode ? require('./empleados.js') : dependencia(raiz, 'Empleados');
   var Prestaciones = isNode ? require('./prestaciones.js') : dependencia(raiz, 'Prestaciones');
   var Exportes = isNode ? require('./exportes.js') : dependencia(raiz, 'Exportes');
+  var Constancia = isNode ? require('./constancia.js') : dependencia(raiz, 'Constancia');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
@@ -190,6 +191,95 @@
     return ok(c);
   }
 
+  /* ---------- Constancia de trabajo ---------- */
+
+  var MAX_CONSTANCIAS_MES = 5;
+  var MAX_FALLOS_VERIFICAR = 40;
+
+  function firmante(p) {
+    return {
+      nombre: String(p.firmaNombre || 'Lic. Luis Paul Rojas'),
+      cargo: String(p.firmaCargo || 'Gerente de Gestión Humana'),
+      telefono: String(p.firmaTelefono || '(0412) 205.11.60.'),
+      ciudad: String(p.ciudad || 'Caracas'),
+    };
+  }
+
+  /** Vista de una constancia: datos guardados + estado calculado hoy. */
+  function vistaConstancia(c, ahora, p) {
+    return {
+      id: c.id, nombre: c.nombre, cedula: c.cedula, empresa: c.empresa, empresaNombre: Constancia.NOMBRES_EMPRESA[c.empresa] || c.empresa,
+      cargo: c.cargo, organizacion: c.organizacion, fechaIngreso: c.fechaIngreso, salario: c.salario,
+      emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora),
+      firmante: p ? firmante(p) : undefined,
+    };
+  }
+
+  /**
+   * El trabajador pide su constancia: se guarda una copia fija de sus datos de hoy (cargo, ingreso, sueldo),
+   * con vigencia de 3 meses y un código único para el QR. Sale sola, sin aprobación.
+   */
+  function emitirConstancia(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos. Consulta con Recursos Humanos.');
+    if (!emp.fechaIngreso) return err('VALIDACION', 'Falta tu fecha de ingreso. Consulta con Recursos Humanos.');
+    if (!(emp.salarioMensual > 0)) return err('VALIDACION', 'Falta tu salario en el sistema. Consulta con Recursos Humanos.');
+    var p = repo.parametros(), ahora = ctx.ahora();
+    var max = Number(p.constanciasMaxPorMes) > 0 ? Number(p.constanciasMaxPorMes) : MAX_CONSTANCIAS_MES;
+    var recientes = repo.constanciasDe(s.clave).filter(function (c) { return c.emision > ahora - 30 * 86400000; });
+    if (recientes.length >= max) return err('LIMITE', 'Ya generaste ' + max + ' constancias este mes. Si necesitas otra, consulta con Recursos Humanos.');
+    var c = {
+      id: repo.nuevoIdConstancia(), clave: s.clave, nombre: emp.nombre, cedula: emp.cedulaLetra + '-' + emp.cedulaNumero,
+      empresa: Empleados.empresaFideicomiso(emp), cargo: emp.puesto, organizacion: emp.organizacion,
+      fechaIngreso: Constancia.fechaCorta(emp.fechaIngreso), salario: Calculo.redondear2(emp.salarioMensual),
+      emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave,
+    };
+    repo.guardarConstancia(c);
+    repo.log('CONSTANCIA_EMITIDA', s.clave, c.id);
+    return ok(vistaConstancia(c, ahora, p));
+  }
+
+  function misConstancias(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var p = repo.parametros(), ahora = ctx.ahora();
+    return ok(repo.constanciasDe(s.clave).sort(function (a, b) { return b.emision - a.emision; })
+      .slice(0, 20).map(function (c) { return vistaConstancia(c, ahora, p); }));
+  }
+
+  /**
+   * Público (lo abre el QR): confirma si la constancia existe y está vigente.
+   * El código es largo y aleatorio; las consultas con códigos inexistentes se limitan.
+   */
+  function verificarConstancia(repo, ctx, id) {
+    id = String(id || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{10,40}$/.test(id)) return err('NO_ENCONTRADO', 'Código de constancia no válido.');
+    if (repo.fallos('verificar') >= MAX_FALLOS_VERIFICAR) return err('BLOQUEADO', 'Demasiadas consultas. Intenta de nuevo en unos minutos.');
+    var c = repo.constanciaPorId(id);
+    if (!c) { repo.registrarFallo('verificar'); return err('NO_ENCONTRADO', 'No existe ninguna constancia con ese código.'); }
+    return ok(vistaConstancia(c, ctx.ahora()));
+  }
+
+  function listarConstancias(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var ahora = ctx.ahora();
+    return ok(repo.todasConstancias().sort(function (a, b) { return b.emision - a.emision; })
+      .slice(0, 100).map(function (c) { return vistaConstancia(c, ahora); }));
+  }
+
+  function anularConstancia(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var c = repo.constanciaPorId(String(id || '').toUpperCase());
+    if (!c) return err('NO_ENCONTRADO', 'No encontramos esa constancia.');
+    c.estado = 'ANULADA';
+    repo.guardarConstancia(c);
+    repo.log('CONSTANCIA_ANULADA', s.clave, c.id);
+    return ok(vistaConstancia(c, ctx.ahora()));
+  }
+
   /* ---------- Base de empleados (RRHH) ---------- */
 
   /**
@@ -314,6 +404,8 @@
     bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
     generarArchivoAnticipos: generarArchivoAnticipos, marcarAnticiposPagados: marcarAnticiposPagados,
     cambiarEstadoCierre: cambiarEstadoCierre, leerToken: leerToken,
+    emitirConstancia: emitirConstancia, misConstancias: misConstancias, verificarConstancia: verificarConstancia,
+    listarConstancias: listarConstancias, anularConstancia: anularConstancia,
     cargarEmpleados: cargarEmpleados, listarEmpleados: listarEmpleados, asignarJefe: asignarJefe, asignarJefeDepartamento: asignarJefeDepartamento, fijarEmpresaFideicomiso: fijarEmpresaFideicomiso,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

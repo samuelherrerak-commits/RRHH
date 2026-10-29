@@ -258,3 +258,92 @@ test('un trabajador no puede asignar jefes', () => {
   const t = S.iniciarSesion(repo, ctx, '11111111').data.token;
   assert.equal(S.asignarJefe(repo, ctx, t, ['V11111111'], 'V33333333').code, 'SESION');
 });
+
+/* ---------- Constancia de trabajo ---------- */
+
+function conSueldo(extra = {}) {
+  const repo = crearRepo([{ cedula: 'V305803231', nombre: 'Samuel Herrera', organizacion: 'PROSEIN CENTRAL', puesto: 'Asistente', fechaInicio: '12/11/2024', salarioMensual: 5500, ...extra }]);
+  return { repo, ctx: crearCtx(Date.UTC(2026, 9, 29, 15, 0)) };
+}
+
+test('constancia: sale sola con los datos de hoy, vigencia de 3 meses y código único', () => {
+  const { repo, ctx } = conSueldo();
+  const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  const r = S.emitirConstancia(repo, ctx, t);
+  assert.equal(r.ok, true);
+  const c = r.data;
+  assert.equal(c.nombre, 'Samuel Herrera');
+  assert.equal(c.cedula, 'V-30580323');
+  assert.equal(c.fechaIngreso, '12/11/2024');
+  assert.equal(c.salario, 5500);
+  assert.equal(c.empresa, 'PCA');
+  assert.equal(c.estado, 'VIGENTE');
+  assert.equal(require('../core/constancia.js').fechaCorta(require('../core/constancia.js').fechaCaracas(c.vence)), '29/01/2027');
+  assert.match(c.id, /^[A-Z0-9]{10,}$/);
+  assert.equal(c.firmante.cargo, 'Gerente de Gestión Humana');
+  assert.ok(repo.st.logs.some((l) => l.accion === 'CONSTANCIA_EMITIDA'));
+});
+
+test('constancia: faltan datos → mensaje claro; no se emite', () => {
+  const sinSueldo = conSueldo({ salarioMensual: '' });
+  const t = S.iniciarSesion(sinSueldo.repo, sinSueldo.ctx, '30580323').data.token;
+  assert.match(S.emitirConstancia(sinSueldo.repo, sinSueldo.ctx, t).message, /salario/);
+  const sinFecha = conSueldo({ fechaInicio: '' });
+  const t2 = S.iniciarSesion(sinFecha.repo, sinFecha.ctx, '30580323').data.token;
+  assert.match(S.emitirConstancia(sinFecha.repo, sinFecha.ctx, t2).message, /fecha de ingreso/);
+});
+
+test('constancia: tope de 5 al mes por trabajador', () => {
+  const { repo, ctx } = conSueldo();
+  const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  for (let i = 0; i < 5; i++) assert.equal(S.emitirConstancia(repo, ctx, t).ok, true);
+  assert.equal(S.emitirConstancia(repo, ctx, t).code, 'LIMITE');
+  ctx.reloj.t += 31 * 86400000; // pasado un mes vuelve a poder (con otra sesión)
+  const t2 = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  assert.equal(S.emitirConstancia(repo, ctx, t2).ok, true);
+});
+
+test('verificación pública por código: vigente, vencida y anulada', () => {
+  const { repo, ctx } = conSueldo();
+  const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  const c = S.emitirConstancia(repo, ctx, t).data;
+  const v = S.verificarConstancia(repo, ctx, c.id.toLowerCase());     // sin sesión
+  assert.equal(v.data.estado, 'VIGENTE');
+  assert.equal(v.data.salario, 5500);
+  assert.equal(v.data.firmante, undefined);
+  ctx.reloj.t += 100 * 86400000;                                        // 100 días después
+  assert.equal(S.verificarConstancia(repo, ctx, c.id).data.estado, 'VENCIDA');
+  ctx.reloj.t -= 100 * 86400000;
+  const a = S.iniciarSesion(repo, ctx, '30580323');                       // el mismo trabajador no puede anular
+  assert.equal(S.anularConstancia(repo, ctx, a.data.token, c.id).code, 'SESION');
+  repo.st.usuarios['11111111'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
+  const rr = S.iniciarSesionAdmin(repo, ctx, '11111111', 'k').data.token;
+  assert.equal(S.anularConstancia(repo, ctx, rr, c.id).data.estado, 'ANULADA');
+  assert.equal(S.verificarConstancia(repo, ctx, c.id).data.estado, 'ANULADA');
+  assert.equal(S.listarConstancias(repo, ctx, rr).data.length, 1);
+});
+
+test('verificación: códigos inventados se rechazan y se limitan', () => {
+  const { repo, ctx } = conSueldo();
+  assert.equal(S.verificarConstancia(repo, ctx, 'x').code, 'NO_ENCONTRADO');
+  for (let i = 0; i < 40; i++) S.verificarConstancia(repo, ctx, 'ABCDEFGHIJ' + i);
+  assert.equal(S.verificarConstancia(repo, ctx, 'ABCDEFGHIJKL').code, 'BLOQUEADO');
+});
+
+test('mis constancias: solo las propias', () => {
+  const { repo, ctx } = conSueldo();
+  const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  S.emitirConstancia(repo, ctx, t);
+  repo.st.constancias.OTRA = { id: 'OTRA', clave: 'V99999999', emision: 1, vence: 2, estado: 'VIGENTE' };
+  assert.equal(S.misConstancias(repo, ctx, t).data.length, 1);
+});
+
+test('el sueldo del detalle llega al empleado y se conserva si el archivo nuevo no lo trae', () => {
+  const E = require('../core/empleados.js');
+  const a = E.fusionarDetalle([], [{ cedula: 'V305803231', nombre: 'Ana', organizacion: 'X', fechaInicio: '01/01/2020', salarioMensual: '1.234,56' }]).empleados;
+  assert.equal(a[0].salarioMensual, 1234.56);
+  const b = E.fusionarDetalle(a, [{ cedula: 'V305803231', nombre: 'Ana', organizacion: 'X', fechaInicio: '01/01/2020' }]).empleados;
+  assert.equal(b[0].salarioMensual, 1234.56);
+  const c = E.fusionarDetalle(b, [{ cedula: 'V305803231', nombre: 'Ana', organizacion: 'X', fechaInicio: '01/01/2020', salarioMensual: 6000 }]).empleados;
+  assert.equal(c[0].salarioMensual, 6000);
+});

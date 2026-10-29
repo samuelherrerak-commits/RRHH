@@ -4,7 +4,7 @@
   "description": "Sistema de RRHH Prosein / Austral: aporte trimestral al fideicomiso y portal del trabajador. El cálculo vive en core/ y lo usan el servidor, el navegador y las pruebas.",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "sync": "mkdir -p web/core && cp core/calculo.js core/empleados.js web/core/"
+    "sync": "mkdir -p web/core && cp core/calculo.js core/empleados.js core/constancia.js web/core/"
   },
   "engines": {
     "node": ">=18"

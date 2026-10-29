@@ -8,15 +8,19 @@
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
-  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe'],
+  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
+  CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
 var RUTAS_TRABAJADOR = {
+  emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
+  misConstancias: function (repo, ctx, d) { return Servicio.misConstancias(repo, ctx, d.token); },
+  verificarConstancia: function (repo, ctx, d) { return Servicio.verificarConstancia(repo, ctx, d.id); },   // pública (QR)
   login: function (repo, ctx, d) { return Servicio.iniciarSesion(repo, ctx, d.cedula); },
   estadoDeCuenta: function (repo, ctx, d) { return Servicio.miEstadoDeCuenta(repo, ctx, d.token); },
   solicitarAnticipo: function (repo, ctx, d) { return Servicio.solicitarAnticipo(repo, ctx, d.token, d); },
@@ -24,6 +28,8 @@ var RUTAS_TRABAJADOR = {
 };
 
 var RUTAS_RRHH = {
+  listarConstancias: function (repo, ctx, d) { return Servicio.listarConstancias(repo, ctx, d.token); },
+  anularConstancia: function (repo, ctx, d) { return Servicio.anularConstancia(repo, ctx, d.token, d.id); },
   loginAdmin: function (repo, ctx, d) { return Servicio.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave); },
   bandejaAnticipos: function (repo, ctx, d) { return Servicio.bandejaAnticipos(repo, ctx, d.token, d.estado); },
   decidirAnticipo: function (repo, ctx, d) { return Servicio.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo); },
@@ -124,7 +130,7 @@ function empleado_(f) {
     estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso),
     empresaDetalle: texto_(f.empresaDetalle) || 'PCA', empresaFideicomiso: texto_(f.empresaFideicomiso),
     revisarCedula: f.revisarCedula === true || f.revisarCedula === 'TRUE', motivoRevision: texto_(f.motivoRevision),
-    jefe: texto_(f.jefe), editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
+    salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), jefe: texto_(f.jefe), editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
   };
 }
 
@@ -140,6 +146,17 @@ function anticipo_(f) {
   };
 }
 
+var constanciasCache = null;
+function constancias_() {
+  return constanciasCache || (constanciasCache = leer_('CONSTANCIAS').map(function (f) {
+    return {
+      _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), nombre: texto_(f.nombre), cedula: texto_(f.cedula), empresa: texto_(f.empresa),
+      cargo: texto_(f.cargo), organizacion: texto_(f.organizacion), fechaIngreso: texto_(f.fechaIngreso), salario: Number(f.salario),
+      emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor),
+    };
+  }));
+}
+
 function crearRepo_() {
   var cache = CacheService.getScriptCache();
   var anticipos = null, cierres = null;
@@ -152,6 +169,12 @@ function crearRepo_() {
       leer_('PARAMETROS').forEach(function (f) { p[f.clave] = f.valor; });
       return p;
     },
+    constanciasDe: function (clave) { return constancias_().filter(function (c) { return c.clave === clave; }); },
+    constanciaPorId: function (id) { return constancias_().filter(function (c) { return c.id === id; })[0] || null; },
+    todasConstancias: function () { return constancias_(); },
+    guardarConstancia: function (c) { escribirFila_('CONSTANCIAS', c); constanciasCache = null; },
+    /** Código largo y aleatorio: va dentro del QR y no se puede adivinar. */
+    nuevoIdConstancia: function () { return Utilities.getUuid().replace(/-/g, '').slice(0, 16).toUpperCase(); },
     todosEmpleados: function () { return leer_('EMPLEADOS').map(empleado_); },
     /** Reescribe toda la hoja EMPLEADOS de una vez (mucho más rápido que fila por fila). */
     guardarEmpleados: function (lista) {
@@ -161,7 +184,7 @@ function crearRepo_() {
       if (!lista.length) return;
       var filas = lista.map(function (e) {
         return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
-          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || ''];
+          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual];
       });
       var rango = h.getRange(2, 1, filas.length, cab.length);
       rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte
@@ -227,6 +250,11 @@ function configurarInicial() {
     if (h.getLastRow() <= 1) h.getRange(2, 1, filas.length, filas[0].length).setValues(filas);
   };
   sem('PARAMETROS', [['anioBase', 2025], ['diasMinimosMes', 1], ['diasUtilidades', 120], ['porcentajeAnticipoMax', 0.75]]);
+  // Parámetros nuevos: se agregan solo si no existen, sin tocar los que ya editaste.
+  var hp = ss.getSheetByName('PARAMETROS'), existentes = {};
+  hp.getDataRange().getValues().forEach(function (f) { existentes[String(f[0])] = true; });
+  [['firmaNombre', 'Lic. Luis Paul Rojas'], ['firmaCargo', 'Gerente de Gestión Humana'], ['firmaTelefono', '(0412) 205.11.60.'], ['ciudad', 'Caracas'], ['constanciasMaxPorMes', 5]]
+    .forEach(function (f) { if (!existentes[f[0]]) hp.appendRow(f); });
   sem('EMPRESAS', [['PCA', 5847, 1, 5, 'A'], ['AIV', 5847, 1, 5, 'A']]);
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('SECRETO')) props.setProperty('SECRETO', Utilities.getUuid() + Utilities.getUuid());
@@ -286,7 +314,7 @@ function diagnostico() {
   var pr = PropertiesService.getScriptProperties();
   l.push((pr.getProperty('SECRETO') ? '✔ ' : '✘ FALTA ') + 'clave secreta');
   l.push((pr.getProperty('API_TOKEN') ? '✔ ' : '✘ FALTA ') + 'token de la API');
-  ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Servicio'].forEach(function (m) {
+  ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'].forEach(function (m) {
     var ok = false; try { ok = typeof this[m] === 'object'; } catch (e) { /* no definido */ }
     l.push((ok ? '✔ ' : '✘ FALTA ') + 'archivo core/' + m.toLowerCase() + '.js');
   }, this);

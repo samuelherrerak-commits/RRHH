@@ -21,3 +21,11 @@ export const chip = (estado) => {
   const [txt, tono] = ESTADOS[estado] || [estado, 'neutro'];
   return `<span class="chip chip-${tono}">${esc(txt)}</span>`;
 };
+
+/** ms → 29/10/2026 en hora de Caracas (la misma fecha que ve cualquiera, esté donde esté). */
+export const fechaCaracas = (ms) => window.Constancia.fechaCorta(window.Constancia.fechaCaracas(ms));
+
+export const chipConstancia = (estado) => {
+  const [txt, tono] = { VIGENTE: ['Vigente', 'ok'], VENCIDA: ['Vencida', 'espera'], ANULADA: ['Anulada', 'error'] }[estado] || [estado, 'neutro'];
+  return `<span class="chip chip-${tono}">${esc(txt)}</span>`;
+};

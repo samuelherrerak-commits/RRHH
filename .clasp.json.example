@@ -6,6 +6,7 @@
     "core/empleados.js",
     "core/prestaciones.js",
     "core/exportes.js",
+    "core/constancia.js",
     "core/servicio.js",
     "apps-script/Code.gs"
   ]

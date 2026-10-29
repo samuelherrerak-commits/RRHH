@@ -109,7 +109,7 @@ test('mapearDetalle: reconoce encabezados con tildes, serial de Excel y filas va
   ]);
   assert.equal(r.filas.length, 1);
   assert.equal(r.omitidas, 1);
-  assert.deepEqual(r.faltantes, []);
+  assert.deepEqual(r.faltantes, ['salarioMensual']);   // este archivo de prueba no trae sueldo
   assert.equal(r.filas[0].fechaInicio, '05/03/2024');
   assert.equal(E.mapearDetalle([{ Nombre: 'X' }]).faltantes.includes('cedula'), true);
 });

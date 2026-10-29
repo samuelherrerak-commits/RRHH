@@ -4,13 +4,18 @@ const E = require('../core/empleados.js');
 
 function crearRepo(empleadosFilas) {
   let empleados = E.fusionarDetalle([], empleadosFilas).empleados;
-  const st = { aportes: [], anticipos: {}, cierres: {}, usuarios: {}, fallos: {}, logs: [], seq: 0,
+  const st = { aportes: [], anticipos: {}, constancias: {}, cierres: {}, usuarios: {}, fallos: {}, logs: [], seq: 0,
     parametros: { porcentajeAnticipoMax: 0.75 },
     empresas: { PCA: { fideicomiso: 5847, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' }, AIV: { fideicomiso: 6000, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' } } };
   const clave = (c) => c;
   return {
     st,
     parametros: () => st.parametros,
+    constanciasDe: (c) => Object.values(st.constancias).filter((x) => x.clave === c).map((x) => ({ ...x })),
+    constanciaPorId: (id) => st.constancias[id] || null,
+    todasConstancias: () => Object.values(st.constancias).map((x) => ({ ...x })),
+    guardarConstancia: (c) => { st.constancias[c.id] = c; },
+    nuevoIdConstancia: () => ('CT' + (++st.seq) + 'ABCDEFGHJK').slice(0, 14),
     todosEmpleados: () => empleados.map((e) => ({ ...e })),
     guardarEmpleados: (lista) => { empleados = lista.map((e) => ({ ...e })); },
     empleadoPorClave: (c) => empleados.find((e) => E.claveCedula(e) === clave(c)) || null,

@@ -51,6 +51,17 @@
     return { letra: letra, numero: sinCeros(dig), revisar: false, motivo: '' };
   }
 
+  /** 130 | "130" | "1.234,56" | "1234.56" → número; vacío o inválido → null. */
+  function numeroDeMonto(v) {
+    if (typeof v === 'number') return isFinite(v) && v >= 0 ? v : null;
+    var t = String(v == null ? '' : v).trim().replace(/[^\d.,]/g, '');
+    if (!t) return null;
+    if (t.indexOf(',') !== -1) t = t.replace(/\./g, '').replace(',', '.');
+    else if ((t.match(/\./g) || []).length > 1) t = t.replace(/\./g, '');
+    var n = parseFloat(t);
+    return isFinite(n) ? n : null;
+  }
+
   /** El export trae 'Active'; la hoja usa 'Activo' / 'Inactivo'. */
   function estadoEnEspanol(v) {
     var t = normalizarNombre(v);
@@ -115,13 +126,14 @@
       estado: estadoEnEspanol(fila.estado),
       fechaIngreso: f,
       empresaDetalle: empresaDesdeDetalle(fila.organizacion),
+      salarioMensual: numeroDeMonto(fila.salarioMensual),   // Salario M. del detalle; lo usa la constancia de trabajo
       empresaFideicomiso: '',
       jefe: '',            // clave de cédula del jefe directo (se asigna desde RRHH)
       editados: [],
     };
   }
 
-  var CAMPOS_DETALLE = ['nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
+  var CAMPOS_DETALLE = ['salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
 
   /**
    * Recarga del detalle: actualiza los existentes, agrega los nuevos y
@@ -144,6 +156,7 @@
         var actual = salida[idx[k]];
         CAMPOS_DETALLE.forEach(function (c) {
           if (actual.editados && actual.editados.indexOf(c) !== -1) return;
+          if (c === 'salarioMensual' && nuevo.salarioMensual == null) return;   // el archivo no trae sueldo: se conserva el anterior
           actual[c] = nuevo[c];
         });
         if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
@@ -267,6 +280,7 @@
     departamento: ['DEPARTAMENTO'],
     puesto: ['PUESTO', 'PUESTO NOMINA', 'CARGO'],
     estado: ['ESTADO', 'STATUS'],
+    salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
     fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
   };
 
@@ -302,6 +316,7 @@
       if (!cedula && !nombre) { omitidas++; return; }
       var o = { cedula: cedula, nombre: nombre };
       ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) { o[k] = col[k] ? f[col[k]] : ''; });
+      o.salarioMensual = col.salarioMensual ? f[col.salarioMensual] : '';
       o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
       filas.push(o);
     });
@@ -310,7 +325,7 @@
 
   var api = {
     mapearDetalle: mapearDetalle, fechaDeExcel: fechaDeExcel,
-    numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
+    numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
     normalizarNombre: normalizarNombre, parsearCedula: parsearCedula, verificadorRif: verificadorRif, estadoEnEspanol: estadoEnEspanol,
     empresaDesdeDetalle: empresaDesdeDetalle, empresaFideicomiso: empresaFideicomiso,
     claveCedula: claveCedula, empleadoDesdeDetalle: empleadoDesdeDetalle,

@@ -1,5 +1,8 @@
 import { llamar, sesion } from './api.js';
-import { bs, esc, chip, fechaHora, leerMonto } from './formato.js';
+import { bs, esc, chip, fechaHora, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
+import { descargarConstanciaPdf } from './constancia-pdf.js';
+
+const URL_BASE = location.origin + location.pathname;
 
 const app = document.getElementById('app');
 const btnSalir = document.getElementById('btn-salir');
@@ -23,6 +26,8 @@ function errorEn(caja, msg) { caja.textContent = msg; caja.hidden = !msg; }
 /* ---------- Arranque y rutas ---------- */
 
 async function arrancar() {
+  const verificar = /^#v=([A-Za-z0-9]+)/.exec(location.hash);   // enlace del QR: página pública, sin entrar
+  if (verificar) return vistaVerificar(verificar[1]);
   const s = sesion.leer();
   btnSalir.hidden = !s;
   if (s && s.rol !== 'TRABAJADOR') return vistaRRHH();
@@ -78,9 +83,10 @@ async function vistaCuenta(cont = app, token = '') {
   cuenta = { cont, token };
   btnSalir.hidden = false;
   cont.innerHTML = '<p class="vacio">Cargando tu estado de cuenta…</p>';
-  const r = await llamar('estadoDeCuenta', conToken());
+  const [r, rc] = await Promise.all([llamar('estadoDeCuenta', conToken()), llamar('misConstancias', conToken())]);
   if (!r.ok) { toast(r.message); return arrancar(); }
   const { resumen: u, anticipos } = r.data;
+  const constancias = rc.ok ? rc.data : [];
   const nombre = (sesion.leer() || {}).nombre || '';
   const pct = Math.round(u.porcentajeMax * 100);
 
@@ -105,6 +111,15 @@ async function vistaCuenta(cont = app, token = '') {
       </table></div>` : '<p class="vacio">Aún no tienes aportes acreditados.</p>'}
     </section>
     <section class="tarjeta">
+      <h2>Constancia de trabajo</h2>
+      <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 3 meses.</p>
+      <div><button class="btn btn-azul" id="btn-constancia">Descargar constancia de trabajo</button></div>
+      <div class="error-msg" id="err-const" hidden></div>
+      ${constancias.length ? `<div class="lista">${constancias.map((c) => `
+        <div class="item"><div class="item-cab"><div><b>Emitida el ${fechaCaracas(c.emision)}</b><p class="suave">Vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
+          ${c.estado === 'VIGENTE' ? `<div><button class="btn btn-sec btn-chico" data-pdf="${esc(c.id)}">Descargar de nuevo</button></div>` : ''}</div>`).join('')}</div>` : ''}
+    </section>
+    <section class="tarjeta">
       <h2>Mis solicitudes de anticipo</h2>
       ${anticipos.length ? `<div class="lista">${anticipos.slice().sort((a, b) => b.creada - a.creada).map((a) => `
         <div class="item">
@@ -115,6 +130,15 @@ async function vistaCuenta(cont = app, token = '') {
         </div>`).join('')}</div>` : '<p class="vacio">Todavía no has hecho solicitudes.</p>'}
     </section>`;
 
+  const errConst = cont.querySelector('#err-const');
+  const bajarPdf = async (c) => { try { await descargarConstanciaPdf(c, URL_BASE); } catch (e) { errorEn(errConst, e.message || 'No se pudo generar el PDF.'); } };
+  cont.querySelector('#btn-constancia').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    errorEn(errConst, '');
+    const x = await llamar('emitirConstancia', conToken());
+    if (!x.ok) return errorEn(errConst, x.message);
+    await bajarPdf(x.data); toast('Constancia generada.'); vistaCuenta(cuenta.cont, cuenta.token);
+  }));
+  cont.querySelectorAll('[data-pdf]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => bajarPdf(constancias.find((c) => c.id === b.dataset.pdf)))));
   cont.querySelector('#btn-pedir')?.addEventListener('click', () => formularioAnticipo(u));
   cont.querySelectorAll('[data-cancelar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
     const x = await llamar('cancelarAnticipo', { id: b.dataset.cancelar, ...conToken() });
@@ -163,7 +187,7 @@ async function vistaRRHH() {
   if (pestana === 'micuenta' && !miCuenta) pestana = 'solicitudes';
   app.innerHTML = `
     <div class="pestanas" role="tablist">
-      ${[['solicitudes', 'Solicitudes'], ['banco', 'Archivo al banco'], ['empleados', 'Empleados'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : [])].map(([k, t]) =>
+      ${[['solicitudes', 'Solicitudes'], ['banco', 'Archivo al banco'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel"></div>`;
@@ -172,6 +196,7 @@ async function vistaRRHH() {
   if (pestana === 'solicitudes') return panelSolicitudes(panel);
   if (pestana === 'banco') return panelBanco(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
+  if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'micuenta') return vistaCuenta(panel, sesion.leer().tokenTrabajador);
   return panelCierres(panel);
 }
@@ -249,6 +274,56 @@ async function panelBanco(panel) {
     const r = await llamar('pagarAnticipos', { ids: ar.data.map((a) => a.id) });
     toast(r.ok ? `${r.data.cambiados} anticipos pagados.` : r.message); panelBanco(panel);
   }));
+}
+
+/* ---------- RRHH: constancias emitidas ---------- */
+
+async function panelConstancias(panel) {
+  panel.innerHTML = '<p class="vacio">Cargando…</p>';
+  const r = await llamar('listarConstancias');
+  if (!r.ok) { toast(r.message); return arrancar(); }
+  panel.innerHTML = `<section class="tarjeta"><h2>Constancias emitidas (${r.data.length})</h2>
+    <p class="suave">Si anulas una, al escanear su código aparecerá como anulada.</p>
+    ${r.data.length ? `<div class="lista">${r.data.map((c) => `<div class="item">
+      <div class="item-cab"><div><b>${esc(c.nombre)}</b><p class="suave">${esc(c.cedula)} · ${esc(c.empresa)} · ${bs(c.salario)}</p></div>${chipConstancia(c.estado)}</div>
+      <p class="suave">Emitida el ${fechaCaracas(c.emision)} · vence el ${fechaCaracas(c.vence)} · código ${esc(c.id)}</p>
+      ${c.estado !== 'ANULADA' ? `<div><button class="btn btn-sec btn-chico" data-anular="${esc(c.id)}">Anular</button></div>` : ''}</div>`).join('')}</div>` : '<p class="vacio">Todavía no se han emitido constancias.</p>'}</section>`;
+  panel.querySelectorAll('[data-anular]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm('¿Anular esta constancia? Dejará de ser válida al escanear su código.')) return;
+    const x = await llamar('anularConstancia', { id: b.dataset.anular });
+    toast(x.ok ? 'Constancia anulada.' : x.message); panelConstancias(panel);
+  })));
+}
+
+/* ---------- Verificación pública (abre el QR) ---------- */
+
+async function vistaVerificar(id) {
+  btnSalir.hidden = true;
+  app.innerHTML = '<p class="vacio">Verificando la constancia…</p>';
+  const r = await llamar('verificarConstancia', { id, token: '' });
+  if (!r.ok) {
+    app.innerHTML = `<section class="tarjeta login"><div class="banner banner-error"><b>No se pudo verificar</b><span>${esc(r.message)}</span></div>
+      <p class="suave">Si recibiste este documento de un tercero, no lo des por válido.</p></section>`;
+    return;
+  }
+  const c = r.data, vigente = c.estado === 'VIGENTE';
+  const titulo = vigente ? 'Constancia válida y vigente' : c.estado === 'VENCIDA' ? 'Constancia auténtica, pero vencida' : 'Constancia anulada';
+  const tono = vigente ? 'ok' : c.estado === 'VENCIDA' ? 'espera' : 'error';
+  app.innerHTML = `<section class="tarjeta login">
+    <div class="banner banner-${tono}"><b>${titulo}</b>
+      <span>${c.estado === 'ANULADA' ? 'Recursos Humanos anuló este documento. No tiene validez.' : `Se confirma que <b>${esc(c.nombre)}</b> trabaja o trabajó en <b>${esc(c.empresaNombre)}</b>.`}</span></div>
+    <div class="tabla-caja tabla-datos"><table><tbody>
+      <tr><th>Nombre y apellido</th><td>${esc(c.nombre)}</td></tr>
+      <tr><th>Cédula</th><td>${esc(c.cedula)}</td></tr>
+      <tr><th>Empresa</th><td>${esc(c.empresaNombre)}</td></tr>
+      <tr><th>Cargo</th><td>${esc(c.cargo)}</td></tr>
+      <tr><th>Fecha de ingreso</th><td>${esc(c.fechaIngreso)}</td></tr>
+      <tr><th>Salario mensual</th><td>${bs(c.salario)}</td></tr>
+      <tr><th>Fecha de emisión</th><td>${fechaCaracas(c.emision)}</td></tr>
+      <tr><th>Fecha de vencimiento</th><td>${fechaCaracas(c.vence)}</td></tr>
+      <tr><th>Código</th><td>${esc(c.id)}</td></tr>
+    </tbody></table></div>
+    <p class="suave">Datos tomados de los registros de Recursos Humanos al momento de emitir la constancia (vigencia de 3 meses).</p></section>`;
 }
 
 /* ---------- RRHH: empleados ---------- */

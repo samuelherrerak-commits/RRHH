@@ -83,3 +83,12 @@ dialog form { display: grid; gap: var(--s4); }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--carbon); color: #fff; padding: 12px 20px; border-radius: 999px; font-size: 14px; max-width: calc(100vw - 32px); z-index: 10; box-shadow: 0 10px 30px rgb(20 22 24 / .14); }
 .vacio { text-align: center; padding: var(--s5); color: var(--tinta-3); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.banner { display: grid; gap: var(--s1); padding: var(--s4); border-radius: var(--radio-sm); }
+.banner b { font-size: 17px; }
+.banner-ok { background: var(--ok-velo); color: var(--ok); } .banner-espera { background: var(--espera-velo); color: var(--espera); } .banner-error { background: var(--error-velo); color: var(--error); }
+.tabla-datos th { text-transform: none; letter-spacing: 0; font-size: 13px; width: 42%; white-space: normal; }
+.tabla-datos td { white-space: normal; }
+.tabla-datos table { min-width: 0; table-layout: fixed; }
+.tabla-datos th { width: 38%; }
+.tabla-datos td { overflow-wrap: anywhere; }
