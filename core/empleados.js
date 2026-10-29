@@ -62,6 +62,9 @@
     return isFinite(n) ? n : null;
   }
 
+  /** Quita espacios dobles y en los extremos («LUIS PAUL  ROJAS » → «LUIS PAUL ROJAS»). */
+  function espacios(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+
   /** El export trae 'Active'; la hoja usa 'Activo' / 'Inactivo'. */
   function estadoEnEspanol(v) {
     var t = normalizarNombre(v);
@@ -118,11 +121,11 @@
       cedulaNumero: c.numero,
       revisarCedula: c.revisar,
       motivoRevision: c.motivo,
-      nombre: String(fila.nombre || '').trim(),
+      nombre: espacios(fila.nombre),
       nombreNorm: normalizarNombre(fila.nombre),
-      organizacion: String(fila.organizacion || '').trim(),
-      departamento: String(fila.departamento || '').trim(),
-      puesto: String(fila.puesto || '').trim(),
+      organizacion: espacios(fila.organizacion),
+      departamento: espacios(fila.departamento),
+      puesto: espacios(fila.puesto),
       estado: estadoEnEspanol(fila.estado),
       fechaIngreso: f,
       empresaDetalle: empresaDesdeDetalle(fila.organizacion),

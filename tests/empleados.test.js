@@ -120,3 +120,11 @@ test('fechaDeExcel: serial entero, con hora y texto sin tocar', () => {
   assert.equal(E.fechaDeExcel('25/07/2011'), '25/07/2011');
   assert.equal(E.fechaDeExcel(''), '');
 });
+
+test('nombres, cargos y departamentos sin espacios dobles (vienen así en el export real)', () => {
+  const e = E.empleadoDesdeDetalle({ cedula: 'V305803231', nombre: ' LUIS PAUL  ROJAS LISARDO ', puesto: 'Gerente  de RRHH', departamento: 'Recursos  Humanos', organizacion: 'PROSEIN  CENTRAL' });
+  assert.equal(e.nombre, 'LUIS PAUL ROJAS LISARDO');
+  assert.equal(e.puesto, 'Gerente de RRHH');
+  assert.equal(e.departamento, 'Recursos Humanos');
+  assert.equal(e.organizacion, 'PROSEIN CENTRAL');
+});

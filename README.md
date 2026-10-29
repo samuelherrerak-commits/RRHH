@@ -14,6 +14,8 @@ npm test
 node dev/server.js
 ```
 
+Con `npm run dev:gas` el sitio usa como API el archivo real `apps-script/RRHH.gs` sobre hojas simuladas (Samuel 30580323 y Luis Paul 7952013, clave `clave-demo-123`).
+
 Abre http://localhost:8080. Trabajador: cédula `12345678`. RRHH: cédula `98765432` o `11111111`, clave `demo` (el sitio pide la clave solo a las cédulas de RRHH).
 
 ## Publicar

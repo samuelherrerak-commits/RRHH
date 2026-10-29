@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "sync": "mkdir -p web/core && cp core/calculo.js core/empleados.js core/constancia.js web/core/",
-    "build:gas": "node scripts/build-gas.js"
+    "build:gas": "node scripts/build-gas.js",
+    "dev:gas": "node dev/server.js --gas"
   },
   "engines": {
     "node": ">=18"

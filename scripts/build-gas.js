@@ -1,4 +1,4 @@
-// Junta los módulos de core/ y apps-script/Code.gs en UN solo archivo para pegar en Apps Script.
+// Junta los módulos de core/ y src/api.gs en UN solo archivo para pegar en Apps Script.
 // Uso: npm run build:gas   (genera apps-script/RRHH.gs)
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,16 +10,18 @@ const MODULOS = [
   ['core/calculo.js', 'Calculo'], ['core/empleados.js', 'Empleados'], ['core/prestaciones.js', 'Prestaciones'],
   ['core/exportes.js', 'Exportes'], ['core/constancia.js', 'Constancia'], ['core/servicio.js', 'Servicio'],
 ];
-const CODE = 'apps-script/Code.gs';
+const CODE = 'src/api.gs';
 
 function envolver(codigo, nombre) {
   const mapa = MODULOS.map(([f, n]) => `'./${f.split('/')[1]}': ${n}`).join(', ');
   return [
     `var ${nombre} = (function () {`,
-    '  var module = { exports: {} }, exports = module.exports;',
-    `  var require = function (ruta) { return ({ ${mapa} })[ruta]; };`,
-    codigo.trimEnd().replace(/^/gm, '  '),
-    '  return module.exports;',
+    '  try {',
+    '    var module = { exports: {} }, exports = module.exports;',
+    `    var require = function (ruta) { return ({ ${mapa} })[ruta]; };`,
+    codigo.trimEnd().replace(/^/gm, '    '),
+    '    return module.exports;',
+    `  } catch (e) { ERRORES_CARGA.push('${nombre}: ' + (e && e.message)); return undefined; }`,
     '})();',
   ].join('\n');
 }
@@ -28,12 +30,15 @@ function construir() {
   const cabecera = [
     '/* ============================================================',
     ' * RRHH Prosein / Austral · API de Apps Script (ARCHIVO GENERADO)',
-    ' * No lo edites aquí: cambia los archivos de core/ o apps-script/Code.gs',
+    ' * No lo edites aquí: cambia los archivos de core/ o src/api.gs',
     ' * y ejecuta `npm run build:gas`.',
     ' *',
     ' * Cómo usarlo: en Apps Script borra todos los archivos del proyecto,',
-    ' * deja uno solo y pega TODO este contenido.',
+    ' * deja uno solo y pega TODO este contenido (más de 1.500 líneas).',
     ' * ============================================================ */',
+    '',
+    '// Errores al cargar los módulos (se muestran al abrir la URL /exec).',
+    'var ERRORES_CARGA = [];',
     '',
   ].join('\n');
   const partes = MODULOS.map(([f, n]) => `// ===== ${f} =====\n` + envolver(fs.readFileSync(path.join(RAIZ, f), 'utf8'), n) + '\n');

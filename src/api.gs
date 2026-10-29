@@ -6,7 +6,8 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-29.4';
+var VERSION = '2026-10-29.5';
+var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
@@ -77,7 +78,7 @@ function doPost(e) {
     var esperado = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
     if (esperado && d.api_token !== esperado) return salida_({ ok: false, code: 'TOKEN', message: 'Acceso no autorizado.' });
     var cargados = modulosCargados_(), sinCargar = MODULOS.filter(function (k) { return !cargados[k]; });
-    if (sinCargar.length) throw new Error('Falta código en Apps Script (' + sinCargar.join(', ') + '). Pega RRHH.gs completo y publica una nueva versión de la implementación.');
+    if (sinCargar.length) throw new Error('Falta código en Apps Script (' + sinCargar.join(', ') + '). ' + AVISO_CODIGO);
     var ruta = RUTAS_TRABAJADOR[d.action] || RUTAS_RRHH[d.action];
     if (!ruta) return salida_({ ok: false, code: 'ACCION', message: 'Acción desconocida.' });
     return salida_(ruta(crearRepo_(), crearCtx_(), d));
@@ -88,7 +89,7 @@ function doPost(e) {
     var sinCodigo = err && err.name === 'ReferenceError';   // falta pegar o publicar algún módulo
     registrarError_(err);
     return salida_({ ok: false, code: 'SERVER', message: falta ? err.message
-      : sinCodigo ? 'Falta código en Apps Script (' + err.message + '). Pega RRHH.gs completo y publica una nueva versión de la implementación.'
+      : sinCodigo ? 'Falta código en Apps Script (' + err.message + '). ' + AVISO_CODIGO
       : 'Error del servidor. Intenta de nuevo.' });
   } finally {
     try { lock.releaseLock(); } catch (x) { /* sin bloqueo */ }
@@ -98,7 +99,8 @@ function doPost(e) {
 /** Abrir la URL /exec en el navegador muestra qué versión está publicada y si todos los módulos cargaron. */
 function doGet() {
   var m = modulosCargados_(), completo = MODULOS.every(function (k) { return m[k]; });
-  return salida_({ ok: true, data: 'API de RRHH activa', version: VERSION, modulosCompletos: completo, modulos: m });
+  var erroresCarga = typeof ERRORES_CARGA !== 'undefined' ? ERRORES_CARGA : ['Este no es el archivo RRHH.gs: falta el código de los módulos'];
+  return salida_({ ok: true, data: 'API de RRHH activa', version: VERSION, modulosCompletos: completo, modulos: m, erroresCarga: erroresCarga, aviso: completo ? '' : AVISO_CODIGO });
 }
 
 /** Guarda el error en la hoja LOG para poder consultarlo desde «Diagnóstico». */
@@ -324,7 +326,7 @@ function requerirModulos_() {
   var m = modulosCargados_(), faltan = MODULOS.filter(function (k) { return !m[k]; });
   if (faltan.length) {
     SpreadsheetApp.getUi().alert('Falta código en Apps Script',
-      'No se encontró: ' + faltan.join(', ') + '.\n\nBorra todos los archivos del proyecto y pega UN solo archivo: RRHH.gs (carpeta apps-script del repositorio).',
+      'No se encontró: ' + faltan.join(', ') + '.\n\n' + AVISO_CODIGO,
       SpreadsheetApp.getUi().ButtonSet.OK);
     throw new Error('Faltan módulos: ' + faltan.join(', '));
   }

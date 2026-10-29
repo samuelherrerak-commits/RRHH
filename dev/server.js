@@ -36,16 +36,26 @@ const RUTAS = {
 const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const WEB = path.join(__dirname, '..', 'web');
 
+// Modo --gas: la API es el archivo REAL apps-script/RRHH.gs ejecutándose sobre hojas simuladas (como en Google).
+// Samuel (30580323) y Luis Paul (7952013) tienen la clave «clave-demo-123».
+const MODO_GAS = process.argv.includes('--gas');
+let gas = null;
+if (MODO_GAS) {
+  const { crearEntorno } = require('./gas-simulado.js');
+  gas = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-demo-123', '7952013', 'YES', 'clave-demo-123'] });
+  gas.ejecutar('configurarInicial'); gas.ejecutar('ponerClaveRRHH'); gas.ejecutar('ponerClaveRRHH');
+}
+
 http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api') {
     let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
-      let r; try { const d = JSON.parse(b); r = RUTAS[d.action] ? RUTAS[d.action](d) : { ok: false, code: 'ACCION', message: 'Acción desconocida.' }; } catch (e) { r = { ok: false, code: 'SERVER', message: 'Error' }; }
+      let r; try { const d = JSON.parse(b); r = gas ? gas.llamar(d) : RUTAS[d.action] ? RUTAS[d.action](d) : { ok: false, code: 'ACCION', message: 'Acción desconocida.' }; } catch (e) { r = { ok: false, code: 'SERVER', message: 'Error' }; }
       res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(r));
     }); return;
   }
   let p = req.url.split('?')[0]; if (p === '/') p = '/index.html';
-  if (p === '/config.js') { res.setHeader('Content-Type', 'text/javascript'); return res.end("export const CONFIG={API_URL:'/api',API_TOKEN:'x',TIMEOUT_MS:5000};"); }
+  if (p === '/config.js') { res.setHeader('Content-Type', 'text/javascript'); return res.end(`export const CONFIG={API_URL:'/api',API_TOKEN:'${MODO_GAS ? 'RRHH2026' : 'x'}',TIMEOUT_MS:5000};`); }
   const f = path.join(WEB, path.normalize(p));
   if (!f.startsWith(WEB) || !fs.existsSync(f)) { res.statusCode = 404; return res.end('no'); }
   res.setHeader('Content-Type', TIPOS[path.extname(f)] || 'application/octet-stream'); res.end(fs.readFileSync(f));
-}).listen(process.env.PORT || 8080, () => console.log('http://localhost:' + (process.env.PORT || 8080)));
+}).listen(process.env.PORT || 8080, () => console.log('http://localhost:' + (process.env.PORT || 8080) + (MODO_GAS ? '  (API = apps-script/RRHH.gs sobre hojas simuladas)' : '')));
