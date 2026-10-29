@@ -146,3 +146,23 @@ test('si falta código en Apps Script, el menú lo explica en vez de dar un erro
   assert.throws(() => e.ejecutar('ponerClaveRRHH'), /Faltan módulos: Empleados/);
   assert.match(e.ui.alertas.at(-1)[1], /RRHH\.gs/);
 });
+
+test('abrir la URL muestra la versión y que todos los módulos cargaron', () => {
+  const e = crearEntorno();
+  const r = JSON.parse(vm.runInContext('doGet', e.ctx)().contenido);
+  assert.equal(r.modulosCompletos, true);
+  assert.match(r.version, /^\d{4}-\d{2}-\d{2}\.\d+$/);
+  assert.ok(Object.values(r.modulos).every(Boolean));
+});
+
+test('si falta el código, el sitio recibe un mensaje claro y el error queda en LOG', () => {
+  const e = crearEntorno(); e.ejecutar('configurarInicial');
+  vm.runInContext('Servicio = undefined; delete globalThis.Servicio;', e.ctx);
+  const doGetFalta = JSON.parse(vm.runInContext('doGet', e.ctx)().contenido);
+  assert.equal(doGetFalta.modulosCompletos, false);
+  assert.equal(doGetFalta.modulos.Servicio, false);
+  const r = e.llamar({ action: 'listarConstancias' });
+  assert.equal(r.code, 'SERVER');
+  assert.match(r.message, /Falta código en Apps Script.*RRHH\.gs/);
+  assert.ok(e.hojas.LOG.filas.some((f) => f && f[1] === 'ERROR'));
+});

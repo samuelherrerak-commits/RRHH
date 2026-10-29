@@ -5,6 +5,16 @@
    y escriben las hojas.
    ========================================================== */
 
+// Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
+var VERSION = '2026-10-29.3';
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'];
+
+function modulosCargados_() {
+  var r = {};
+  MODULOS.forEach(function (m) { r[m] = typeof this[m] !== 'undefined'; }, this);
+  return r;
+}
+
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
@@ -70,14 +80,25 @@ function doPost(e) {
     console.error(err && err.stack || err);
     // Los errores de puesta en marcha ("Falta la hoja…", "Falta la propiedad…") se muestran tal cual para poder corregirlos.
     var falta = err && /^Falta /.test(String(err.message));
-    return salida_({ ok: false, code: 'SERVER', message: falta ? err.message : 'Error del servidor. Intenta de nuevo.' });
+    var sinCodigo = err && err.name === 'ReferenceError';   // falta pegar o publicar algún módulo
+    registrarError_(err);
+    return salida_({ ok: false, code: 'SERVER', message: falta ? err.message
+      : sinCodigo ? 'Falta código en Apps Script (' + err.message + '). Pega RRHH.gs completo y publica una nueva versión de la implementación.'
+      : 'Error del servidor. Intenta de nuevo.' });
   } finally {
     try { lock.releaseLock(); } catch (x) { /* sin bloqueo */ }
   }
 }
 
+/** Abrir la URL /exec en el navegador muestra qué versión está publicada y si todos los módulos cargaron. */
 function doGet() {
-  return salida_({ ok: true, data: 'API de RRHH activa' });
+  var m = modulosCargados_(), completo = MODULOS.every(function (k) { return m[k]; });
+  return salida_({ ok: true, data: 'API de RRHH activa', version: VERSION, modulosCompletos: completo, modulos: m });
+}
+
+/** Guarda el error en la hoja LOG para poder consultarlo desde «Diagnóstico». */
+function registrarError_(err) {
+  try { hoja_('LOG').appendRow([new Date(), 'ERROR', '', String(err && (err.stack || err.message || err)).slice(0, 500)]); } catch (x) { /* sin hoja */ }
 }
 
 function salida_(obj) {
@@ -358,6 +379,11 @@ function diagnostico() {
     var ok = false; try { ok = typeof this[m] === 'object'; } catch (e) { /* no definido */ }
     l.push((ok ? '✔ ' : '✘ FALTA ') + 'archivo core/' + m.toLowerCase() + '.js');
   }, this);
+  l.push('Versión del código: ' + VERSION);
+  try {
+    var errores = leer_('LOG').filter(function (f) { return f.accion === 'ERROR'; }).slice(-3).map(function (f) { return '· ' + texto_(f.detalle).split('\n')[0]; });
+    if (errores.length) l.push('Últimos errores:\n' + errores.join('\n'));
+  } catch (e) { /* sin LOG */ }
   var faltas = l.filter(function (x) { return x.indexOf('✘') === 0; }).length;
   ui.alert(faltas ? 'Hay ' + faltas + ' cosas por corregir' : 'Todo en orden', l.join('\n') + (faltas ? '\n\nEjecuta «1 · Configurar hojas» y revisa que pegaste todos los archivos.' : ''), ui.ButtonSet.OK);
 }
