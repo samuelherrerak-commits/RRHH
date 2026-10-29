@@ -129,7 +129,7 @@ test('RRHH carga el detalle de empleados y el trabajador ya puede entrar', () =>
   assert.equal(S.iniciarSesion(repo, ctx, '30580323').code, 'NO_ENCONTRADO');
   const r = S.cargarEmpleados(repo, ctx, a, [
     { cedula: 'V305803231', nombre: 'Ana Uno', organizacion: 'PROSEIN', fechaInicio: '01/02/2020' },
-    { cedula: 'V12345678', nombre: 'Sin Verificador', organizacion: 'PROSEIN', fechaInicio: '' },
+    { cedula: 'V123456789', nombre: 'Verificador Malo', organizacion: 'PROSEIN', fechaInicio: '' },
   ]);
   assert.deepEqual(r.data.resumen, { agregados: 2, actualizados: 0, inactivados: 0 });
   assert.equal(r.data.revisar.length, 1);
@@ -150,4 +150,18 @@ test('RRHH cambia la empresa del fideicomiso y la recarga del detalle la respeta
   S.cargarEmpleados(repo, ctx, a, [fila]);
   assert.equal(S.listarEmpleados(repo, ctx, a, 'ruiz').data.empleados[0].empresa, 'AIV');
   assert.equal(S.fijarEmpresaFideicomiso(repo, ctx, a, 'V11111111', 'XXX').code, 'VALIDACION');
+});
+
+test('login con la cédula real, con el RIF completo y con cédula de 7 dígitos', () => {
+  const E = require('../core/empleados.js');
+  const rif7 = 'V' + '09123456' + E.verificadorRif('V', '09123456');
+  const repo = crearRepo([
+    { cedula: 'V305803231', nombre: 'Ana Real', organizacion: 'PROSEIN', fechaInicio: '01/02/2020' },
+    { cedula: rif7, nombre: 'Siete Digitos', organizacion: 'PROSEIN', fechaInicio: '01/02/2020' },
+  ]);
+  const ctx = crearCtx();
+  assert.equal(S.iniciarSesion(repo, ctx, '30580323').data.nombre, 'Ana Real');   // cédula
+  assert.equal(S.iniciarSesion(repo, ctx, 'V-305803231').data.nombre, 'Ana Real'); // RIF
+  assert.equal(S.iniciarSesion(repo, ctx, '9123456').data.nombre, 'Siete Digitos'); // sin el cero
+  assert.equal(S.iniciarSesion(repo, ctx, '09123456').data.nombre, 'Siete Digitos');
 });

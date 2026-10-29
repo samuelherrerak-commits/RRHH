@@ -46,7 +46,8 @@
   function iniciarSesion(repo, ctx, cedulaTexto) {
     var digitos = String(cedulaTexto || '').replace(/\D/g, '');
     if (digitos.length < 5 || digitos.length > 9) return err('CEDULA', 'Escribe tu cédula, solo números.');
-    if (digitos.length === 9) digitos = digitos.slice(0, 8);
+    if (digitos.length === 9) digitos = digitos.slice(0, 8);   // escribió el RIF: se quita el verificador
+    digitos = digitos.replace(/^0+/, '');                       // V09123456 es la cédula 9123456
     if (repo.fallos('global') >= MAX_FALLOS_GLOBAL || repo.fallos(digitos) >= MAX_FALLOS_CEDULA) {
       return err('BLOQUEADO', 'Demasiados intentos. Espera unos minutos e intenta de nuevo.');
     }

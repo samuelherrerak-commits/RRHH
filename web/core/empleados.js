@@ -16,19 +16,45 @@
       .toUpperCase().replace(/[^A-Z0-9Ñ ]/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
+  var VALOR_LETRA = { V: 1, E: 2, J: 3, P: 4, G: 5 };
+
+  /** Dígito verificador del RIF venezolano (letra + 8 dígitos). */
+  function verificadorRif(letra, ocho) {
+    var nums = [VALOR_LETRA[letra] || 1].concat(String(ocho).split('').map(Number));
+    var pesos = [4, 3, 2, 7, 6, 5, 4, 3, 2], t = 0;
+    for (var i = 0; i < 9; i++) t += nums[i] * pesos[i];
+    var r = 11 - (t % 11);
+    return r >= 10 ? 0 : r;
+  }
+
   /**
-   * "V12345678X" → letra V, número sin verificador.
-   * 9 dígitos: el último es verificador y se quita. 8 dígitos: se deja
-   * completa y se marca para revisión. Otro largo: se marca para revisión.
+   * Cédula tal como viene en el detalle (RIF: letra + 8 dígitos + verificador) → cédula real.
+   * - 9 dígitos: el último es el verificador del RIF y se quita; si no coincide se marca para revisar.
+   * - Los ceros a la izquierda se quitan: V09123456 es la cédula 9.123.456 (7 dígitos).
+   * - 8 dígitos: cédula completa, salvo que el último dígito sea un verificador válido de una
+   *   cédula de 7 dígitos; en ese caso queda dudoso y se marca para revisar.
    */
   function parsearCedula(crudo) {
     var s = String(crudo == null ? '' : crudo).toUpperCase().replace(/[^A-Z0-9]/g, '');
     var m = /^([VEJGP]?)(\d+)$/.exec(s);
     if (!m) return { letra: '', numero: '', revisar: true, motivo: 'Cédula vacía o con formato inesperado' };
-    var letra = m[1] || 'V', dig = m[2];
-    if (dig.length === 9) return { letra: letra, numero: dig.slice(0, 8), revisar: false, motivo: '' };
-    if (dig.length === 8) return { letra: letra, numero: dig, revisar: true, motivo: '8 dígitos: no se sabe si el último es verificador' };
-    return { letra: letra, numero: dig, revisar: true, motivo: dig.length + ' dígitos' };
+    var letra = m[1] || 'V', dig = m[2], sinCeros = function (x) { return x.replace(/^0+/, '') || '0'; };
+    if (dig.length === 9) {
+      var coincide = verificadorRif(letra, dig.slice(0, 8)) === Number(dig[8]);
+      return { letra: letra, numero: sinCeros(dig.slice(0, 8)), revisar: !coincide, motivo: coincide ? '' : 'El dígito verificador del RIF no coincide' };
+    }
+    if (dig.length === 8) {
+      var dudoso = verificadorRif(letra, '0' + dig.slice(0, 7)) === Number(dig[7]);
+      return { letra: letra, numero: sinCeros(dig), revisar: dudoso, motivo: dudoso ? '8 dígitos: podría traer verificador' : '' };
+    }
+    if (dig.length > 9) return { letra: letra, numero: dig, revisar: true, motivo: dig.length + ' dígitos' };
+    return { letra: letra, numero: sinCeros(dig), revisar: false, motivo: '' };
+  }
+
+  /** El export trae 'Active'; la hoja usa 'Activo' / 'Inactivo'. */
+  function estadoEnEspanol(v) {
+    var t = normalizarNombre(v);
+    return /^(INACTIV|INACTIVE|RETIRAD|EGRESAD|BAJA)/.test(t) ? 'Inactivo' : 'Activo';
   }
 
   /** AUSTRAL IMPORT DE VENEZUELA C.A → AIV; todo lo demás → PCA. */
@@ -63,7 +89,7 @@
       organizacion: String(fila.organizacion || '').trim(),
       departamento: String(fila.departamento || '').trim(),
       puesto: String(fila.puesto || '').trim(),
-      estado: String(fila.estado || 'Activo').trim(),
+      estado: estadoEnEspanol(fila.estado),
       fechaIngreso: f,
       empresaDetalle: empresaDesdeDetalle(fila.organizacion),
       empresaFideicomiso: '',
@@ -212,10 +238,10 @@
 
   var COLUMNAS_DETALLE = {
     cedula: ['CEDULA', 'CI', 'DOCUMENTO'],
-    nombre: ['NOMBRE', 'NOMBRES Y APELLIDOS', 'EMPLEADO'],
+    nombre: ['NOMBRE', 'NOMBRE SOCIO DEL NEGOCIO', 'NOMBRES Y APELLIDOS', 'EMPLEADO'],
     organizacion: ['ORGANIZACION', 'EMPRESA'],
     departamento: ['DEPARTAMENTO'],
-    puesto: ['PUESTO', 'CARGO'],
+    puesto: ['PUESTO', 'PUESTO NOMINA', 'CARGO'],
     estado: ['ESTADO', 'STATUS'],
     fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
   };
@@ -260,7 +286,7 @@
 
   var api = {
     mapearDetalle: mapearDetalle, fechaDeExcel: fechaDeExcel,
-    normalizarNombre: normalizarNombre, parsearCedula: parsearCedula,
+    normalizarNombre: normalizarNombre, parsearCedula: parsearCedula, verificadorRif: verificadorRif, estadoEnEspanol: estadoEnEspanol,
     empresaDesdeDetalle: empresaDesdeDetalle, empresaFideicomiso: empresaFideicomiso,
     claveCedula: claveCedula, empleadoDesdeDetalle: empleadoDesdeDetalle,
     fusionarDetalle: fusionarDetalle, similitud: similitud, cruzarPorNombre: cruzarPorNombre,

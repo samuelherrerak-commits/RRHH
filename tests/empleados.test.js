@@ -7,20 +7,44 @@ test('normalizarNombre: mayúsculas, sin tildes ni espacios dobles', () => {
   assert.equal(E.normalizarNombre('Rodríguez, Esther'), 'RODRIGUEZ ESTHER');
 });
 
-test('cédula de 9 dígitos: se quita el verificador', () => {
-  assert.deepEqual(E.parsearCedula('V123456789'), { letra: 'V', numero: '12345678', revisar: false, motivo: '' });
+const conVerificador = (letra, ocho) => letra + ocho + E.verificadorRif(letra, ocho);
+
+test('RIF de 9 dígitos: se quita el verificador y queda la cédula (caso real V305803231 → 30580323)', () => {
+  assert.deepEqual(E.parsearCedula('V305803231'), { letra: 'V', numero: '30580323', revisar: false, motivo: '' });
 });
 
-test('cédula de 8 dígitos: se deja completa y se marca para revisar', () => {
-  const c = E.parsearCedula('V12345678');
-  assert.equal(c.numero, '12345678');
+test('cédula de 7 dígitos: el RIF trae un cero al inicio y se quita', () => {
+  const c = E.parsearCedula(conVerificador('V', '09123456'));
+  assert.equal(c.numero, '9123456');
+  assert.equal(c.revisar, false);
+});
+
+test('RIF con verificador que no coincide: se quita igual pero se marca para revisar', () => {
+  const mal = 'V30580323' + ((E.verificadorRif('V', '30580323') + 1) % 10);
+  const c = E.parsearCedula(mal);
+  assert.equal(c.numero, '30580323');
   assert.equal(c.revisar, true);
 });
 
+test('cédula de 8 dígitos sin verificador: se deja completa', () => {
+  // elige un número de 8 dígitos cuyo último dígito NO sea verificador válido de una cédula de 7
+  let n = 20000000;
+  while (E.verificadorRif('V', '0' + String(n).slice(0, 7)) === Number(String(n)[7])) n++;
+  const c = E.parsearCedula('V' + n);
+  assert.equal(c.numero, String(n));
+  assert.equal(c.revisar, false);
+});
+
 test('cédula extranjera y formatos con puntos o guiones', () => {
-  assert.equal(E.parsearCedula('E-84.123.456-7').letra, 'E');
-  assert.equal(E.parsearCedula('E-84.123.456-7').numero, '84123456');
+  assert.equal(E.parsearCedula('E-84.123.456').letra, 'E');
+  assert.equal(E.parsearCedula(conVerificador('E', '84123456')).numero, '84123456');
   assert.equal(E.parsearCedula('').revisar, true);
+});
+
+test("estado: 'Active' del export es 'Activo'", () => {
+  assert.equal(E.estadoEnEspanol('Active'), 'Activo');
+  assert.equal(E.estadoEnEspanol('Inactive'), 'Inactivo');
+  assert.equal(E.estadoEnEspanol(''), 'Activo');
 });
 
 test('empresa: Austral Import = AIV, todo lo demás = PCA, y la edición manual manda', () => {
