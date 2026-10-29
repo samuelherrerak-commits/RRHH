@@ -100,19 +100,23 @@
 
   /**
    * Saldo por período descontando las solicitudes activas (pendientes, aprobadas o registradas).
-   * Un período está «pagado» si ya se disfrutó algo de él (antes del sistema o en una solicitud activa).
+   * Pago: nómina paga un período completo cuando se empieza a disfrutar. Según el cierre, están pagados
+   * todos los períodos hasta el último que tenga días disfrutados (antes del sistema o en una solicitud activa),
+   * aunque alguno anterior figure con 0 disfrutados.
    */
   function saldo(periodos, solicitudes) {
     var usados = {};
     (solicitudes || []).filter(function (s) { return ACTIVAS.indexOf(s.estado) !== -1; }).forEach(function (s) {
       (s.imputacion || []).forEach(function (i) { usados[i.periodo] = (usados[i.periodo] || 0) + i.dias; });
     });
-    var porPeriodo = periodos.map(function (p) {
+    var ultimoPagado = -1;
+    periodos.forEach(function (p, i) { if (p.disfrutadosPrevios > 0 || usados[p.periodo]) ultimoPagado = i; });
+    var porPeriodo = periodos.map(function (p, i) {
       var enSistema = usados[p.periodo] || 0;
       return {
         periodo: p.periodo, correspondientes: p.correspondientes, disfrutadosPrevios: p.disfrutadosPrevios, enSistema: enSistema,
         pendientes: Math.max(0, p.correspondientes - p.disfrutadosPrevios - enSistema), origen: p.origen,
-        pagado: p.disfrutadosPrevios > 0 || enSistema > 0,
+        pagado: i <= ultimoPagado,
       };
     });
     return { porPeriodo: porPeriodo, total: porPeriodo.reduce(function (t, p) { return t + p.pendientes; }, 0) };
@@ -164,6 +168,33 @@
     return { ok: true, errores: [], calculo: { culminacion: fin, reintegro: siguienteHabil(fin, c.feriados), imputacion: imp, condicion: condicion(imp) } };
   }
 
+  /* ---------- Constancia de aprobación ---------- */
+
+  /** Número de serie de Excel de una fecha (días desde 30/12/1899). */
+  function serialExcel(txt) { return aDia(txt) + 25569; }
+
+  /**
+   * Número de constancia igual al del Excel de RRHH: serial(inicio) + cédula (8 dígitos) + serial(culminación) + serial(reintegro).
+   * Ej.: 46272 + V07924627 + 46283 + 46286 → «46272V079246274628346286».
+   */
+  function numeroConstancia(sol, letra, numero) {
+    var ced = (letra || 'V') + ('00000000' + String(numero)).slice(-8);
+    return '' + serialExcel(sol.inicio) + ced + serialExcel(sol.culminacion) + serialExcel(sol.reintegro);
+  }
+
+  /**
+   * Pendientes que quedan «una vez aplicado el presente disfrute»: cuenta esta solicitud y las activas
+   * anteriores a ella (no las que se pidieron después).
+   */
+  function pendientesTras(periodos, solicitudes, sol) {
+    var previas = (solicitudes || []).filter(function (x) {
+      return x.id === sol.id || (ACTIVAS.indexOf(x.estado) !== -1 && x.creada <= sol.creada);
+    }).map(function (x) { return x.id === sol.id ? Object.assign({}, x, { estado: 'REGISTRADA' }) : x; });
+    if (!previas.some(function (x) { return x.id === sol.id; })) previas.push(Object.assign({}, sol, { estado: 'REGISTRADA' }));
+    var s = saldo(periodos, previas);
+    return { porPeriodo: s.porPeriodo.map(function (p) { return { periodo: p.periodo, pendientes: p.pendientes }; }), total: s.total };
+  }
+
   /* ---------- Importar el «CIERRE DE VACACIONES» ---------- */
 
   /**
@@ -206,6 +237,7 @@
     contarHabiles: contarHabiles, culminacion: culminacion, siguienteHabil: siguienteHabil,
     diasPorAnios: diasPorAnios, periodosDeEmpleado: periodosDeEmpleado, saldo: saldo, imputar: imputar, condicion: condicion,
     validarSolicitud: validarSolicitud, mapearCierre: mapearCierre,
+    serialExcel: serialExcel, numeroConstancia: numeroConstancia, pendientesTras: pendientesTras,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Vacaciones = api;

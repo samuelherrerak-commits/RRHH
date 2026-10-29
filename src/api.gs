@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.3';
+var VERSION = '2026-10-30.4';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
@@ -31,7 +31,7 @@ var HOJAS = {
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
   VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
-    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo'],
+    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
@@ -217,14 +217,15 @@ function fechaIso_(v) {
 }
 
 function vacSolicitud_(f) {
-  var imp = [];
+  var imp = [], pend = null;
   try { imp = f.imputacion ? JSON.parse(f.imputacion) : []; } catch (e) { /* vacía */ }
+  try { pend = f.pendientesDespues ? JSON.parse(f.pendientesDespues) : null; } catch (e) { /* vacío */ }
   return {
     _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), inicio: fechaIso_(f.inicio), culminacion: fechaIso_(f.culminacion),
     reintegro: fechaIso_(f.reintegro), dias: Number(f.dias) || 0, condicion: texto_(f.condicion), imputacion: imp, estado: texto_(f.estado),
     jefe: texto_(f.jefe), creada: Number(f.creada) || 0, actualizada: Number(f.actualizada) || 0, decididaJefePor: texto_(f.decididaJefePor),
     decisionJefe: Number(f.decisionJefe) || 0, registradaPor: texto_(f.registradaPor), registrada: Number(f.registrada) || 0,
-    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo),
+    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo), numeroConstancia: texto_(f.numeroConstancia), pendientesDespues: pend,
   };
 }
 
@@ -274,10 +275,11 @@ function crearRepo_() {
     vacSolicitudesPorEstado: function (estado) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.estado === estado; }); },
     vacSolicitudPorId: function (id) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.id === id; })[0] || null; },
     guardarVacSolicitud: function (s) {
-      var copia = Object.assign({}, s, { imputacion: JSON.stringify(s.imputacion || []) });
+      var copia = Object.assign({}, s, { imputacion: JSON.stringify(s.imputacion || []), pendientesDespues: s.pendientesDespues ? JSON.stringify(s.pendientesDespues) : '' });
       if (!copia._fila) {
         var h = hoja_('VAC_SOLICITUDES');
         h.getRange(h.getLastRow() + 1, 1, 1, 6).setNumberFormat('@');   // id, clave y fechas como texto
+        h.getRange(h.getLastRow() + 1, HOJAS.VAC_SOLICITUDES.indexOf('numeroConstancia') + 1).setNumberFormat('@');
       }
       escribirFila_('VAC_SOLICITUDES', copia);
       s._fila = copia._fila;

@@ -312,17 +312,21 @@
     return { clave: clave, hoy: hoy, periodos: periodos, solicitudes: solicitudes, saldo: Vacaciones.saldo(periodos, solicitudes) };
   }
 
-  function vistaVac(s, nombres) {
+  /** info: clave → { nombre, empresa } (de nombresPorClave). */
+  function vistaVac(s, info) {
+    var yo = info && info[s.clave] || {}, jefe = info && info[s.jefe] || {};
     return {
-      id: s.id, clave: s.clave, nombre: nombres && nombres[s.clave] || '', inicio: s.inicio, culminacion: s.culminacion, reintegro: s.reintegro,
+      id: s.id, clave: s.clave, nombre: yo.nombre || '', empresa: yo.empresa || 'PCA', inicio: s.inicio, culminacion: s.culminacion, reintegro: s.reintegro,
       dias: s.dias, condicion: s.condicion, imputacion: s.imputacion, estado: s.estado, creada: s.creada,
-      jefe: s.jefe, jefeNombre: nombres && nombres[s.jefe] || '', motivoRechazo: s.motivoRechazo || '', nomina: s.nomina || '',
+      jefe: s.jefe, jefeNombre: jefe.nombre || '', motivoRechazo: s.motivoRechazo || '', nomina: s.nomina || '',
+      // constancia de aprobación (solo cuando RRHH la registró)
+      registrada: s.registrada || 0, numeroConstancia: s.numeroConstancia || '', pendientesDespues: s.pendientesDespues || null,
     };
   }
 
   function nombresPorClave(repo) {
     var m = {};
-    repo.todosEmpleados().forEach(function (e) { m[Empleados.claveCedula(e)] = e.nombre; });
+    repo.todosEmpleados().forEach(function (e) { m[Empleados.claveCedula(e)] = { nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e) }; });
     return m;
   }
 
@@ -419,12 +423,23 @@
     });
   }
 
+  /**
+   * RRHH registra: queda la constancia de aprobación con su número (formato del Excel) y los días que
+   * quedan pendientes por período una vez aplicado este disfrute.
+   */
   function registrarVacaciones(repo, ctx, token, id, nomina) {
     var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
     if (!s) return err('SESION', 'No autorizado.');
     var sol = repo.vacSolicitudPorId(id);
     if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
-    return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() });
+    var emp = repo.empleadoPorClave(sol.clave);
+    var extra = { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() };
+    if (emp) {
+      var c = contextoVac(repo, ctx, emp);
+      extra.numeroConstancia = Vacaciones.numeroConstancia(sol, emp.cedulaLetra, emp.cedulaNumero);
+      extra.pendientesDespues = Vacaciones.pendientesTras(c.periodos, c.solicitudes, sol);
+    }
+    return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
   }
 
   function rechazarVacacionesRRHH(repo, ctx, token, id, motivo) {

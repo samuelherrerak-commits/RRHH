@@ -1,6 +1,6 @@
 import { llamar, sesion } from './api.js';
 import { bs, esc, chip, fechaHora, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
-import { descargarConstanciaPdf } from './constancia-pdf.js';
+import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 
 const URL_BASE = location.origin + location.pathname;
 
@@ -244,6 +244,7 @@ async function seccionVacaciones(cont) {
           <p class="suave">${esc(x.condicion)}${x.estado === 'PENDIENTE_JEFE' && x.jefeNombre ? ` · esperando a ${esc(primerNombre(x.jefeNombre))}` : ''}</p>
           ${x.estado === 'RECHAZADA' && x.motivoRechazo ? `<p class="error-msg">Motivo: ${esc(x.motivoRechazo)}</p>` : ''}
           ${x.estado === 'PENDIENTE_JEFE' ? `<div><button class="btn btn-sec btn-chico" data-cancelar-vac="${esc(x.id)}">Cancelar solicitud</button></div>` : ''}
+          ${x.estado === 'REGISTRADA' && x.numeroConstancia ? `<div><button class="btn btn-azul btn-chico" data-pdf-vac="${esc(x.id)}">Descargar constancia de aprobación</button></div>` : ''}
         </div>`).join('')}</div>` : '<p class="vacio">Todavía no has hecho solicitudes en el sistema.</p>'}
     </section>`;
 
@@ -276,10 +277,19 @@ async function seccionVacaciones(cont) {
       });
     });
   }
+  activarPdfVac(cont, d.solicitudes);
   cont.querySelectorAll('[data-cancelar-vac]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
     if (!confirm('¿Cancelar esta solicitud de vacaciones?')) return;
     const x = await llamar('cancelarVacaciones', { id: b.dataset.cancelarVac, ...conToken() });
     toast(x.ok ? 'Solicitud cancelada.' : x.message); vistaCuenta(cuenta.cont, cuenta.token, 'vacaciones');
+  })));
+}
+
+/** Botones «Descargar constancia de aprobación» de una lista de solicitudes. */
+function activarPdfVac(cont, lista) {
+  cont.querySelectorAll('[data-pdf-vac]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    try { await descargarConstanciaVacacionesPdf(lista.find((x) => x.id === b.dataset.pdfVac)); }
+    catch (e) { toast(e.message || 'No se pudo generar el PDF.'); }
   })));
 }
 
@@ -543,6 +553,7 @@ async function panelVacaciones(panel) {
           <p>${esc(resumenFechas(x))}</p>
           <p class="suave"><b>${esc(x.condicion)}</b>${pago ? ` — ${esc(pago)}` : ''} · ${x.imputacion.map((i) => `${i.dias} del ${i.periodo}`).join(', ')}</p>
           ${x.nomina ? `<p class="suave">Nómina: ${esc(x.nomina)}</p>` : ''}${x.motivoRechazo ? `<p class="suave">Motivo: ${esc(x.motivoRechazo)}</p>` : ''}
+          ${x.estado === 'REGISTRADA' && x.numeroConstancia ? `<div><button class="btn btn-azul btn-chico" data-pdf-vac="${esc(x.id)}">Constancia de aprobación</button></div>` : ''}
           ${x.estado === 'APROBADA_JEFE' ? `
             ${pago ? `<label>Código de nómina del pago <input placeholder="Ej. NV-80" data-nomina="${esc(x.id)}" autocomplete="off"></label>` : ''}
             <div class="fila"><button class="btn btn-chico" data-registrar="${esc(x.id)}">Registrar</button><button class="btn btn-sec btn-chico" data-rechazar-vac="${esc(x.id)}">Rechazar</button></div>` : ''}
@@ -557,6 +568,7 @@ async function panelVacaciones(panel) {
     </section>`;
 
   panel.querySelector('#estado-vac').addEventListener('change', (e) => { estadoVacRRHH = e.target.value; panelVacaciones(panel); });
+  activarPdfVac(panel, solicitudes);
   panel.querySelector('#ver-sin-jefe')?.addEventListener('click', () => { abrirSinJefe = true; pestana = 'empleados'; vistaRRHH(); });
   panel.querySelectorAll('[data-registrar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
     const nomina = panel.querySelector(`[data-nomina="${b.dataset.registrar}"]`)?.value || '';

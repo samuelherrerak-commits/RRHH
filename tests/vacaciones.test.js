@@ -101,3 +101,29 @@ test('importar el cierre: toma CORRESPONDIENTE y DISFRUTADOS por período (aunqu
   ]);
   assert.deepEqual(r.personas[1].periodos.map((p) => p.periodo), ['2024-2025', '2025-2026']);   // sin datos en 23-24
 });
+
+test('pago: pagado hasta el último período con días disfrutados, aunque uno anterior figure con 0', () => {
+  const per = V.periodosDeEmpleado('2020-05-04', [
+    { periodo: '2023-2024', correspondientes: 18, disfrutadosPrevios: 0 },    // 0 disfrutados, pero ya pagado
+    { periodo: '2024-2025', correspondientes: 19, disfrutadosPrevios: 5 },    // el último con disfrute
+    { periodo: '2025-2026', correspondientes: 20, disfrutadosPrevios: 0 },    // aún no pagado
+  ], '2026-10-29');
+  const s = V.saldo(per, []);
+  assert.deepEqual(s.porPeriodo.map((p) => [p.periodo, p.pagado]), [['2023-2024', true], ['2024-2025', true], ['2025-2026', false]]);
+  assert.equal(V.condicion(V.imputar(s, 18)), V.SIN_PAGO);              // los 18 del 23-24: sin pago
+  assert.equal(V.condicion(V.imputar(s, 32)), V.SIN_PAGO);              // 18 + 14 del 24-25: sin pago
+  assert.equal(V.condicion(V.imputar(s, 33)), V.CON_PAGO);              // el día 33 entra al 25-26 → se paga ese período
+});
+
+test('número de constancia igual al del Excel (caso real del modelo)', () => {
+  assert.equal(V.serialExcel('2026-09-07'), 46272);
+  assert.equal(V.numeroConstancia({ inicio: '2026-09-07', culminacion: '2026-09-18', reintegro: '2026-09-21' }, 'V', '7924627'), '46272V079246274628346286');
+});
+
+test('pendientes tras el disfrute: cuenta esta solicitud y las anteriores, no las posteriores', () => {
+  const per = V.periodosDeEmpleado('2022-03-10', [{ periodo: '2024-2025', correspondientes: 17, disfrutadosPrevios: 10 }, { periodo: '2025-2026', correspondientes: 18, disfrutadosPrevios: 0 }], '2026-10-29');
+  const a = { id: 'A', estado: 'REGISTRADA', creada: 1, imputacion: [{ periodo: '2024-2025', dias: 7 }, { periodo: '2025-2026', dias: 3 }] };
+  const b = { id: 'B', estado: 'PENDIENTE_JEFE', creada: 2, imputacion: [{ periodo: '2025-2026', dias: 5 }] };
+  assert.deepEqual(V.pendientesTras(per, [a, b], a), { porPeriodo: [{ periodo: '2024-2025', pendientes: 0 }, { periodo: '2025-2026', pendientes: 15 }], total: 15 });
+  assert.equal(V.pendientesTras(per, [a, b], b).total, 10);
+});

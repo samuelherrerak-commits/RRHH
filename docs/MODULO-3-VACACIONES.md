@@ -7,7 +7,7 @@ Basado en «Solicitud Digital de Disfrute de Vacaciones - PROSEIN / AUSTRAL.xlsx
 - **Días por período**: los del cierre; los períodos nuevos (y los ingresos sin cierre) usan la ley: 15 + (años de servicio − 1), tope 30, al cumplir cada aniversario.
 - **Anticipación**: la fecha de inicio debe estar entre 15 y 20 días después de hoy (parámetros `vacAnticipacionMin` / `vacAnticipacionMax`), y ser día hábil.
 - **Sin adelantar días**: no se puede pedir más de lo pendiente.
-- **Pago**: nómina paga el período completo la primera vez que se disfruta de él. Si la solicitud toma días de un período aún no disfrutado → «Disfrute de días con pago» (RRHH anota el código de nómina); si solo toma de períodos ya pagados → «Disfrute». Los días salen primero del período más antiguo.
+- **Pago**: nómina paga el período completo cuando se empieza a disfrutar. Están pagados todos los períodos **hasta el último con días disfrutados** en el cierre (aunque uno anterior figure con 0). Si la solicitud toma días de un período posterior → «Disfrute de días con pago» (RRHH anota el código de nómina); si solo toma de períodos pagados → «Disfrute». Los días salen primero del período más antiguo.
 - **Jefe directo obligatorio**: sin jefe no se puede solicitar; RRHH ve cuántos faltan.
 
 ## Flujo
@@ -26,5 +26,5 @@ Basado en «Solicitud Digital de Disfrute de Vacaciones - PROSEIN / AUSTRAL.xlsx
 ## Importación (pestaña Vacaciones de RRHH)
 Sube el Excel; se lee la hoja CIERRE DE VACACIONES (por cada «DISFRUTADOS AA-AA» su «CORRESPONDIENTE AA-AA» o, si no tiene título, la columna anterior). Con el archivo real: 151 personas, 28 egresos (se ignoran) y 34 ingresos sin cierre (usan la regla).
 
-## Pendiente
-- Constancia de vacaciones en PDF (falta el modelo).
+## Constancia de aprobación (PDF)
+Al registrar, RRHH deja fijos el **número de constancia** (formato del Excel: serial de inicio + cédula de 8 dígitos + serial de culminación + serial de reintegro; verificado con el modelo: 46272V079246274628346286) y los **pendientes por período** una vez aplicado ese disfrute. El trabajador y RRHH la descargan en PDF con el modelo «Constancia de Aprobación de Vacaciones» (membrete Prosein nuevo o Austral según la empresa).

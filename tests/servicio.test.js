@@ -447,7 +447,12 @@ test('vacaciones: flujo completo trabajador → jefe → RRHH, con pago del per�
   const b = S.bandejaVacaciones(repo, ctx, rrhh).data;
   assert.equal(b.solicitudes.length, 1);
   assert.equal(b.solicitudes[0].jefeNombre, 'Carla Jefa');
-  assert.equal(S.registrarVacaciones(repo, ctx, rrhh, r.data.id, 'NV-80').data.estado, 'REGISTRADA');
+  const reg = S.registrarVacaciones(repo, ctx, rrhh, r.data.id, 'NV-80').data;
+  assert.equal(reg.estado, 'REGISTRADA');
+  assert.equal(reg.numeroConstancia, '46339V305803234635246353');   // 13/11 + cédula + 26/11 + 27/11 (seriales de Excel)
+  assert.deepEqual(reg.pendientesDespues, { porPeriodo: [{ periodo: '2023-2024', pendientes: 0 }, { periodo: '2024-2025', pendientes: 0 }, { periodo: '2025-2026', pendientes: 15 }], total: 15 });
+  assert.equal(reg.empresa, 'PCA');
+  assert.equal(S.datosVacaciones(repo, ctx, yo).data.solicitudes[0].numeroConstancia, reg.numeroConstancia);
   assert.equal(S.datosVacaciones(repo, ctx, yo).data.saldo.total, 15);
 
   // 20 días después pide otra (dentro de su nueva ventana): ya es solo disfrute (el 25-26 ya se pagó)

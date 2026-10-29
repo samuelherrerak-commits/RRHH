@@ -888,19 +888,23 @@ var Vacaciones = (function () {
     
       /**
        * Saldo por período descontando las solicitudes activas (pendientes, aprobadas o registradas).
-       * Un período está «pagado» si ya se disfrutó algo de él (antes del sistema o en una solicitud activa).
+       * Pago: nómina paga un período completo cuando se empieza a disfrutar. Según el cierre, están pagados
+       * todos los períodos hasta el último que tenga días disfrutados (antes del sistema o en una solicitud activa),
+       * aunque alguno anterior figure con 0 disfrutados.
        */
       function saldo(periodos, solicitudes) {
         var usados = {};
         (solicitudes || []).filter(function (s) { return ACTIVAS.indexOf(s.estado) !== -1; }).forEach(function (s) {
           (s.imputacion || []).forEach(function (i) { usados[i.periodo] = (usados[i.periodo] || 0) + i.dias; });
         });
-        var porPeriodo = periodos.map(function (p) {
+        var ultimoPagado = -1;
+        periodos.forEach(function (p, i) { if (p.disfrutadosPrevios > 0 || usados[p.periodo]) ultimoPagado = i; });
+        var porPeriodo = periodos.map(function (p, i) {
           var enSistema = usados[p.periodo] || 0;
           return {
             periodo: p.periodo, correspondientes: p.correspondientes, disfrutadosPrevios: p.disfrutadosPrevios, enSistema: enSistema,
             pendientes: Math.max(0, p.correspondientes - p.disfrutadosPrevios - enSistema), origen: p.origen,
-            pagado: p.disfrutadosPrevios > 0 || enSistema > 0,
+            pagado: i <= ultimoPagado,
           };
         });
         return { porPeriodo: porPeriodo, total: porPeriodo.reduce(function (t, p) { return t + p.pendientes; }, 0) };
@@ -952,6 +956,33 @@ var Vacaciones = (function () {
         return { ok: true, errores: [], calculo: { culminacion: fin, reintegro: siguienteHabil(fin, c.feriados), imputacion: imp, condicion: condicion(imp) } };
       }
     
+      /* ---------- Constancia de aprobación ---------- */
+    
+      /** Número de serie de Excel de una fecha (días desde 30/12/1899). */
+      function serialExcel(txt) { return aDia(txt) + 25569; }
+    
+      /**
+       * Número de constancia igual al del Excel de RRHH: serial(inicio) + cédula (8 dígitos) + serial(culminación) + serial(reintegro).
+       * Ej.: 46272 + V07924627 + 46283 + 46286 → «46272V079246274628346286».
+       */
+      function numeroConstancia(sol, letra, numero) {
+        var ced = (letra || 'V') + ('00000000' + String(numero)).slice(-8);
+        return '' + serialExcel(sol.inicio) + ced + serialExcel(sol.culminacion) + serialExcel(sol.reintegro);
+      }
+    
+      /**
+       * Pendientes que quedan «una vez aplicado el presente disfrute»: cuenta esta solicitud y las activas
+       * anteriores a ella (no las que se pidieron después).
+       */
+      function pendientesTras(periodos, solicitudes, sol) {
+        var previas = (solicitudes || []).filter(function (x) {
+          return x.id === sol.id || (ACTIVAS.indexOf(x.estado) !== -1 && x.creada <= sol.creada);
+        }).map(function (x) { return x.id === sol.id ? Object.assign({}, x, { estado: 'REGISTRADA' }) : x; });
+        if (!previas.some(function (x) { return x.id === sol.id; })) previas.push(Object.assign({}, sol, { estado: 'REGISTRADA' }));
+        var s = saldo(periodos, previas);
+        return { porPeriodo: s.porPeriodo.map(function (p) { return { periodo: p.periodo, pendientes: p.pendientes }; }), total: s.total };
+      }
+    
       /* ---------- Importar el «CIERRE DE VACACIONES» ---------- */
     
       /**
@@ -994,6 +1025,7 @@ var Vacaciones = (function () {
         contarHabiles: contarHabiles, culminacion: culminacion, siguienteHabil: siguienteHabil,
         diasPorAnios: diasPorAnios, periodosDeEmpleado: periodosDeEmpleado, saldo: saldo, imputar: imputar, condicion: condicion,
         validarSolicitud: validarSolicitud, mapearCierre: mapearCierre,
+        serialExcel: serialExcel, numeroConstancia: numeroConstancia, pendientesTras: pendientesTras,
       };
       if (typeof module !== 'undefined' && module.exports) module.exports = api;
       else raiz.Vacaciones = api;
@@ -1321,17 +1353,21 @@ var Servicio = (function () {
         return { clave: clave, hoy: hoy, periodos: periodos, solicitudes: solicitudes, saldo: Vacaciones.saldo(periodos, solicitudes) };
       }
     
-      function vistaVac(s, nombres) {
+      /** info: clave → { nombre, empresa } (de nombresPorClave). */
+      function vistaVac(s, info) {
+        var yo = info && info[s.clave] || {}, jefe = info && info[s.jefe] || {};
         return {
-          id: s.id, clave: s.clave, nombre: nombres && nombres[s.clave] || '', inicio: s.inicio, culminacion: s.culminacion, reintegro: s.reintegro,
+          id: s.id, clave: s.clave, nombre: yo.nombre || '', empresa: yo.empresa || 'PCA', inicio: s.inicio, culminacion: s.culminacion, reintegro: s.reintegro,
           dias: s.dias, condicion: s.condicion, imputacion: s.imputacion, estado: s.estado, creada: s.creada,
-          jefe: s.jefe, jefeNombre: nombres && nombres[s.jefe] || '', motivoRechazo: s.motivoRechazo || '', nomina: s.nomina || '',
+          jefe: s.jefe, jefeNombre: jefe.nombre || '', motivoRechazo: s.motivoRechazo || '', nomina: s.nomina || '',
+          // constancia de aprobación (solo cuando RRHH la registró)
+          registrada: s.registrada || 0, numeroConstancia: s.numeroConstancia || '', pendientesDespues: s.pendientesDespues || null,
         };
       }
     
       function nombresPorClave(repo) {
         var m = {};
-        repo.todosEmpleados().forEach(function (e) { m[Empleados.claveCedula(e)] = e.nombre; });
+        repo.todosEmpleados().forEach(function (e) { m[Empleados.claveCedula(e)] = { nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e) }; });
         return m;
       }
     
@@ -1428,12 +1464,23 @@ var Servicio = (function () {
         });
       }
     
+      /**
+       * RRHH registra: queda la constancia de aprobación con su número (formato del Excel) y los días que
+       * quedan pendientes por período una vez aplicado este disfrute.
+       */
       function registrarVacaciones(repo, ctx, token, id, nomina) {
         var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
         if (!s) return err('SESION', 'No autorizado.');
         var sol = repo.vacSolicitudPorId(id);
         if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
-        return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() });
+        var emp = repo.empleadoPorClave(sol.clave);
+        var extra = { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() };
+        if (emp) {
+          var c = contextoVac(repo, ctx, emp);
+          extra.numeroConstancia = Vacaciones.numeroConstancia(sol, emp.cedulaLetra, emp.cedulaNumero);
+          extra.pendientesDespues = Vacaciones.pendientesTras(c.periodos, c.solicitudes, sol);
+        }
+        return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
       }
     
       function rechazarVacacionesRRHH(repo, ctx, token, id, motivo) {
@@ -1634,7 +1681,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.3';
+var VERSION = '2026-10-30.4';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
@@ -1659,7 +1706,7 @@ var HOJAS = {
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
   VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
-    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo'],
+    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
@@ -1845,14 +1892,15 @@ function fechaIso_(v) {
 }
 
 function vacSolicitud_(f) {
-  var imp = [];
+  var imp = [], pend = null;
   try { imp = f.imputacion ? JSON.parse(f.imputacion) : []; } catch (e) { /* vacía */ }
+  try { pend = f.pendientesDespues ? JSON.parse(f.pendientesDespues) : null; } catch (e) { /* vacío */ }
   return {
     _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), inicio: fechaIso_(f.inicio), culminacion: fechaIso_(f.culminacion),
     reintegro: fechaIso_(f.reintegro), dias: Number(f.dias) || 0, condicion: texto_(f.condicion), imputacion: imp, estado: texto_(f.estado),
     jefe: texto_(f.jefe), creada: Number(f.creada) || 0, actualizada: Number(f.actualizada) || 0, decididaJefePor: texto_(f.decididaJefePor),
     decisionJefe: Number(f.decisionJefe) || 0, registradaPor: texto_(f.registradaPor), registrada: Number(f.registrada) || 0,
-    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo),
+    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo), numeroConstancia: texto_(f.numeroConstancia), pendientesDespues: pend,
   };
 }
 
@@ -1902,10 +1950,11 @@ function crearRepo_() {
     vacSolicitudesPorEstado: function (estado) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.estado === estado; }); },
     vacSolicitudPorId: function (id) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.id === id; })[0] || null; },
     guardarVacSolicitud: function (s) {
-      var copia = Object.assign({}, s, { imputacion: JSON.stringify(s.imputacion || []) });
+      var copia = Object.assign({}, s, { imputacion: JSON.stringify(s.imputacion || []), pendientesDespues: s.pendientesDespues ? JSON.stringify(s.pendientesDespues) : '' });
       if (!copia._fila) {
         var h = hoja_('VAC_SOLICITUDES');
         h.getRange(h.getLastRow() + 1, 1, 1, 6).setNumberFormat('@');   // id, clave y fechas como texto
+        h.getRange(h.getLastRow() + 1, HOJAS.VAC_SOLICITUDES.indexOf('numeroConstancia') + 1).setNumberFormat('@');
       }
       escribirFila_('VAC_SOLICITUDES', copia);
       s._fila = copia._fila;
