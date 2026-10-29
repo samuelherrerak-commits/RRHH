@@ -293,14 +293,39 @@ test('constancia: faltan datos → mensaje claro; no se emite', () => {
   assert.match(S.emitirConstancia(sinFecha.repo, sinFecha.ctx, t2).message, /fecha de ingreso/);
 });
 
-test('constancia: tope de 5 al mes por trabajador', () => {
+test('constancia: solo una vigente a la vez; al vencer (o si RRHH la anula) se puede generar otra', () => {
   const { repo, ctx } = conSueldo();
   const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
-  for (let i = 0; i < 5; i++) assert.equal(S.emitirConstancia(repo, ctx, t).ok, true);
-  assert.equal(S.emitirConstancia(repo, ctx, t).code, 'LIMITE');
-  ctx.reloj.t += 31 * 86400000; // pasado un mes vuelve a poder (con otra sesión)
+  const c1 = S.emitirConstancia(repo, ctx, t);
+  assert.equal(c1.ok, true);
+  const otra = S.emitirConstancia(repo, ctx, t);
+  assert.equal(otra.code, 'YA_VIGENTE');
+  assert.match(otra.message, /vigente hasta el 28\/11\/2026.*a partir del 29\/11\/2026/);
+  assert.equal(S.misConstancias(repo, ctx, t).data.length, 1);          // no se creó otra
+
+  ctx.reloj.t += 30 * 86400000;                                           // día 30: sigue vigente
   const t2 = S.iniciarSesion(repo, ctx, '30580323').data.token;
-  assert.equal(S.emitirConstancia(repo, ctx, t2).ok, true);
+  assert.equal(S.emitirConstancia(repo, ctx, t2).code, 'YA_VIGENTE');
+  ctx.reloj.t += 1 * 86400000;                                            // día 31: vencida → puede
+  const t3 = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  const c2 = S.emitirConstancia(repo, ctx, t3);
+  assert.equal(c2.ok, true);
+  assert.notEqual(c2.data.id, c1.data.id);
+
+  repo.st.usuarios['11111111'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
+  const rr = S.iniciarSesionAdmin(repo, ctx, '11111111', 'k').data.token;
+  assert.equal(S.emitirConstancia(repo, ctx, t3).code, 'YA_VIGENTE');
+  S.anularConstancia(repo, ctx, rr, c2.data.id);                          // RRHH anula → puede generar otra
+  assert.equal(S.emitirConstancia(repo, ctx, t3).ok, true);
+});
+
+test('constancia: aun anulando, el tope de 5 en 30 días se mantiene', () => {
+  const { repo, ctx } = conSueldo();
+  repo.st.usuarios['11111111'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
+  const rr = S.iniciarSesionAdmin(repo, ctx, '11111111', 'k').data.token;
+  const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  for (let i = 0; i < 5; i++) { const c = S.emitirConstancia(repo, ctx, t); assert.equal(c.ok, true); S.anularConstancia(repo, ctx, rr, c.data.id); }
+  assert.equal(S.emitirConstancia(repo, ctx, t).code, 'LIMITE');
 });
 
 test('verificación pública por código: vigente, vencida y anulada', () => {

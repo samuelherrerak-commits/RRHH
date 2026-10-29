@@ -219,6 +219,8 @@
   /**
    * El trabajador pide su constancia: se guarda una copia fija de sus datos de hoy (cargo, ingreso, sueldo),
    * con vigencia de 30 días y un código único para el QR. Sale sola, sin aprobación.
+   * Solo una a la vez: mientras tenga una VIGENTE no se genera otra (se vuelve a descargar la misma).
+   * Cuando vence, o si RRHH la anula, puede generar una nueva.
    */
   function emitirConstancia(repo, ctx, token) {
     var s = leerToken(ctx, token, ['TRABAJADOR']);
@@ -229,7 +231,14 @@
     if (!(emp.salarioMensual > 0)) return err('VALIDACION', 'Falta tu salario en el sistema. Consulta con Recursos Humanos.');
     var p = repo.parametros(), ahora = ctx.ahora();
     var max = Number(p.constanciasMaxPorMes) > 0 ? Number(p.constanciasMaxPorMes) : MAX_CONSTANCIAS_MES;
-    var recientes = repo.constanciasDe(s.clave).filter(function (c) { return c.emision > ahora - 30 * 86400000; });
+    var propias = repo.constanciasDe(s.clave);
+    var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE'; })[0];
+    if (vigente) {
+      var hasta = Constancia.fechaCaracas(vigente.vence);
+      return err('YA_VIGENTE', 'Ya tienes una constancia vigente hasta el ' + Constancia.fechaCorta(hasta) +
+        '. Puedes descargarla de nuevo; podrás generar una nueva a partir del ' + Constancia.fechaCorta(Constancia.sumarDias(hasta, 1)) + '.');
+    }
+    var recientes = propias.filter(function (c) { return c.emision > ahora - 30 * 86400000; });
     if (recientes.length >= max) return err('LIMITE', 'Ya generaste ' + max + ' constancias este mes. Si necesitas otra, consulta con Recursos Humanos.');
     var c = {
       id: repo.nuevoIdConstancia(), clave: s.clave, nombre: emp.nombre, cedula: emp.cedulaLetra + '-' + emp.cedulaNumero,

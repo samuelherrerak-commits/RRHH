@@ -149,26 +149,29 @@ async function seccionConstancia(cont) {
   const rc = await llamar('misConstancias', conToken());
   if (!rc.ok && rc.code === 'SESION') { toast(rc.message); return arrancar(); }
   const constancias = rc.ok ? rc.data : [];
+  const vigente = constancias.find((c) => c.estado === 'VIGENTE');
   cont.innerHTML = `${volver()}
     <section class="tarjeta">
       <h2>Constancia de trabajo</h2>
       <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 30 días.</p>
-      <div><button class="btn" id="btn-constancia">Descargar constancia de trabajo</button></div>
+      ${vigente ? `<p class="aviso">Tienes una constancia vigente hasta el <b>${fechaCaracas(vigente.vence)}</b>. Puedes descargarla las veces que necesites; podrás generar una nueva cuando venza.</p>
+        <div><button class="btn" id="btn-vigente">Descargar mi constancia vigente</button></div>`
+        : '<div><button class="btn" id="btn-constancia">Generar constancia de trabajo</button></div>'}
       <div class="error-msg" id="err-const" hidden></div>
     </section>
     ${constancias.length ? `<section class="tarjeta"><h2>Mis constancias</h2><div class="lista">${constancias.map((c) => `
       <div class="item"><div class="item-cab"><div><b>Emitida el ${fechaCaracas(c.emision)}</b><p class="suave">Vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
-        ${c.estado === 'VIGENTE' ? `<div><button class="btn btn-sec btn-chico" data-pdf="${esc(c.id)}">Descargar de nuevo</button></div>` : ''}</div>`).join('')}</div></section>` : ''}`;
+      </div>`).join('')}</div></section>` : ''}`;
 
   const errConst = cont.querySelector('#err-const');
   const bajarPdf = async (c) => { try { await descargarConstanciaPdf(c, URL_BASE); } catch (e) { errorEn(errConst, e.message || 'No se pudo generar el PDF.'); } };
-  cont.querySelector('#btn-constancia').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+  cont.querySelector('#btn-vigente')?.addEventListener('click', (e) => conBoton(e.currentTarget, () => bajarPdf(vigente)));
+  cont.querySelector('#btn-constancia')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
     errorEn(errConst, '');
     const x = await llamar('emitirConstancia', conToken());
     if (!x.ok) return errorEn(errConst, x.message);
     await bajarPdf(x.data); toast('Constancia generada.'); vistaCuenta(cuenta.cont, cuenta.token, 'constancia');
   }));
-  cont.querySelectorAll('[data-pdf]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => bajarPdf(constancias.find((c) => c.id === b.dataset.pdf)))));
 }
 
 /* ---------- Vacaciones (próximamente) ---------- */
