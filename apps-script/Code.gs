@@ -13,9 +13,19 @@ var HOJAS = {
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
   CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
-  USUARIOS: ['cedula', 'sal', 'hash', 'rol'],
+  USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
+
+/**
+ * Personal de Recursos Humanos que se crea al configurar las hojas. Todavía NO tienen clave:
+ * cada uno la pone desde el menú RRHH → «2 · Poner o cambiar clave». Para agregar a otra persona,
+ * añádela aquí (cédula sin letra ni verificador) y ejecuta «1 · Configurar hojas».
+ */
+var USUARIOS_RRHH_INICIALES = [
+  { cedula: '30580323', nombre: 'Samuel Herrera', rol: 'ADMIN' },
+  { cedula: '7952013', nombre: 'Luis Paul Rojas', rol: 'ADMIN' },
+];
 
 var RUTAS_TRABAJADOR = {
   emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
@@ -256,6 +266,14 @@ function configurarInicial() {
   [['firmaNombre', 'Lic. Luis Paul Rojas'], ['firmaCargo', 'Gerente de Gestión Humana'], ['firmaTelefono', '(0412) 205.11.60.'], ['ciudad', 'Caracas'], ['constanciasMaxPorMes', 5]]
     .forEach(function (f) { if (!existentes[f[0]]) hp.appendRow(f); });
   sem('EMPRESAS', [['PCA', 5847, 1, 5, 'A'], ['AIV', 5847, 1, 5, 'A']]);
+  // Usuarios de RRHH iniciales (sin clave todavía; no pueden entrar hasta ponerla)
+  var existentes_ = {};
+  leer_('USUARIOS').forEach(function (u) { existentes_[texto_(u.cedula)] = u; });
+  USUARIOS_RRHH_INICIALES.forEach(function (u) {
+    var ya = existentes_[u.cedula];
+    if (!ya) escribirFila_('USUARIOS', { cedula: u.cedula, sal: '', hash: '', rol: u.rol, nombre: u.nombre });
+    else if (!texto_(ya.nombre)) { ya.nombre = u.nombre; escribirFila_('USUARIOS', ya); }
+  });
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('SECRETO')) props.setProperty('SECRETO', Utilities.getUuid() + Utilities.getUuid());
   if (!props.getProperty('API_TOKEN')) props.setProperty('API_TOKEN', 'RRHH2026');
@@ -269,39 +287,61 @@ function configurarInicial() {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('RRHH')
-    .addItem('1 · Configurar hojas (primera vez)', 'configurarInicial')
-    .addItem('2 · Crear mi usuario de RRHH', 'crearUsuarioRRHH')
+    .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
+    .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
 }
 
+/** Avisa con claridad si falta pegar algún archivo del sistema (en vez de un error técnico). */
+function requerirModulos_() {
+  var faltan = [];
+  ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'].forEach(function (m) {
+    if (typeof this[m] === 'undefined') faltan.push(m);
+  }, this);
+  if (faltan.length) {
+    SpreadsheetApp.getUi().alert('Falta código en Apps Script',
+      'No se encontró: ' + faltan.join(', ') + '.\n\nBorra todos los archivos del proyecto y pega UN solo archivo: RRHH.gs (carpeta apps-script del repositorio).',
+      SpreadsheetApp.getUi().ButtonSet.OK);
+    throw new Error('Faltan módulos: ' + faltan.join(', '));
+  }
+}
+
 /**
- * Pide cédula, clave y rol en pantalla. Muestra el nombre del empleado para confirmar.
- * La clave no queda escrita en ningún sitio, solo su huella. Cada persona de RRHH se crea con su propia clave.
+ * Pone o cambia la clave de una persona de RRHH. Muestra el nombre para confirmar.
+ * La clave no queda escrita en ningún sitio, solo su huella. Solo quien edita esta hoja puede hacerlo.
  */
-function crearUsuarioRRHH() {
+function ponerClaveRRHH() {
   var ui = SpreadsheetApp.getUi();
+  requerirModulos_();
   configurarInicial();
-  var c = ui.prompt('Usuario de RRHH', 'Cédula de la persona, solo números (sin V ni dígito verificador):', ui.ButtonSet.OK_CANCEL);
+  var lista = leer_('USUARIOS').map(function (u, i) {
+    return (i + 1) + ') ' + texto_(u.cedula) + ' · ' + (texto_(u.nombre) || '—') + (texto_(u.hash) ? '' : '  (sin clave)');
+  }).join('\n');
+  var c = ui.prompt('Clave de RRHH', 'Escribe la cédula de la persona (solo números):\n\n' + lista, ui.ButtonSet.OK_CANCEL);
   if (c.getSelectedButton() !== ui.Button.OK) return;
   var cedula = Empleados.numeroDeCedulaTexto(c.getResponseText());
   if (!cedula) { ui.alert('La cédula no es válida.'); return; }
+  var existente = leer_('USUARIOS').filter(function (u) { return texto_(u.cedula) === cedula; })[0];
   var emp = crearRepo_().empleadoPorClave('V' + cedula) || crearRepo_().empleadoPorClave('E' + cedula);
-  var quien = emp ? emp.nombre : '(no está en la hoja EMPLEADOS todavía)';
-  if (ui.alert('Confirmar', 'Cédula ' + cedula + '\n' + quien + '\n\n¿Crear o actualizar su usuario de RRHH?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  var quien = (existente && texto_(existente.nombre)) || (emp && emp.nombre) || '(no está en la lista de empleados todavía)';
+  var rol = existente ? texto_(existente.rol) : '';
+  if (!existente) {
+    if (ui.alert('Persona nueva', quien + '\nCédula ' + cedula + '\n\nNo es un usuario de RRHH todavía. ¿Crearla?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+    rol = ui.alert('Rol', '¿Administrador? Sí = ADMIN (todo). No = RRHH.', ui.ButtonSet.YES_NO) === ui.Button.YES ? 'ADMIN' : 'RRHH';
+  } else if (ui.alert('Confirmar', quien + '\nCédula ' + cedula + ' · ' + rol + '\n\n¿Poner o cambiar su clave?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   var k = ui.prompt('Clave', 'Clave de ' + quien + ' (mínimo 8 caracteres). Se pedirá cada vez que entre:', ui.ButtonSet.OK_CANCEL);
   if (k.getSelectedButton() !== ui.Button.OK) return;
   var clave = k.getResponseText();
   if (clave.length < 8) { ui.alert('La clave debe tener al menos 8 caracteres.'); return; }
-  var rol = ui.alert('Rol', '¿Administrador? Sí = ADMIN (todo). No = RRHH.', ui.ButtonSet.YES_NO) === ui.Button.YES ? 'ADMIN' : 'RRHH';
-  guardarUsuario_(cedula, clave, rol);
-  ui.alert('Listo', 'Usuario ' + rol + ' creado para ' + quien + '.\nAl escribir su cédula en el sitio, el sistema le pedirá la clave.', ui.ButtonSet.OK);
+  guardarUsuario_(cedula, clave, rol, (existente && texto_(existente.nombre)) || (emp && emp.nombre) || '');
+  ui.alert('Listo', 'Clave guardada para ' + quien + '.\nAl escribir su cédula en el sitio, el sistema le pedirá la clave.', ui.ButtonSet.OK);
 }
 
-function guardarUsuario_(cedula, clave, rol) {
+function guardarUsuario_(cedula, clave, rol, nombre) {
   var sal = Utilities.getUuid();
   var existente = leer_('USUARIOS').filter(function (u) { return texto_(u.cedula) === cedula; })[0];
-  escribirFila_('USUARIOS', { _fila: existente ? existente._fila : 0, cedula: cedula, sal: sal, hash: crearCtx_().hash(clave, sal), rol: rol });
+  escribirFila_('USUARIOS', { _fila: existente ? existente._fila : 0, cedula: cedula, sal: sal, hash: crearCtx_().hash(clave, sal), rol: rol, nombre: nombre || (existente ? texto_(existente.nombre) : '') });
 }
 
 /** Revisa que todo esté en su sitio y lo muestra en pantalla. */

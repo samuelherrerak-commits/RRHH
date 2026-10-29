@@ -18,5 +18,14 @@ Abre http://localhost:8080. Trabajador: cédula `12345678`. RRHH: cédula `98765
 
 ## Publicar
 
-1. Apps Script: copia `core/*.js` y `apps-script/Code.gs`, ejecuta `configurarInicial()` y `crearUsuarioRRHH()`, e implementa como aplicación web (ejecutar como tú, acceso a cualquier persona). Cada cambio de código requiere una **nueva versión** de la implementación para conservar la misma URL.
-2. Render: New → Static Site, conecta este repositorio, Publish Directory `web`, sin comando de build (o usa `render.yaml`).
+**Apps Script (un solo archivo)**
+
+1. Abre tu hoja de Google → Extensiones → Apps Script.
+2. Borra todos los archivos del proyecto salvo uno, y pega **todo** el contenido de `apps-script/RRHH.gs` (es un archivo generado que ya junta el cálculo, las reglas y la API).
+3. En Configuración del proyecto activa «Mostrar el archivo appsscript.json» y pega `apps-script/appsscript.json`.
+4. Recarga la hoja. Aparece el menú **RRHH**: «1 · Configurar hojas y usuarios» y luego «2 · Poner o cambiar clave de RRHH» (una vez por persona).
+5. Implementar → Administrar implementaciones → editar → **Nueva versión** (la URL `/exec` se conserva).
+
+Tras cambiar código del repositorio: `npm run build:gas` regenera `apps-script/RRHH.gs`, y `npm test` avisa si quedó desactualizado.
+
+**Render**: New → Static Site, conecta este repositorio, Publish Directory `web`, sin comando de build (o usa `render.yaml`).

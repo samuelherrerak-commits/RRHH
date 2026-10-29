@@ -74,6 +74,7 @@
     if (!digitos) return err('CEDULA', 'Escribe tu cédula, solo números.');
     if (repo.fallos('admin:' + digitos) >= MAX_FALLOS_CEDULA) return err('BLOQUEADO', 'Demasiados intentos. Espera unos minutos.');
     var u = repo.usuario(digitos);
+    if (u && !u.hash) return err('SIN_CLAVE', 'Tu usuario aún no tiene clave. Pídele a un administrador que la cree desde la hoja de Google (menú RRHH).');
     if (!u || ctx.hash(String(claveTexto || ''), u.sal) !== u.hash) {
       repo.registrarFallo('admin:' + digitos);
       return err('CREDENCIALES', 'Clave incorrecta.');
