@@ -82,6 +82,8 @@ function vistaLogin() {
 let cuenta = { cont: app, token: '', seccion: 'inicio' };
 const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
 const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso'];
+// Fideicomiso queda en «Próximamente» para los trabajadores hasta que esté la pantalla de aportes (cambiar a true para abrirlo).
+const FIDEICOMISO_ACTIVO = false;
 const seccionDesdeHash = () => { const m = /^#\/(\w+)$/.exec(location.hash); return m && SECCIONES.includes(m[1]) ? m[1] : 'inicio'; };
 
 function navegar(seccion) {
@@ -138,7 +140,7 @@ function seccionInicio(cont) {
     <nav class="accesos" aria-label="Solicitudes">
       ${tarjeta('constancia', 'Constancia de trabajo', 'Descárgala al instante en PDF, con código QR de verificación.', 'rojo')}
       ${tarjeta('vacaciones', 'Vacaciones', 'Solicita tus días; tu jefe directo y Gestión Humana las aprueban.', 'azul', '<span class="chip chip-neutro">Próximamente</span>')}
-      ${tarjeta('fideicomiso', 'Fideicomiso', 'Consulta tus aportes de prestaciones y solicita anticipos.', 'carbon')}
+      ${tarjeta('fideicomiso', 'Fideicomiso', 'Consulta tus aportes de prestaciones y solicita anticipos.', 'carbon', FIDEICOMISO_ACTIVO ? '' : '<span class="chip chip-neutro">Próximamente</span>')}
     </nav>`;
 }
 
@@ -187,6 +189,14 @@ function seccionVacaciones(cont) {
 /* ---------- Fideicomiso: estado de cuenta y anticipos ---------- */
 
 async function seccionFideicomiso(cont) {
+  if (!FIDEICOMISO_ACTIVO) {
+    cont.innerHTML = `${volver()}
+      <section class="tarjeta">
+        <h2>Fideicomiso</h2>
+        <p class="aviso">Muy pronto podrás consultar aquí tus aportes de prestaciones sociales, cuánto tienes disponible y solicitar anticipos.</p>
+      </section>`;
+    return;
+  }
   cont.innerHTML = `${volver()}<p class="vacio">Cargando tu estado de cuenta…</p>`;
   const r = await llamar('estadoDeCuenta', conToken());
   if (!r.ok) { toast(r.message); return arrancar(); }
