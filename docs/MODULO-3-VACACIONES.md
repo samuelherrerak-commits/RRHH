@@ -1,37 +1,30 @@
-# Módulo 3 · Vacaciones (propuesta, pendiente de aprobación)
+# Módulo 3 · Vacaciones
 
-Basado en «Solicitud Digital de Disfrute de Vacaciones - PROSEIN / AUSTRAL.xlsx»:
-- **CIERRE DE VACACIONES**: saldo por persona y período (22-23, 23-24, 24-25, 25-26): correspondientes, disfrutados, pendientes.
-- **Sheet1 (2)**: 126 solicitudes del formulario (feb–oct 2026) con inicio, culminación, reintegro, días, condición y número de constancia; lista de feriados 2026.
+Basado en «Solicitud Digital de Disfrute de Vacaciones - PROSEIN / AUSTRAL.xlsx». El **cierre** (hoja CIERRE DE VACACIONES) está actualizado e incluye todas las solicitudes hechas por formulario: se importa como saldo inicial y no se descuenta nada dos veces.
 
-## Cómo se cuentan los días (igual que el Excel)
-- **Días hábiles**: lunes a viernes, sin feriados (`NETWORKDAYS`). Verificado: coincide en 125 de 125 solicitudes.
-- **Reintegro**: siguiente día hábil después de la culminación.
-- **Días por período**: 15 + (años de servicio − 1), tope 30 (la ley). Coincide con el cierre en 143 de 150 personas; los 7 distintos se importan tal cual.
-
-## Hojas nuevas
-| Hoja | Contenido |
-|---|---|
-| `FERIADOS` | fecha · motivo. Se carga la lista 2026 del archivo; RRHH agrega los de cada año. |
-| `VAC_PERIODOS` | clave · período (2024-2025) · días correspondientes · días disfrutados antes del sistema · origen (CIERRE / REGLA). |
-| `VAC_SOLICITUDES` | id · clave · inicio · culminación · reintegro · días hábiles · condición · nómina · estado · jefe · aprobación del jefe (quién/cuándo) · registro RRHH (quién/cuándo) · motivo de rechazo · imputación por período · número de constancia. |
-
-**Saldo pendiente** = correspondientes − disfrutados antes del sistema − días de solicitudes aprobadas, descontando primero del período más antiguo.
-Al cumplir aniversario se abre el período nuevo con la regla de la ley.
+## Reglas
+- **Días hábiles**: lunes a viernes sin feriados (como `NETWORKDAYS`; verificado en 125 de 125 solicitudes). Reintegro = siguiente día hábil.
+- **Días por período**: los del cierre; los períodos nuevos (y los ingresos sin cierre) usan la ley: 15 + (años de servicio − 1), tope 30, al cumplir cada aniversario.
+- **Anticipación**: la fecha de inicio debe estar entre 15 y 20 días después de hoy (parámetros `vacAnticipacionMin` / `vacAnticipacionMax`), y ser día hábil.
+- **Sin adelantar días**: no se puede pedir más de lo pendiente.
+- **Pago**: nómina paga el período completo la primera vez que se disfruta de él. Si la solicitud toma días de un período aún no disfrutado → «Disfrute de días con pago» (RRHH anota el código de nómina); si solo toma de períodos ya pagados → «Disfrute». Los días salen primero del período más antiguo.
+- **Jefe directo obligatorio**: sin jefe no se puede solicitar; RRHH ve cuántos faltan.
 
 ## Flujo
-1. El trabajador elige fecha de inicio y cuántos días (o inicio y culminación); el sistema calcula culminación y reintegro y muestra su saldo.
-2. La solicitud llega a su **jefe directo**, que la ve al entrar con su cédula («Solicitudes de mi equipo») y aprueba o rechaza.
-3. Aprobada por el jefe, llega al panel de **RRHH**, que la registra (y anota la nómina si es «con pago»).
-4. Estados: PENDIENTE_JEFE → APROBADA_JEFE → REGISTRADA · RECHAZADA · CANCELADA (por el trabajador mientras esté pendiente).
+1. El trabajador elige fecha de inicio y días hábiles; ve al instante último día, reintegro y si lleva pago. Los días quedan reservados.
+2. Su jefe directo la ve en «Mi equipo» (al entrar con su cédula, o en «Mi cuenta» si es de RRHH) y aprueba o rechaza con motivo.
+3. Aprobada, llega a RRHH (pestaña Vacaciones, «Por registrar»), que la registra con el código de nómina o la rechaza.
+4. Estados: PENDIENTE_JEFE → APROBADA_JEFE → REGISTRADA · RECHAZADA · CANCELADA (el trabajador cancela mientras está con el jefe). Rechazadas y canceladas devuelven los días.
 
-## Importación inicial (una vez)
-- Cierre → `VAC_PERIODOS` (151 personas × 4 períodos).
-- Solicitudes del formulario → `VAC_SOLICITUDES` como **historial** (ver pregunta 1).
-- 34 personas del Detalle de Empleado no están en el cierre (ingresos recientes): su saldo arranca con la regla.
+## Hojas
+| Hoja | Contenido |
+|---|---|
+| `FERIADOS` | fecha (AAAA-MM-DD) · motivo. Lista 2026 de RRHH **corregida**: 12/10 en vez de 10/12 y se agregan 5 y 24 de julio. RRHH agrega los de cada año. |
+| `VAC_PERIODOS` | clave · período · correspondientes · disfrutados antes del sistema. Se reemplaza al importar el cierre. |
+| `VAC_SOLICITUDES` | id · clave · inicio · culminación · reintegro · días · condición · imputación por período · estado · jefe · fechas y responsables de cada paso · nómina · motivo de rechazo. |
 
-## Hallazgos en el archivo
-- 28 cédulas del cierre no están en el Detalle de Empleado actual (¿egresos?).
-- 11 solicitudes con cédula que no se encuentra en el cierre (`#N/A`).
-- 1 solicitud con 32.940 días (fecha mal escrita).
-- 13 personas acumulan más de 45 días pendientes.
+## Importación (pestaña Vacaciones de RRHH)
+Sube el Excel; se lee la hoja CIERRE DE VACACIONES (por cada «DISFRUTADOS AA-AA» su «CORRESPONDIENTE AA-AA» o, si no tiene título, la columna anterior). Con el archivo real: 151 personas, 28 egresos (se ignoran) y 34 ingresos sin cierre (usan la regla).
+
+## Pendiente
+- Constancia de vacaciones en PDF (falta el modelo).

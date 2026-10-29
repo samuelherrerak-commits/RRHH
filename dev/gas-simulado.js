@@ -33,7 +33,8 @@ function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'ut
       getActiveSpreadsheet: () => ({ getSheetByName: (n) => hojas[n] || null, insertSheet: (n) => (hojas[n] = crearHoja(n)) }),
       getUi: () => ({
         ButtonSet: { OK: 'OK', OK_CANCEL: 'OK_CANCEL', YES_NO: 'YES_NO' }, Button: { OK: 'OK', YES: 'YES', NO: 'NO', CANCEL: 'CANCEL' },
-        alert(t, m, b) { ui.alertas.push([t, m]); const r = ui.respuestas.shift(); return r === undefined ? 'OK' : r; },
+        // solo las preguntas Sí/No consumen una respuesta; los avisos informativos no
+        alert(t, m, b) { ui.alertas.push([t, m]); if (b !== 'YES_NO') return 'OK'; const r = ui.respuestas.shift(); return r === undefined ? 'OK' : r; },
         prompt(t, m) { ui.alertas.push([t, m]); const r = ui.respuestas.shift(); return { getSelectedButton: () => 'OK', getResponseText: () => r }; },
         createMenu: () => ({ addItem() { return this; }, addToUi() {} }),
       }),

@@ -127,3 +127,44 @@ test('si se pega solo src/api.gs (sin módulos), la URL y el sitio lo dicen con 
 test('el archivo para pegar es el único .gs de la carpeta apps-script', () => {
   assert.deepEqual(fs.readdirSync('apps-script').filter((f) => f.endsWith('.gs')), ['RRHH.gs']);
 });
+
+test('vacaciones sobre las hojas: feriados iniciales, cierre, solicitud, jefe y RRHH', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel', '7952013', 'YES', 'clave-de-luis'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH'); e.ejecutar('ponerClaveRRHH');
+  const fer = e.hojas.FERIADOS.filas.slice(1).map((f) => f[0]);
+  assert.ok(fer.includes('2026-10-12') && fer.includes('2026-07-24') && !fer.includes('2026-12-10'));
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', departamento: 'RRHH', fechaInicio: '10/03/2022' },
+    { cedula: 'V079520130', nombre: 'LUIS PAUL ROJAS', organizacion: 'PROSEIN CENTRAL', departamento: 'RRHH', fechaInicio: '15/09/2022' },
+  ] });
+  e.llamar({ action: 'asignarJefe', token: admin, claves: ['V30580323'], jefe: 'V7952013' });
+  const imp = e.llamar({ action: 'importarCierreVacaciones', token: admin, personas: [
+    { cedula: 'V30580323', periodos: [{ periodo: '2024-2025', correspondientes: 17, disfrutadosPrevios: 10 }, { periodo: '2025-2026', correspondientes: 18, disfrutadosPrevios: 0 }] }] });
+  assert.deepEqual(imp.data, { personas: 1, periodos: 2, noActivos: 0, activosSinCierre: 1 });
+
+  // Samuel (como trabajador) pide: la fecha debe estar entre 15 y 20 días desde hoy
+  const tSamuel = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.tokenTrabajador;
+  const d = e.llamar({ action: 'datosVacaciones', token: tSamuel }).data;
+  assert.equal(d.saldo.total, 25);
+  assert.equal(d.jefe.nombre, 'LUIS PAUL ROJAS');
+  const V = require('../core/vacaciones.js');
+  let inicio = V.sumarDiasTxt(d.hoy, 15);
+  while (!V.esHabil(inicio, d.feriados)) inicio = V.sumarDiasTxt(inicio, 1);
+  const sol = e.llamar({ action: 'solicitarVacaciones', token: tSamuel, inicio, dias: 10 });
+  assert.equal(sol.ok, true, JSON.stringify(sol));
+  assert.equal(sol.data.condicion, 'Disfrute de días con pago');
+
+  // Luis Paul es RRHH: su cédula pide clave; como jefe usa su sesión de empleado («Mi cuenta» en el panel)
+  assert.equal(e.llamar({ action: 'login', cedula: '7952013' }).data.requiereClave, true);
+  const tLuis = e.llamar({ action: 'loginAdmin', cedula: '7952013', clave: 'clave-de-luis' }).data.tokenTrabajador;
+  const eq = e.llamar({ action: 'equipoVacaciones', token: tLuis }).data;
+  assert.equal(eq.pendientes.length, 1);
+  assert.equal(e.llamar({ action: 'decidirVacacionesJefe', token: tLuis, id: sol.data.id, aprobar: true }).data.estado, 'APROBADA_JEFE');
+  assert.equal(e.llamar({ action: 'bandejaVacaciones', token: admin }).data.solicitudes.length, 1);
+  assert.equal(e.llamar({ action: 'registrarVacaciones', token: admin, id: sol.data.id, nomina: 'NV-80' }).data.estado, 'REGISTRADA');
+  const final = e.llamar({ action: 'datosVacaciones', token: tSamuel }).data;
+  assert.equal(final.saldo.total, 15);
+  assert.equal(final.solicitudes[0].inicio, inicio);
+  assert.deepEqual(final.solicitudes[0].imputacion.map((i) => [i.periodo, i.dias]), [['2024-2025', 7], ['2025-2026', 3]]);
+});

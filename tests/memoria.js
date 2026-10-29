@@ -4,13 +4,24 @@ const E = require('../core/empleados.js');
 
 function crearRepo(empleadosFilas) {
   let empleados = E.fusionarDetalle([], empleadosFilas).empleados;
-  const st = { aportes: [], anticipos: {}, constancias: {}, cierres: {}, usuarios: {}, fallos: {}, logs: [], seq: 0,
+  const st = { aportes: [], anticipos: {}, constancias: {}, vacPeriodos: [], vacSolicitudes: {}, cierres: {},
+    feriados: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-04-02', '2026-04-03', '2026-04-19', '2026-05-01', '2026-06-24', '2026-07-05', '2026-07-24', '2026-10-12', '2026-12-24', '2026-12-25', '2026-12-31', '2027-01-01'], usuarios: {}, fallos: {}, logs: [], seq: 0,
     parametros: { porcentajeAnticipoMax: 0.75 },
     empresas: { PCA: { fideicomiso: 5847, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' }, AIV: { fideicomiso: 6000, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' } } };
   const clave = (c) => c;
   return {
     st,
     parametros: () => st.parametros,
+    feriados: () => st.feriados.slice(),
+    vacPeriodosDe: (c) => st.vacPeriodos.filter((p) => p.clave === c).map((p) => ({ ...p })),
+    vacClavesConPeriodos: () => [...new Set(st.vacPeriodos.map((p) => p.clave))],
+    guardarVacPeriodos: (filas) => { st.vacPeriodos = filas.map((f) => ({ ...f })); },
+    vacSolicitudesDe: (c) => Object.values(st.vacSolicitudes).filter((x) => x.clave === c).map((x) => ({ ...x })),
+    vacSolicitudesPorJefe: (c) => Object.values(st.vacSolicitudes).filter((x) => x.jefe === c).map((x) => ({ ...x })),
+    vacSolicitudesPorEstado: (e) => Object.values(st.vacSolicitudes).filter((x) => x.estado === e).map((x) => ({ ...x })),
+    vacSolicitudPorId: (id) => (st.vacSolicitudes[id] ? { ...st.vacSolicitudes[id] } : null),
+    guardarVacSolicitud: (x) => { st.vacSolicitudes[x.id] = { ...x }; },
+    nuevoIdVac: () => 'VAC' + (++st.seq),
     constanciasDe: (c) => Object.values(st.constancias).filter((x) => x.clave === c).map((x) => ({ ...x })),
     constanciaPorId: (id) => st.constancias[id] || null,
     todasConstancias: () => Object.values(st.constancias).map((x) => ({ ...x })),

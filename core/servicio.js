@@ -16,6 +16,7 @@
   var Prestaciones = isNode ? require('./prestaciones.js') : dependencia(raiz, 'Prestaciones');
   var Exportes = isNode ? require('./exportes.js') : dependencia(raiz, 'Exportes');
   var Constancia = isNode ? require('./constancia.js') : dependencia(raiz, 'Constancia');
+  var Vacaciones = isNode ? require('./vacaciones.js') : dependencia(raiz, 'Vacaciones');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
@@ -290,6 +291,192 @@
     return ok(vistaConstancia(c, ctx.ahora()));
   }
 
+  /* ---------- Vacaciones ---------- */
+
+  var ESTADOS_VAC = { PENDIENTE_JEFE: ['APROBADA_JEFE', 'RECHAZADA', 'CANCELADA'], APROBADA_JEFE: ['REGISTRADA', 'RECHAZADA'], REGISTRADA: [], RECHAZADA: [], CANCELADA: [] };
+
+  function hoyCaracas(ctx) { return Vacaciones.deObjeto(Constancia.fechaCaracas(ctx.ahora())); }
+
+  function reglasVac(p) {
+    var r = {};
+    if (Number(p.vacAnticipacionMin) > 0) r.anticipacionMin = Number(p.vacAnticipacionMin);
+    if (Number(p.vacAnticipacionMax) > 0) r.anticipacionMax = Number(p.vacAnticipacionMax);
+    return Object.assign({}, Vacaciones.REGLAS, r);
+  }
+
+  /** Períodos, solicitudes y saldo de un empleado. */
+  function contextoVac(repo, ctx, emp) {
+    var clave = Empleados.claveCedula(emp), hoy = hoyCaracas(ctx);
+    var periodos = Vacaciones.periodosDeEmpleado(Vacaciones.deObjeto(emp.fechaIngreso), repo.vacPeriodosDe(clave), hoy);
+    var solicitudes = repo.vacSolicitudesDe(clave);
+    return { clave: clave, hoy: hoy, periodos: periodos, solicitudes: solicitudes, saldo: Vacaciones.saldo(periodos, solicitudes) };
+  }
+
+  function vistaVac(s, nombres) {
+    return {
+      id: s.id, clave: s.clave, nombre: nombres && nombres[s.clave] || '', inicio: s.inicio, culminacion: s.culminacion, reintegro: s.reintegro,
+      dias: s.dias, condicion: s.condicion, imputacion: s.imputacion, estado: s.estado, creada: s.creada,
+      jefe: s.jefe, jefeNombre: nombres && nombres[s.jefe] || '', motivoRechazo: s.motivoRechazo || '', nomina: s.nomina || '',
+    };
+  }
+
+  function nombresPorClave(repo) {
+    var m = {};
+    repo.todosEmpleados().forEach(function (e) { m[Empleados.claveCedula(e)] = e.nombre; });
+    return m;
+  }
+
+  function cambiarVac(repo, ctx, sol, nuevo, actor, extra) {
+    if ((ESTADOS_VAC[sol.estado] || []).indexOf(nuevo) === -1) return err('TRANSICION', 'La solicitud ya no está pendiente de esa acción.');
+    Object.assign(sol, extra || {}, { estado: nuevo, actualizada: ctx.ahora() });
+    repo.guardarVacSolicitud(sol);
+    repo.log('VACACIONES_' + nuevo, actor, sol.id);
+    return ok(vistaVac(sol, nombresPorClave(repo)));
+  }
+
+  /** Lo que ve el trabajador: saldo por período, sus solicitudes, feriados y reglas para el formulario. */
+  function datosVacaciones(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp) return err('NO_ENCONTRADO', 'No encontramos tus datos.');
+    var c = contextoVac(repo, ctx, emp), nombres = nombresPorClave(repo);
+    var jefe = emp.jefe ? repo.empleadoPorClave(emp.jefe) : null;
+    return ok({
+      hoy: c.hoy, reglas: reglasVac(repo.parametros()), feriados: repo.feriados(), saldo: c.saldo,
+      jefe: jefe && jefe.estado !== 'Inactivo' ? { clave: emp.jefe, nombre: jefe.nombre } : null,
+      sinFechaIngreso: !emp.fechaIngreso,
+      solicitudes: c.solicitudes.sort(function (a, b) { return b.creada - a.creada; }).map(function (x) { return vistaVac(x, nombres); }),
+    });
+  }
+
+  function solicitarVacaciones(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+    var jefe = emp.jefe ? repo.empleadoPorClave(emp.jefe) : null;
+    var c = contextoVac(repo, ctx, emp), feriados = repo.feriados();
+    var v = Vacaciones.validarSolicitud({ inicio: datos && datos.inicio, dias: Number(datos && datos.dias) }, {
+      hoy: c.hoy, feriados: feriados, saldo: c.saldo, solicitudes: c.solicitudes,
+      tieneJefe: !!(jefe && jefe.estado !== 'Inactivo'), reglas: reglasVac(repo.parametros()),
+    });
+    if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+    var sol = {
+      id: repo.nuevoIdVac(), clave: c.clave, inicio: datos.inicio, culminacion: v.calculo.culminacion, reintegro: v.calculo.reintegro,
+      dias: Number(datos.dias), condicion: v.calculo.condicion, imputacion: v.calculo.imputacion, estado: 'PENDIENTE_JEFE',
+      jefe: emp.jefe, creada: ctx.ahora(), actualizada: ctx.ahora(), decididaJefePor: '', registradaPor: '', nomina: '', motivoRechazo: '',
+    };
+    repo.guardarVacSolicitud(sol);
+    repo.log('VACACIONES_SOLICITADA', c.clave, sol.id + ' · ' + sol.dias + ' días desde ' + sol.inicio);
+    return ok(vistaVac(sol, nombresPorClave(repo)));
+  }
+
+  function cancelarVacaciones(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var sol = repo.vacSolicitudPorId(id);
+    if (!sol || sol.clave !== s.clave) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
+    if (sol.estado !== 'PENDIENTE_JEFE') return err('TRANSICION', 'Solo puedes cancelar una solicitud que tu jefe aún no ha revisado.');
+    return cambiarVac(repo, ctx, sol, 'CANCELADA', s.clave);
+  }
+
+  /** Bandeja del jefe directo: solicitudes de su equipo. */
+  function equipoVacaciones(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var equipo = repo.todosEmpleados().filter(function (e) { return e.jefe === s.clave && e.estado !== 'Inactivo'; });
+    var nombres = nombresPorClave(repo);
+    var sols = repo.vacSolicitudesPorJefe(s.clave).sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; });
+    return ok({
+      esJefe: equipo.length > 0, equipo: equipo.length,
+      pendientes: sols.filter(function (x) { return x.estado === 'PENDIENTE_JEFE'; }).map(function (x) { return vistaVac(x, nombres); }),
+      recientes: sols.filter(function (x) { return x.estado !== 'PENDIENTE_JEFE'; }).sort(function (a, b) { return b.actualizada - a.actualizada; })
+        .slice(0, 20).map(function (x) { return vistaVac(x, nombres); }),
+    });
+  }
+
+  function decidirVacacionesJefe(repo, ctx, token, id, aprobar, motivo) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var sol = repo.vacSolicitudPorId(id);
+    if (!sol || sol.jefe !== s.clave) return err('NO_ENCONTRADO', 'Esa solicitud no es de tu equipo.');
+    if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
+    return cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave,
+      { decididaJefePor: s.clave, decisionJefe: ctx.ahora(), motivoRechazo: aprobar ? '' : String(motivo).trim() });
+  }
+
+  /** RRHH: solicitudes por estado (por defecto, las aprobadas por el jefe que faltan por registrar). */
+  function bandejaVacaciones(repo, ctx, token, estado) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var nombres = nombresPorClave(repo);
+    var activos = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo'; });
+    return ok({
+      solicitudes: repo.vacSolicitudesPorEstado(estado || 'APROBADA_JEFE').sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; })
+        .map(function (x) { return vistaVac(x, nombres); }),
+      sinJefe: activos.filter(function (e) { return !e.jefe; }).length,
+      conCierre: repo.vacClavesConPeriodos().length,
+    });
+  }
+
+  function registrarVacaciones(repo, ctx, token, id, nomina) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var sol = repo.vacSolicitudPorId(id);
+    if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
+    return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() });
+  }
+
+  function rechazarVacacionesRRHH(repo, ctx, token, id, motivo) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    if (!String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
+    var sol = repo.vacSolicitudPorId(id);
+    if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
+    return cambiarVac(repo, ctx, sol, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo).trim(), registradaPor: s.clave });
+  }
+
+  /**
+   * RRHH importa el «CIERRE DE VACACIONES» (ya mapeado con Vacaciones.mapearCierre en el navegador).
+   * Reemplaza los saldos iniciales; informa egresos (en el cierre pero no activos) e ingresos (activos sin cierre).
+   */
+  function importarCierreVacaciones(repo, ctx, token, personas) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    if (!Array.isArray(personas) || !personas.length) return err('VALIDACION', 'El archivo no trae personas.');
+    var filas = [], claves = {};
+    personas.forEach(function (p) {
+      var c = Empleados.parsearCedula(p.cedula);
+      if (!c.numero) return;
+      var clave = c.letra + c.numero;
+      claves[clave] = true;
+      (p.periodos || []).forEach(function (x) {
+        if (!/^\d{4}-\d{4}$/.test(x.periodo)) return;
+        filas.push({ clave: clave, periodo: x.periodo, correspondientes: Number(x.correspondientes) || 0, disfrutadosPrevios: Number(x.disfrutadosPrevios) || 0 });
+      });
+    });
+    repo.guardarVacPeriodos(filas);
+    var activos = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo'; });
+    var activosPorClave = {};
+    activos.forEach(function (e) { activosPorClave[Empleados.claveCedula(e)] = true; });
+    var resumen = {
+      personas: Object.keys(claves).length, periodos: filas.length,
+      noActivos: Object.keys(claves).filter(function (k) { return !activosPorClave[k]; }).length,
+      activosSinCierre: activos.filter(function (e) { return !claves[Empleados.claveCedula(e)]; }).length,
+    };
+    repo.log('VACACIONES_CIERRE_IMPORTADO', s.clave, JSON.stringify(resumen));
+    return ok(resumen);
+  }
+
+  /** RRHH consulta el saldo de un empleado. */
+  function saldoVacacionesEmpleado(repo, ctx, token, clave) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var emp = repo.empleadoPorClave(clave);
+    if (!emp) return err('NO_ENCONTRADO', 'No encontramos ese empleado.');
+    var c = contextoVac(repo, ctx, emp);
+    return ok({ nombre: emp.nombre, saldo: c.saldo });
+  }
+
   /* ---------- Base de empleados (RRHH) ---------- */
 
   /**
@@ -414,6 +601,10 @@
     bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
     generarArchivoAnticipos: generarArchivoAnticipos, marcarAnticiposPagados: marcarAnticiposPagados,
     cambiarEstadoCierre: cambiarEstadoCierre, leerToken: leerToken,
+    datosVacaciones: datosVacaciones, solicitarVacaciones: solicitarVacaciones, cancelarVacaciones: cancelarVacaciones,
+    equipoVacaciones: equipoVacaciones, decidirVacacionesJefe: decidirVacacionesJefe, bandejaVacaciones: bandejaVacaciones,
+    registrarVacaciones: registrarVacaciones, rechazarVacacionesRRHH: rechazarVacacionesRRHH,
+    importarCierreVacaciones: importarCierreVacaciones, saldoVacacionesEmpleado: saldoVacacionesEmpleado,
     emitirConstancia: emitirConstancia, misConstancias: misConstancias, verificarConstancia: verificarConstancia,
     listarConstancias: listarConstancias, anularConstancia: anularConstancia,
     cargarEmpleados: cargarEmpleados, listarEmpleados: listarEmpleados, asignarJefe: asignarJefe, asignarJefeDepartamento: asignarJefeDepartamento, fijarEmpresaFideicomiso: fijarEmpresaFideicomiso,

@@ -6,16 +6,17 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.2';
+var VERSION = '2026-10-30.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
   return {
     Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
     Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
-    Constancia: typeof Constancia !== 'undefined' && !!Constancia, Servicio: typeof Servicio !== 'undefined' && !!Servicio,
+    Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
+    Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
 
@@ -27,6 +28,10 @@ var HOJAS = {
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
   CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
+  FERIADOS: ['fecha', 'motivo'],
+  VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
+  VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
+    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
@@ -41,7 +46,21 @@ var USUARIOS_RRHH_INICIALES = [
   { cedula: '7952013', nombre: 'Luis Paul Rojas', rol: 'ADMIN' },
 ];
 
+// Feriados nacionales 2026 (lista de RRHH, corregida: 12 de octubre en vez de 10/12; se agregan 5 y 24 de julio).
+var FERIADOS_INICIALES = [
+  ['2026-01-01', 'Año Nuevo'], ['2026-02-16', 'Lunes de Carnaval'], ['2026-02-17', 'Martes de Carnaval'], ['2026-04-02', 'Jueves Santo'],
+  ['2026-04-03', 'Viernes Santo'], ['2026-04-19', 'Declaración de la Independencia'], ['2026-05-01', 'Día del Trabajador'],
+  ['2026-06-24', 'Batalla de Carabobo'], ['2026-07-05', 'Día de la Independencia'], ['2026-07-24', 'Natalicio del Libertador'],
+  ['2026-10-12', 'Día de la Resistencia Indígena'], ['2026-12-24', 'Víspera de Navidad'], ['2026-12-25', 'Navidad'],
+  ['2026-12-31', 'Fin de Año'], ['2027-01-01', 'Año Nuevo'],
+];
+
 var RUTAS_TRABAJADOR = {
+  datosVacaciones: function (repo, ctx, d) { return Servicio.datosVacaciones(repo, ctx, d.token); },
+  solicitarVacaciones: function (repo, ctx, d) { return Servicio.solicitarVacaciones(repo, ctx, d.token, d); },
+  cancelarVacaciones: function (repo, ctx, d) { return Servicio.cancelarVacaciones(repo, ctx, d.token, d.id); },
+  equipoVacaciones: function (repo, ctx, d) { return Servicio.equipoVacaciones(repo, ctx, d.token); },
+  decidirVacacionesJefe: function (repo, ctx, d) { return Servicio.decidirVacacionesJefe(repo, ctx, d.token, d.id, !!d.aprobar, d.motivo); },
   emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
   misConstancias: function (repo, ctx, d) { return Servicio.misConstancias(repo, ctx, d.token); },
   verificarConstancia: function (repo, ctx, d) { return Servicio.verificarConstancia(repo, ctx, d.id); },   // pública (QR)
@@ -52,6 +71,11 @@ var RUTAS_TRABAJADOR = {
 };
 
 var RUTAS_RRHH = {
+  bandejaVacaciones: function (repo, ctx, d) { return Servicio.bandejaVacaciones(repo, ctx, d.token, d.estado); },
+  registrarVacaciones: function (repo, ctx, d) { return Servicio.registrarVacaciones(repo, ctx, d.token, d.id, d.nomina); },
+  rechazarVacacionesRRHH: function (repo, ctx, d) { return Servicio.rechazarVacacionesRRHH(repo, ctx, d.token, d.id, d.motivo); },
+  importarCierreVacaciones: function (repo, ctx, d) { return Servicio.importarCierreVacaciones(repo, ctx, d.token, d.personas); },
+  saldoVacacionesEmpleado: function (repo, ctx, d) { return Servicio.saldoVacacionesEmpleado(repo, ctx, d.token, d.clave); },
   listarConstancias: function (repo, ctx, d) { return Servicio.listarConstancias(repo, ctx, d.token); },
   anularConstancia: function (repo, ctx, d) { return Servicio.anularConstancia(repo, ctx, d.token, d.id); },
   loginAdmin: function (repo, ctx, d) { return Servicio.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave); },
@@ -184,6 +208,26 @@ function anticipo_(f) {
   };
 }
 
+/** Fecha de la hoja (Date o texto) → 'AAAA-MM-DD' en hora de Caracas. */
+function fechaIso_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'America/Caracas', 'yyyy-MM-dd');
+  var t = texto_(v).trim(), m;
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return t.slice(0, 10);
+}
+
+function vacSolicitud_(f) {
+  var imp = [];
+  try { imp = f.imputacion ? JSON.parse(f.imputacion) : []; } catch (e) { /* vacía */ }
+  return {
+    _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), inicio: fechaIso_(f.inicio), culminacion: fechaIso_(f.culminacion),
+    reintegro: fechaIso_(f.reintegro), dias: Number(f.dias) || 0, condicion: texto_(f.condicion), imputacion: imp, estado: texto_(f.estado),
+    jefe: texto_(f.jefe), creada: Number(f.creada) || 0, actualizada: Number(f.actualizada) || 0, decididaJefePor: texto_(f.decididaJefePor),
+    decisionJefe: Number(f.decisionJefe) || 0, registradaPor: texto_(f.registradaPor), registrada: Number(f.registrada) || 0,
+    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo),
+  };
+}
+
 var constanciasCache = null;
 function constancias_() {
   return constanciasCache || (constanciasCache = leer_('CONSTANCIAS').map(function (f) {
@@ -207,6 +251,38 @@ function crearRepo_() {
       leer_('PARAMETROS').forEach(function (f) { p[f.clave] = f.valor; });
       return p;
     },
+    feriados: function () { return leer_('FERIADOS').map(function (f) { return fechaIso_(f.fecha); }).filter(function (f) { return /^\d{4}-\d{2}-\d{2}$/.test(f); }); },
+    vacPeriodosDe: function (clave) {
+      return leer_('VAC_PERIODOS').filter(function (f) { return texto_(f.clave) === clave; }).map(function (f) {
+        return { periodo: texto_(f.periodo), correspondientes: Number(f.correspondientes) || 0, disfrutadosPrevios: Number(f.disfrutadosPrevios) || 0 };
+      });
+    },
+    vacClavesConPeriodos: function () {
+      var v = {}; leer_('VAC_PERIODOS').forEach(function (f) { v[texto_(f.clave)] = true; }); return Object.keys(v);
+    },
+    /** Reemplaza toda la hoja VAC_PERIODOS de una vez (importación del cierre). */
+    guardarVacPeriodos: function (filas) {
+      var h = hoja_('VAC_PERIODOS'), cab = HOJAS.VAC_PERIODOS, ultima = h.getLastRow();
+      if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+      if (!filas.length) return;
+      var r = h.getRange(2, 1, filas.length, cab.length);
+      h.getRange(2, 1, filas.length, 2).setNumberFormat('@');
+      r.setValues(filas.map(function (f) { return [f.clave, f.periodo, f.correspondientes, f.disfrutadosPrevios]; }));
+    },
+    vacSolicitudesDe: function (clave) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.clave === clave; }); },
+    vacSolicitudesPorJefe: function (clave) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.jefe === clave; }); },
+    vacSolicitudesPorEstado: function (estado) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.estado === estado; }); },
+    vacSolicitudPorId: function (id) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.id === id; })[0] || null; },
+    guardarVacSolicitud: function (s) {
+      var copia = Object.assign({}, s, { imputacion: JSON.stringify(s.imputacion || []) });
+      if (!copia._fila) {
+        var h = hoja_('VAC_SOLICITUDES');
+        h.getRange(h.getLastRow() + 1, 1, 1, 6).setNumberFormat('@');   // id, clave y fechas como texto
+      }
+      escribirFila_('VAC_SOLICITUDES', copia);
+      s._fila = copia._fila;
+    },
+    nuevoIdVac: function () { return 'VAC-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     constanciasDe: function (clave) { return constancias_().filter(function (c) { return c.clave === clave; }); },
     constanciaPorId: function (id) { return constancias_().filter(function (c) { return c.id === id; })[0] || null; },
     todasConstancias: function () { return constancias_(); },
@@ -291,9 +367,16 @@ function configurarInicial() {
   // Parámetros nuevos: se agregan solo si no existen, sin tocar los que ya editaste.
   var hp = ss.getSheetByName('PARAMETROS'), existentes = {};
   hp.getDataRange().getValues().forEach(function (f) { existentes[String(f[0])] = true; });
-  [['firmaNombre', 'Lic. Luis Paul Rojas'], ['firmaCargo', 'Gerente de Gestión Humana'], ['firmaTelefono', '(0412) 205.11.60.'], ['ciudad', 'Caracas'], ['constanciasMaxPorMes', 5]]
+  [['firmaNombre', 'Lic. Luis Paul Rojas'], ['firmaCargo', 'Gerente de Gestión Humana'], ['firmaTelefono', '(0412) 205.11.60.'], ['ciudad', 'Caracas'], ['constanciasMaxPorMes', 5],
+   ['vacAnticipacionMin', 15], ['vacAnticipacionMax', 20]]
     .forEach(function (f) { if (!existentes[f[0]]) hp.appendRow(f); });
   sem('EMPRESAS', [['PCA', 5847, 1, 5, 'A'], ['AIV', 5847, 1, 5, 'A']]);
+  // Feriados iniciales (solo si la hoja está vacía; después RRHH la edita)
+  var hf = ss.getSheetByName('FERIADOS');
+  if (hf.getLastRow() <= 1) {
+    hf.getRange(2, 1, FERIADOS_INICIALES.length, 1).setNumberFormat('@');
+    hf.getRange(2, 1, FERIADOS_INICIALES.length, 2).setValues(FERIADOS_INICIALES);
+  }
   // Usuarios de RRHH iniciales (sin clave todavía; no pueden entrar hasta ponerla)
   var existentes_ = {};
   leer_('USUARIOS').forEach(function (u) { existentes_[texto_(u.cedula)] = u; });

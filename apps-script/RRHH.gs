@@ -13,7 +13,7 @@ var ERRORES_CARGA = [];
 var Calculo = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Cálculo del aporte trimestral al fideicomiso.
        Funciones puras: sin hojas, sin DOM, sin fecha del sistema.
@@ -165,7 +165,7 @@ var Calculo = (function () {
 var Empleados = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Base de empleados y cruce del aporte. Funciones puras.
        ========================================================== */
@@ -518,7 +518,7 @@ var Empleados = (function () {
 var Prestaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Módulo 1 · Prestaciones sociales: lo que ve el trabajador y
        las reglas del anticipo. Funciones puras.
@@ -610,7 +610,7 @@ var Prestaciones = (function () {
 var Exportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Archivos para el banco. Funciones puras.
        Diseño NOMINA APORTES: FIDEICOMISO | Cedula (letra) | (número)
@@ -657,7 +657,7 @@ var Exportes = (function () {
 var Constancia = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Constancia de trabajo: textos, monto en letras y vigencia (30 días).
        Funciones puras; las usan el servidor, el navegador (PDF) y las pruebas.
@@ -781,11 +781,232 @@ var Constancia = (function () {
   } catch (e) { ERRORES_CARGA.push('Constancia: ' + (e && e.message)); return undefined; }
 })();
 
+// ===== core/vacaciones.js =====
+var Vacaciones = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Vacaciones: días hábiles, períodos, saldo y reglas de la solicitud.
+       Funciones puras. Fechas como texto 'AAAA-MM-DD' (sin horas ni zonas).
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      var REGLAS = { anticipacionMin: 15, anticipacionMax: 20, diasBase: 15, diasTope: 30 };
+      var ACTIVAS = ['PENDIENTE_JEFE', 'APROBADA_JEFE', 'REGISTRADA'];
+      var CON_PAGO = 'Disfrute de días con pago';
+      var SIN_PAGO = 'Disfrute';
+    
+      /* ---------- Fechas ---------- */
+    
+      function aDia(txt) {                       // 'AAAA-MM-DD' → número de día (UTC)
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(txt || ''));
+        if (!m) return NaN;
+        var t = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+        var d = new Date(t);
+        if (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3]) return NaN;
+        return t / 86400000;
+      }
+      function deDia(n) {
+        var d = new Date(n * 86400000);
+        return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2);
+      }
+      function sumarDiasTxt(txt, n) { return deDia(aDia(txt) + n); }
+      function esFecha(txt) { return !isNaN(aDia(txt)); }
+      /** {y,m,d} → 'AAAA-MM-DD' */
+      function deObjeto(f) { return f ? f.y + '-' + ('0' + f.m).slice(-2) + '-' + ('0' + f.d).slice(-2) : ''; }
+      /** 'AAAA-MM-DD' → 'DD/MM/AAAA' */
+      function corta(txt) { var p = String(txt).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+    
+      function conjunto(feriados) {
+        var s = {};
+        (feriados || []).forEach(function (f) { s[f] = true; });
+        return s;
+      }
+    
+      /** Lunes a viernes que no sea feriado. */
+      function esHabil(txt, fer) {
+        var dow = new Date(aDia(txt) * 86400000).getUTCDay();
+        return dow !== 0 && dow !== 6 && !fer[txt];
+      }
+    
+      /** Días hábiles entre dos fechas, ambas incluidas (como NETWORKDAYS). */
+      function contarHabiles(desde, hasta, feriados) {
+        var fer = conjunto(feriados), n = 0;
+        for (var d = aDia(desde); d <= aDia(hasta); d++) if (esHabil(deDia(d), fer)) n++;
+        return n;
+      }
+    
+      /** Fecha del día hábil número `dias` contando desde `inicio` (inicio = día 1). */
+      function culminacion(inicio, dias, feriados) {
+        var fer = conjunto(feriados), d = aDia(inicio), cuenta = 0;
+        for (var i = 0; i < 400; i++, d++) {
+          if (esHabil(deDia(d), fer) && ++cuenta === dias) return deDia(d);
+        }
+        return '';
+      }
+    
+      /** Siguiente día hábil después de `fecha` (reintegro). */
+      function siguienteHabil(fecha, feriados) {
+        var fer = conjunto(feriados), d = aDia(fecha) + 1;
+        while (!esHabil(deDia(d), fer)) d++;
+        return deDia(d);
+      }
+    
+      /* ---------- Períodos y saldo ---------- */
+    
+      /** Días que corresponden al cumplir `anios` de servicio: 15 + (años − 1), tope 30. */
+      function diasPorAnios(anios, r) {
+        r = r || REGLAS;
+        return anios >= 1 ? Math.min(r.diasTope, r.diasBase + anios - 1) : 0;
+      }
+    
+      /** '2024-2025' → año en que termina (2025). */
+      function finPeriodo(p) { return Number(String(p).split('-')[1]); }
+    
+      /**
+       * Períodos de un empleado: los importados del cierre y, después del último (o desde el ingreso si
+       * no hay cierre), uno por cada aniversario ya cumplido hasta `hoy`, con la regla de la ley.
+       * importados: [{ periodo:'2024-2025', correspondientes, disfrutadosPrevios }]
+       */
+      function periodosDeEmpleado(ingreso, importados, hoy, r) {
+        var lista = (importados || []).map(function (p) {
+          return { periodo: p.periodo, correspondientes: Number(p.correspondientes) || 0, disfrutadosPrevios: Number(p.disfrutadosPrevios) || 0, origen: 'CIERRE' };
+        }).sort(function (a, b) { return finPeriodo(a.periodo) - finPeriodo(b.periodo); });
+        if (!esFecha(ingreso)) return lista;
+        var yIng = Number(ingreso.slice(0, 4)), mmdd = ingreso.slice(5);
+        var desde = lista.length ? finPeriodo(lista[lista.length - 1].periodo) + 1 : yIng + 1;
+        var yHoy = Number(hoy.slice(0, 4));
+        for (var y = desde; y <= yHoy; y++) {
+          var aniversario = y + '-' + (mmdd === '02-29' ? '02-28' : mmdd);
+          if (aniversario > hoy) break;                 // aún no lo cumple
+          lista.push({ periodo: (y - 1) + '-' + y, correspondientes: diasPorAnios(y - yIng, r), disfrutadosPrevios: 0, origen: 'REGLA' });
+        }
+        return lista;
+      }
+    
+      /**
+       * Saldo por período descontando las solicitudes activas (pendientes, aprobadas o registradas).
+       * Un período está «pagado» si ya se disfrutó algo de él (antes del sistema o en una solicitud activa).
+       */
+      function saldo(periodos, solicitudes) {
+        var usados = {};
+        (solicitudes || []).filter(function (s) { return ACTIVAS.indexOf(s.estado) !== -1; }).forEach(function (s) {
+          (s.imputacion || []).forEach(function (i) { usados[i.periodo] = (usados[i.periodo] || 0) + i.dias; });
+        });
+        var porPeriodo = periodos.map(function (p) {
+          var enSistema = usados[p.periodo] || 0;
+          return {
+            periodo: p.periodo, correspondientes: p.correspondientes, disfrutadosPrevios: p.disfrutadosPrevios, enSistema: enSistema,
+            pendientes: Math.max(0, p.correspondientes - p.disfrutadosPrevios - enSistema), origen: p.origen,
+            pagado: p.disfrutadosPrevios > 0 || enSistema > 0,
+          };
+        });
+        return { porPeriodo: porPeriodo, total: porPeriodo.reduce(function (t, p) { return t + p.pendientes; }, 0) };
+      }
+    
+      /**
+       * Reparte `dias` empezando por el período más antiguo con días pendientes.
+       * Cada parte dice si con ella se paga el período (primera vez que se disfruta de él).
+       */
+      function imputar(saldoActual, dias) {
+        var resto = dias, partes = [];
+        saldoActual.porPeriodo.forEach(function (p) {
+          if (resto <= 0 || p.pendientes <= 0) return;
+          var toma = Math.min(resto, p.pendientes);
+          partes.push({ periodo: p.periodo, dias: toma, pagaPeriodo: !p.pagado, diasDelPeriodo: p.correspondientes });
+          resto -= toma;
+        });
+        return resto > 0 ? null : partes;
+      }
+    
+      function condicion(imputacion) {
+        return imputacion.some(function (i) { return i.pagaPeriodo; }) ? CON_PAGO : SIN_PAGO;
+      }
+    
+      /**
+       * Valida una solicitud. Devuelve { ok, errores[], calculo: { culminacion, reintegro, imputacion, condicion } }.
+       * c: { hoy, feriados, saldo, solicitudes (propias), tieneJefe, reglas }
+       */
+      function validarSolicitud(sol, c) {
+        var r = Object.assign({}, REGLAS, c.reglas || {}), e = [];
+        var dias = Number(sol.dias), inicio = String(sol.inicio || '');
+        if (!c.tieneJefe) e.push('No tienes jefe directo asignado. Comunícate con Gestión Humana para que lo registren.');
+        if (!(dias >= 1) || Math.floor(dias) !== dias) e.push('Indica cuántos días hábiles quieres disfrutar.');
+        if (!esFecha(inicio)) e.push('Elige la fecha de inicio.');
+        if (e.length) return { ok: false, errores: e };
+    
+        var desde = sumarDiasTxt(c.hoy, r.anticipacionMin), hasta = sumarDiasTxt(c.hoy, r.anticipacionMax);
+        if (inicio < desde || inicio > hasta) e.push('La fecha de inicio debe estar entre el ' + corta(desde) + ' y el ' + corta(hasta) + ' (de ' + r.anticipacionMin + ' a ' + r.anticipacionMax + ' días de anticipación).');
+        else if (!esHabil(inicio, conjunto(c.feriados))) e.push('La fecha de inicio debe ser un día hábil (no fin de semana ni feriado).');
+        if (dias > c.saldo.total) e.push('Solo tienes ' + c.saldo.total + ' días pendientes. Por ahora no se pueden adelantar días.');
+        if (e.length) return { ok: false, errores: e };
+    
+        var fin = culminacion(inicio, dias, c.feriados);
+        var choca = (c.solicitudes || []).filter(function (s) {
+          return ACTIVAS.indexOf(s.estado) !== -1 && !(fin < s.inicio || inicio > s.culminacion);
+        })[0];
+        if (choca) return { ok: false, errores: ['Se cruza con otra solicitud tuya (del ' + corta(choca.inicio) + ' al ' + corta(choca.culminacion) + ').'] };
+        var imp = imputar(c.saldo, dias);
+        return { ok: true, errores: [], calculo: { culminacion: fin, reintegro: siguienteHabil(fin, c.feriados), imputacion: imp, condicion: condicion(imp) } };
+      }
+    
+      /* ---------- Importar el «CIERRE DE VACACIONES» ---------- */
+    
+      /**
+       * filas: matriz (primera fila = encabezados) de la hoja «CIERRE DE VACACIONES».
+       * Por cada «DISFRUTADOS AA-AA» toma «CORRESPONDIENTE AA-AA» (o, si no tiene título, la columna anterior).
+       * Devuelve { personas: [{ cedula, periodos:[{periodo:'2024-2025', correspondientes, disfrutadosPrevios}] }], periodos:[...] }
+       */
+      function mapearCierre(filas) {
+        var norm = function (h) { return String(h == null ? '' : h).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); };
+        var cab = (filas[0] || []).map(norm);
+        var iCed = cab.indexOf('CEDULA');
+        if (iCed === -1) throw new Error('No encontré la columna CEDULA en la hoja del cierre.');
+        var cols = [];
+        cab.forEach(function (h, j) {
+          var m = /^DISFRUTADOS (\d{2})-(\d{2})$/.exec(h);
+          if (!m) return;
+          var jc = cab.indexOf('CORRESPONDIENTE ' + m[1] + '-' + m[2]);
+          if (jc === -1) jc = j - 1;
+          cols.push({ periodo: '20' + m[1] + '-20' + m[2], jc: jc, jd: j });
+        });
+        if (!cols.length) throw new Error('No encontré columnas «DISFRUTADOS AA-AA» en el cierre.');
+        var num = function (v) { var n = Number(v); return isFinite(n) && v !== '' && v !== null ? n : 0; };
+        var personas = [];
+        filas.slice(1).forEach(function (f) {
+          var ced = String(f[iCed] == null ? '' : f[iCed]).trim();
+          if (!/^[VE]?-?\d{5,9}$/i.test(ced.replace(/\./g, ''))) return;
+          personas.push({
+            cedula: ced,
+            periodos: cols.map(function (c) { return { periodo: c.periodo, correspondientes: num(f[c.jc]), disfrutadosPrevios: num(f[c.jd]) }; })
+              .filter(function (p) { return p.correspondientes > 0 || p.disfrutadosPrevios > 0; }),
+          });
+        });
+        return { personas: personas, periodos: cols.map(function (c) { return c.periodo; }) };
+      }
+    
+      var api = {
+        REGLAS: REGLAS, ACTIVAS: ACTIVAS, CON_PAGO: CON_PAGO, SIN_PAGO: SIN_PAGO,
+        aDia: aDia, deDia: deDia, sumarDiasTxt: sumarDiasTxt, esFecha: esFecha, deObjeto: deObjeto, corta: corta,
+        esHabil: function (txt, feriados) { return esHabil(txt, conjunto(feriados)); },
+        contarHabiles: contarHabiles, culminacion: culminacion, siguienteHabil: siguienteHabil,
+        diasPorAnios: diasPorAnios, periodosDeEmpleado: periodosDeEmpleado, saldo: saldo, imputar: imputar, condicion: condicion,
+        validarSolicitud: validarSolicitud, mapearCierre: mapearCierre,
+      };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Vacaciones = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Vacaciones: ' + (e && e.message)); return undefined; }
+})();
+
 // ===== core/servicio.js =====
 var Servicio = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Casos de uso del módulo de prestaciones. No sabe de Sheets:
        recibe un `repo` (hojas en producción, memoria en pruebas) y
@@ -804,6 +1025,7 @@ var Servicio = (function () {
       var Prestaciones = isNode ? require('./prestaciones.js') : dependencia(raiz, 'Prestaciones');
       var Exportes = isNode ? require('./exportes.js') : dependencia(raiz, 'Exportes');
       var Constancia = isNode ? require('./constancia.js') : dependencia(raiz, 'Constancia');
+      var Vacaciones = isNode ? require('./vacaciones.js') : dependencia(raiz, 'Vacaciones');
     
       var HORAS_SESION = 8;
       var MAX_FALLOS_CEDULA = 5;
@@ -1078,6 +1300,192 @@ var Servicio = (function () {
         return ok(vistaConstancia(c, ctx.ahora()));
       }
     
+      /* ---------- Vacaciones ---------- */
+    
+      var ESTADOS_VAC = { PENDIENTE_JEFE: ['APROBADA_JEFE', 'RECHAZADA', 'CANCELADA'], APROBADA_JEFE: ['REGISTRADA', 'RECHAZADA'], REGISTRADA: [], RECHAZADA: [], CANCELADA: [] };
+    
+      function hoyCaracas(ctx) { return Vacaciones.deObjeto(Constancia.fechaCaracas(ctx.ahora())); }
+    
+      function reglasVac(p) {
+        var r = {};
+        if (Number(p.vacAnticipacionMin) > 0) r.anticipacionMin = Number(p.vacAnticipacionMin);
+        if (Number(p.vacAnticipacionMax) > 0) r.anticipacionMax = Number(p.vacAnticipacionMax);
+        return Object.assign({}, Vacaciones.REGLAS, r);
+      }
+    
+      /** Períodos, solicitudes y saldo de un empleado. */
+      function contextoVac(repo, ctx, emp) {
+        var clave = Empleados.claveCedula(emp), hoy = hoyCaracas(ctx);
+        var periodos = Vacaciones.periodosDeEmpleado(Vacaciones.deObjeto(emp.fechaIngreso), repo.vacPeriodosDe(clave), hoy);
+        var solicitudes = repo.vacSolicitudesDe(clave);
+        return { clave: clave, hoy: hoy, periodos: periodos, solicitudes: solicitudes, saldo: Vacaciones.saldo(periodos, solicitudes) };
+      }
+    
+      function vistaVac(s, nombres) {
+        return {
+          id: s.id, clave: s.clave, nombre: nombres && nombres[s.clave] || '', inicio: s.inicio, culminacion: s.culminacion, reintegro: s.reintegro,
+          dias: s.dias, condicion: s.condicion, imputacion: s.imputacion, estado: s.estado, creada: s.creada,
+          jefe: s.jefe, jefeNombre: nombres && nombres[s.jefe] || '', motivoRechazo: s.motivoRechazo || '', nomina: s.nomina || '',
+        };
+      }
+    
+      function nombresPorClave(repo) {
+        var m = {};
+        repo.todosEmpleados().forEach(function (e) { m[Empleados.claveCedula(e)] = e.nombre; });
+        return m;
+      }
+    
+      function cambiarVac(repo, ctx, sol, nuevo, actor, extra) {
+        if ((ESTADOS_VAC[sol.estado] || []).indexOf(nuevo) === -1) return err('TRANSICION', 'La solicitud ya no está pendiente de esa acción.');
+        Object.assign(sol, extra || {}, { estado: nuevo, actualizada: ctx.ahora() });
+        repo.guardarVacSolicitud(sol);
+        repo.log('VACACIONES_' + nuevo, actor, sol.id);
+        return ok(vistaVac(sol, nombresPorClave(repo)));
+      }
+    
+      /** Lo que ve el trabajador: saldo por período, sus solicitudes, feriados y reglas para el formulario. */
+      function datosVacaciones(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var emp = repo.empleadoPorClave(s.clave);
+        if (!emp) return err('NO_ENCONTRADO', 'No encontramos tus datos.');
+        var c = contextoVac(repo, ctx, emp), nombres = nombresPorClave(repo);
+        var jefe = emp.jefe ? repo.empleadoPorClave(emp.jefe) : null;
+        return ok({
+          hoy: c.hoy, reglas: reglasVac(repo.parametros()), feriados: repo.feriados(), saldo: c.saldo,
+          jefe: jefe && jefe.estado !== 'Inactivo' ? { clave: emp.jefe, nombre: jefe.nombre } : null,
+          sinFechaIngreso: !emp.fechaIngreso,
+          solicitudes: c.solicitudes.sort(function (a, b) { return b.creada - a.creada; }).map(function (x) { return vistaVac(x, nombres); }),
+        });
+      }
+    
+      function solicitarVacaciones(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var emp = repo.empleadoPorClave(s.clave);
+        if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+        var jefe = emp.jefe ? repo.empleadoPorClave(emp.jefe) : null;
+        var c = contextoVac(repo, ctx, emp), feriados = repo.feriados();
+        var v = Vacaciones.validarSolicitud({ inicio: datos && datos.inicio, dias: Number(datos && datos.dias) }, {
+          hoy: c.hoy, feriados: feriados, saldo: c.saldo, solicitudes: c.solicitudes,
+          tieneJefe: !!(jefe && jefe.estado !== 'Inactivo'), reglas: reglasVac(repo.parametros()),
+        });
+        if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+        var sol = {
+          id: repo.nuevoIdVac(), clave: c.clave, inicio: datos.inicio, culminacion: v.calculo.culminacion, reintegro: v.calculo.reintegro,
+          dias: Number(datos.dias), condicion: v.calculo.condicion, imputacion: v.calculo.imputacion, estado: 'PENDIENTE_JEFE',
+          jefe: emp.jefe, creada: ctx.ahora(), actualizada: ctx.ahora(), decididaJefePor: '', registradaPor: '', nomina: '', motivoRechazo: '',
+        };
+        repo.guardarVacSolicitud(sol);
+        repo.log('VACACIONES_SOLICITADA', c.clave, sol.id + ' · ' + sol.dias + ' días desde ' + sol.inicio);
+        return ok(vistaVac(sol, nombresPorClave(repo)));
+      }
+    
+      function cancelarVacaciones(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var sol = repo.vacSolicitudPorId(id);
+        if (!sol || sol.clave !== s.clave) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
+        if (sol.estado !== 'PENDIENTE_JEFE') return err('TRANSICION', 'Solo puedes cancelar una solicitud que tu jefe aún no ha revisado.');
+        return cambiarVac(repo, ctx, sol, 'CANCELADA', s.clave);
+      }
+    
+      /** Bandeja del jefe directo: solicitudes de su equipo. */
+      function equipoVacaciones(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var equipo = repo.todosEmpleados().filter(function (e) { return e.jefe === s.clave && e.estado !== 'Inactivo'; });
+        var nombres = nombresPorClave(repo);
+        var sols = repo.vacSolicitudesPorJefe(s.clave).sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; });
+        return ok({
+          esJefe: equipo.length > 0, equipo: equipo.length,
+          pendientes: sols.filter(function (x) { return x.estado === 'PENDIENTE_JEFE'; }).map(function (x) { return vistaVac(x, nombres); }),
+          recientes: sols.filter(function (x) { return x.estado !== 'PENDIENTE_JEFE'; }).sort(function (a, b) { return b.actualizada - a.actualizada; })
+            .slice(0, 20).map(function (x) { return vistaVac(x, nombres); }),
+        });
+      }
+    
+      function decidirVacacionesJefe(repo, ctx, token, id, aprobar, motivo) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var sol = repo.vacSolicitudPorId(id);
+        if (!sol || sol.jefe !== s.clave) return err('NO_ENCONTRADO', 'Esa solicitud no es de tu equipo.');
+        if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
+        return cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave,
+          { decididaJefePor: s.clave, decisionJefe: ctx.ahora(), motivoRechazo: aprobar ? '' : String(motivo).trim() });
+      }
+    
+      /** RRHH: solicitudes por estado (por defecto, las aprobadas por el jefe que faltan por registrar). */
+      function bandejaVacaciones(repo, ctx, token, estado) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var nombres = nombresPorClave(repo);
+        var activos = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo'; });
+        return ok({
+          solicitudes: repo.vacSolicitudesPorEstado(estado || 'APROBADA_JEFE').sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; })
+            .map(function (x) { return vistaVac(x, nombres); }),
+          sinJefe: activos.filter(function (e) { return !e.jefe; }).length,
+          conCierre: repo.vacClavesConPeriodos().length,
+        });
+      }
+    
+      function registrarVacaciones(repo, ctx, token, id, nomina) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var sol = repo.vacSolicitudPorId(id);
+        if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
+        return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() });
+      }
+    
+      function rechazarVacacionesRRHH(repo, ctx, token, id, motivo) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        if (!String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
+        var sol = repo.vacSolicitudPorId(id);
+        if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
+        return cambiarVac(repo, ctx, sol, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo).trim(), registradaPor: s.clave });
+      }
+    
+      /**
+       * RRHH importa el «CIERRE DE VACACIONES» (ya mapeado con Vacaciones.mapearCierre en el navegador).
+       * Reemplaza los saldos iniciales; informa egresos (en el cierre pero no activos) e ingresos (activos sin cierre).
+       */
+      function importarCierreVacaciones(repo, ctx, token, personas) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        if (!Array.isArray(personas) || !personas.length) return err('VALIDACION', 'El archivo no trae personas.');
+        var filas = [], claves = {};
+        personas.forEach(function (p) {
+          var c = Empleados.parsearCedula(p.cedula);
+          if (!c.numero) return;
+          var clave = c.letra + c.numero;
+          claves[clave] = true;
+          (p.periodos || []).forEach(function (x) {
+            if (!/^\d{4}-\d{4}$/.test(x.periodo)) return;
+            filas.push({ clave: clave, periodo: x.periodo, correspondientes: Number(x.correspondientes) || 0, disfrutadosPrevios: Number(x.disfrutadosPrevios) || 0 });
+          });
+        });
+        repo.guardarVacPeriodos(filas);
+        var activos = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo'; });
+        var activosPorClave = {};
+        activos.forEach(function (e) { activosPorClave[Empleados.claveCedula(e)] = true; });
+        var resumen = {
+          personas: Object.keys(claves).length, periodos: filas.length,
+          noActivos: Object.keys(claves).filter(function (k) { return !activosPorClave[k]; }).length,
+          activosSinCierre: activos.filter(function (e) { return !claves[Empleados.claveCedula(e)]; }).length,
+        };
+        repo.log('VACACIONES_CIERRE_IMPORTADO', s.clave, JSON.stringify(resumen));
+        return ok(resumen);
+      }
+    
+      /** RRHH consulta el saldo de un empleado. */
+      function saldoVacacionesEmpleado(repo, ctx, token, clave) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var emp = repo.empleadoPorClave(clave);
+        if (!emp) return err('NO_ENCONTRADO', 'No encontramos ese empleado.');
+        var c = contextoVac(repo, ctx, emp);
+        return ok({ nombre: emp.nombre, saldo: c.saldo });
+      }
+    
       /* ---------- Base de empleados (RRHH) ---------- */
     
       /**
@@ -1202,6 +1610,10 @@ var Servicio = (function () {
         bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
         generarArchivoAnticipos: generarArchivoAnticipos, marcarAnticiposPagados: marcarAnticiposPagados,
         cambiarEstadoCierre: cambiarEstadoCierre, leerToken: leerToken,
+        datosVacaciones: datosVacaciones, solicitarVacaciones: solicitarVacaciones, cancelarVacaciones: cancelarVacaciones,
+        equipoVacaciones: equipoVacaciones, decidirVacacionesJefe: decidirVacacionesJefe, bandejaVacaciones: bandejaVacaciones,
+        registrarVacaciones: registrarVacaciones, rechazarVacacionesRRHH: rechazarVacacionesRRHH,
+        importarCierreVacaciones: importarCierreVacaciones, saldoVacacionesEmpleado: saldoVacacionesEmpleado,
         emitirConstancia: emitirConstancia, misConstancias: misConstancias, verificarConstancia: verificarConstancia,
         listarConstancias: listarConstancias, anularConstancia: anularConstancia,
         cargarEmpleados: cargarEmpleados, listarEmpleados: listarEmpleados, asignarJefe: asignarJefe, asignarJefeDepartamento: asignarJefeDepartamento, fijarEmpresaFideicomiso: fijarEmpresaFideicomiso,
@@ -1222,16 +1634,17 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.2';
+var VERSION = '2026-10-30.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
   return {
     Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
     Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
-    Constancia: typeof Constancia !== 'undefined' && !!Constancia, Servicio: typeof Servicio !== 'undefined' && !!Servicio,
+    Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
+    Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
 
@@ -1243,6 +1656,10 @@ var HOJAS = {
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
   CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
+  FERIADOS: ['fecha', 'motivo'],
+  VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
+  VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
+    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
@@ -1257,7 +1674,21 @@ var USUARIOS_RRHH_INICIALES = [
   { cedula: '7952013', nombre: 'Luis Paul Rojas', rol: 'ADMIN' },
 ];
 
+// Feriados nacionales 2026 (lista de RRHH, corregida: 12 de octubre en vez de 10/12; se agregan 5 y 24 de julio).
+var FERIADOS_INICIALES = [
+  ['2026-01-01', 'Año Nuevo'], ['2026-02-16', 'Lunes de Carnaval'], ['2026-02-17', 'Martes de Carnaval'], ['2026-04-02', 'Jueves Santo'],
+  ['2026-04-03', 'Viernes Santo'], ['2026-04-19', 'Declaración de la Independencia'], ['2026-05-01', 'Día del Trabajador'],
+  ['2026-06-24', 'Batalla de Carabobo'], ['2026-07-05', 'Día de la Independencia'], ['2026-07-24', 'Natalicio del Libertador'],
+  ['2026-10-12', 'Día de la Resistencia Indígena'], ['2026-12-24', 'Víspera de Navidad'], ['2026-12-25', 'Navidad'],
+  ['2026-12-31', 'Fin de Año'], ['2027-01-01', 'Año Nuevo'],
+];
+
 var RUTAS_TRABAJADOR = {
+  datosVacaciones: function (repo, ctx, d) { return Servicio.datosVacaciones(repo, ctx, d.token); },
+  solicitarVacaciones: function (repo, ctx, d) { return Servicio.solicitarVacaciones(repo, ctx, d.token, d); },
+  cancelarVacaciones: function (repo, ctx, d) { return Servicio.cancelarVacaciones(repo, ctx, d.token, d.id); },
+  equipoVacaciones: function (repo, ctx, d) { return Servicio.equipoVacaciones(repo, ctx, d.token); },
+  decidirVacacionesJefe: function (repo, ctx, d) { return Servicio.decidirVacacionesJefe(repo, ctx, d.token, d.id, !!d.aprobar, d.motivo); },
   emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
   misConstancias: function (repo, ctx, d) { return Servicio.misConstancias(repo, ctx, d.token); },
   verificarConstancia: function (repo, ctx, d) { return Servicio.verificarConstancia(repo, ctx, d.id); },   // pública (QR)
@@ -1268,6 +1699,11 @@ var RUTAS_TRABAJADOR = {
 };
 
 var RUTAS_RRHH = {
+  bandejaVacaciones: function (repo, ctx, d) { return Servicio.bandejaVacaciones(repo, ctx, d.token, d.estado); },
+  registrarVacaciones: function (repo, ctx, d) { return Servicio.registrarVacaciones(repo, ctx, d.token, d.id, d.nomina); },
+  rechazarVacacionesRRHH: function (repo, ctx, d) { return Servicio.rechazarVacacionesRRHH(repo, ctx, d.token, d.id, d.motivo); },
+  importarCierreVacaciones: function (repo, ctx, d) { return Servicio.importarCierreVacaciones(repo, ctx, d.token, d.personas); },
+  saldoVacacionesEmpleado: function (repo, ctx, d) { return Servicio.saldoVacacionesEmpleado(repo, ctx, d.token, d.clave); },
   listarConstancias: function (repo, ctx, d) { return Servicio.listarConstancias(repo, ctx, d.token); },
   anularConstancia: function (repo, ctx, d) { return Servicio.anularConstancia(repo, ctx, d.token, d.id); },
   loginAdmin: function (repo, ctx, d) { return Servicio.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave); },
@@ -1400,6 +1836,26 @@ function anticipo_(f) {
   };
 }
 
+/** Fecha de la hoja (Date o texto) → 'AAAA-MM-DD' en hora de Caracas. */
+function fechaIso_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'America/Caracas', 'yyyy-MM-dd');
+  var t = texto_(v).trim(), m;
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return t.slice(0, 10);
+}
+
+function vacSolicitud_(f) {
+  var imp = [];
+  try { imp = f.imputacion ? JSON.parse(f.imputacion) : []; } catch (e) { /* vacía */ }
+  return {
+    _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), inicio: fechaIso_(f.inicio), culminacion: fechaIso_(f.culminacion),
+    reintegro: fechaIso_(f.reintegro), dias: Number(f.dias) || 0, condicion: texto_(f.condicion), imputacion: imp, estado: texto_(f.estado),
+    jefe: texto_(f.jefe), creada: Number(f.creada) || 0, actualizada: Number(f.actualizada) || 0, decididaJefePor: texto_(f.decididaJefePor),
+    decisionJefe: Number(f.decisionJefe) || 0, registradaPor: texto_(f.registradaPor), registrada: Number(f.registrada) || 0,
+    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo),
+  };
+}
+
 var constanciasCache = null;
 function constancias_() {
   return constanciasCache || (constanciasCache = leer_('CONSTANCIAS').map(function (f) {
@@ -1423,6 +1879,38 @@ function crearRepo_() {
       leer_('PARAMETROS').forEach(function (f) { p[f.clave] = f.valor; });
       return p;
     },
+    feriados: function () { return leer_('FERIADOS').map(function (f) { return fechaIso_(f.fecha); }).filter(function (f) { return /^\d{4}-\d{2}-\d{2}$/.test(f); }); },
+    vacPeriodosDe: function (clave) {
+      return leer_('VAC_PERIODOS').filter(function (f) { return texto_(f.clave) === clave; }).map(function (f) {
+        return { periodo: texto_(f.periodo), correspondientes: Number(f.correspondientes) || 0, disfrutadosPrevios: Number(f.disfrutadosPrevios) || 0 };
+      });
+    },
+    vacClavesConPeriodos: function () {
+      var v = {}; leer_('VAC_PERIODOS').forEach(function (f) { v[texto_(f.clave)] = true; }); return Object.keys(v);
+    },
+    /** Reemplaza toda la hoja VAC_PERIODOS de una vez (importación del cierre). */
+    guardarVacPeriodos: function (filas) {
+      var h = hoja_('VAC_PERIODOS'), cab = HOJAS.VAC_PERIODOS, ultima = h.getLastRow();
+      if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+      if (!filas.length) return;
+      var r = h.getRange(2, 1, filas.length, cab.length);
+      h.getRange(2, 1, filas.length, 2).setNumberFormat('@');
+      r.setValues(filas.map(function (f) { return [f.clave, f.periodo, f.correspondientes, f.disfrutadosPrevios]; }));
+    },
+    vacSolicitudesDe: function (clave) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.clave === clave; }); },
+    vacSolicitudesPorJefe: function (clave) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.jefe === clave; }); },
+    vacSolicitudesPorEstado: function (estado) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.estado === estado; }); },
+    vacSolicitudPorId: function (id) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.id === id; })[0] || null; },
+    guardarVacSolicitud: function (s) {
+      var copia = Object.assign({}, s, { imputacion: JSON.stringify(s.imputacion || []) });
+      if (!copia._fila) {
+        var h = hoja_('VAC_SOLICITUDES');
+        h.getRange(h.getLastRow() + 1, 1, 1, 6).setNumberFormat('@');   // id, clave y fechas como texto
+      }
+      escribirFila_('VAC_SOLICITUDES', copia);
+      s._fila = copia._fila;
+    },
+    nuevoIdVac: function () { return 'VAC-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     constanciasDe: function (clave) { return constancias_().filter(function (c) { return c.clave === clave; }); },
     constanciaPorId: function (id) { return constancias_().filter(function (c) { return c.id === id; })[0] || null; },
     todasConstancias: function () { return constancias_(); },
@@ -1507,9 +1995,16 @@ function configurarInicial() {
   // Parámetros nuevos: se agregan solo si no existen, sin tocar los que ya editaste.
   var hp = ss.getSheetByName('PARAMETROS'), existentes = {};
   hp.getDataRange().getValues().forEach(function (f) { existentes[String(f[0])] = true; });
-  [['firmaNombre', 'Lic. Luis Paul Rojas'], ['firmaCargo', 'Gerente de Gestión Humana'], ['firmaTelefono', '(0412) 205.11.60.'], ['ciudad', 'Caracas'], ['constanciasMaxPorMes', 5]]
+  [['firmaNombre', 'Lic. Luis Paul Rojas'], ['firmaCargo', 'Gerente de Gestión Humana'], ['firmaTelefono', '(0412) 205.11.60.'], ['ciudad', 'Caracas'], ['constanciasMaxPorMes', 5],
+   ['vacAnticipacionMin', 15], ['vacAnticipacionMax', 20]]
     .forEach(function (f) { if (!existentes[f[0]]) hp.appendRow(f); });
   sem('EMPRESAS', [['PCA', 5847, 1, 5, 'A'], ['AIV', 5847, 1, 5, 'A']]);
+  // Feriados iniciales (solo si la hoja está vacía; después RRHH la edita)
+  var hf = ss.getSheetByName('FERIADOS');
+  if (hf.getLastRow() <= 1) {
+    hf.getRange(2, 1, FERIADOS_INICIALES.length, 1).setNumberFormat('@');
+    hf.getRange(2, 1, FERIADOS_INICIALES.length, 2).setValues(FERIADOS_INICIALES);
+  }
   // Usuarios de RRHH iniciales (sin clave todavía; no pueden entrar hasta ponerla)
   var existentes_ = {};
   leer_('USUARIOS').forEach(function (u) { existentes_[texto_(u.cedula)] = u; });

@@ -385,3 +385,104 @@ test('la entrada devuelve el género para el saludo (trabajador y RRHH)', () => 
   repo.st.usuarios['30580323'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'ADMIN' };
   assert.equal(S.iniciarSesionAdmin(repo, ctx, '30580323', 'k').data.genero, 'Masculino');
 });
+
+/* ---------- Vacaciones ---------- */
+
+function conVacaciones() {
+  const repo = crearRepo([
+    { cedula: 'V305803231', nombre: 'Samuel Herrera', organizacion: 'PROSEIN CENTRAL', departamento: 'RRHH', fechaInicio: '10/03/2022' },
+    { cedula: 'V111111119', nombre: 'Carla Jefa', organizacion: 'PROSEIN CENTRAL', departamento: 'RRHH', fechaInicio: '01/01/2015' },
+    { cedula: 'V222222229', nombre: 'Nuevo Ingreso', organizacion: 'PROSEIN CENTRAL', departamento: 'RRHH', fechaInicio: '15/10/2025' },
+  ]);
+  const ctx = crearCtx(Date.UTC(2026, 9, 29, 15, 0));            // 29/10/2026 en Caracas
+  repo.st.usuarios['99999999'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
+  const rrhh = S.iniciarSesionAdmin(repo, ctx, '99999999', 'k').data.token;
+  S.asignarJefe(repo, ctx, rrhh, ['V30580323', 'V22222222'], 'V11111111');
+  // cierre importado: Samuel 7 días del 24-25 (ya pagado) + 18 del 25-26 (sin tocar)
+  S.importarCierreVacaciones(repo, ctx, rrhh, [{ cedula: 'V30580323', periodos: [
+    { periodo: '2023-2024', correspondientes: 16, disfrutadosPrevios: 16 },
+    { periodo: '2024-2025', correspondientes: 17, disfrutadosPrevios: 10 },
+    { periodo: '2025-2026', correspondientes: 18, disfrutadosPrevios: 0 }] }, { cedula: 'V99999999', periodos: [{ periodo: '2025-2026', correspondientes: 15, disfrutadosPrevios: 0 }] }]);
+  const yo = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  const jefa = S.iniciarSesion(repo, ctx, '11111111').data.token;
+  return { repo, ctx, rrhh, yo, jefa };
+}
+
+test('vacaciones: el trabajador ve su saldo por período, su jefe y las reglas', () => {
+  const { repo, ctx, yo } = conVacaciones();
+  const d = S.datosVacaciones(repo, ctx, yo).data;
+  assert.equal(d.hoy, '2026-10-29');
+  assert.equal(d.saldo.total, 25);
+  assert.equal(d.jefe.nombre, 'Carla Jefa');
+  assert.deepEqual([d.reglas.anticipacionMin, d.reglas.anticipacionMax], [15, 20]);
+  assert.ok(d.feriados.includes('2026-10-12'));
+});
+
+test('vacaciones: ingreso nuevo sin cierre arranca con 15 días al cumplir el año', () => {
+  const { repo, ctx } = conVacaciones();
+  const t = S.iniciarSesion(repo, ctx, '22222222').data.token;
+  assert.equal(S.datosVacaciones(repo, ctx, t).data.saldo.total, 15);
+});
+
+test('vacaciones: flujo completo trabajador → jefe → RRHH, con pago del período la primera vez', () => {
+  const { repo, ctx, rrhh, yo, jefa } = conVacaciones();
+  const r = S.solicitarVacaciones(repo, ctx, yo, { inicio: '2026-11-13', dias: 10 });
+  assert.equal(r.ok, true, r.message);
+  assert.equal(r.data.culminacion, '2026-11-26');
+  assert.equal(r.data.reintegro, '2026-11-27');
+  assert.equal(r.data.condicion, 'Disfrute de días con pago');        // 3 días salen del 25-26: se paga completo
+  assert.equal(r.data.estado, 'PENDIENTE_JEFE');
+  assert.equal(S.datosVacaciones(repo, ctx, yo).data.saldo.total, 15);  // reservados mientras está en trámite
+
+  // la jefa la ve y la aprueba; otro trabajador no puede
+  const eq = S.equipoVacaciones(repo, ctx, jefa).data;
+  assert.equal(eq.esJefe, true);
+  assert.equal(eq.pendientes.length, 1);
+  assert.equal(eq.pendientes[0].nombre, 'Samuel Herrera');
+  assert.equal(S.decidirVacacionesJefe(repo, ctx, yo, r.data.id, true).code, 'NO_ENCONTRADO');
+  assert.equal(S.decidirVacacionesJefe(repo, ctx, jefa, r.data.id, true).data.estado, 'APROBADA_JEFE');
+  assert.equal(S.cancelarVacaciones(repo, ctx, yo, r.data.id).code, 'TRANSICION');   // ya no se puede cancelar
+
+  // llega a RRHH, que la registra con la nómina
+  const b = S.bandejaVacaciones(repo, ctx, rrhh).data;
+  assert.equal(b.solicitudes.length, 1);
+  assert.equal(b.solicitudes[0].jefeNombre, 'Carla Jefa');
+  assert.equal(S.registrarVacaciones(repo, ctx, rrhh, r.data.id, 'NV-80').data.estado, 'REGISTRADA');
+  assert.equal(S.datosVacaciones(repo, ctx, yo).data.saldo.total, 15);
+
+  // 20 días después pide otra (dentro de su nueva ventana): ya es solo disfrute (el 25-26 ya se pagó)
+  ctx.reloj.t += 20 * 86400000;                                         // hoy = 18/11 → ventana 03/12 a 08/12
+  const yo2 = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  const r2 = S.solicitarVacaciones(repo, ctx, yo2, { inicio: '2026-12-03', dias: 5 });
+  assert.equal(r2.ok, true, r2.message);
+  assert.equal(r2.data.condicion, 'Disfrute');
+});
+
+test('vacaciones: rechazo del jefe exige motivo y libera los días; cancelar mientras está con el jefe', () => {
+  const { repo, ctx, yo, jefa } = conVacaciones();
+  const r = S.solicitarVacaciones(repo, ctx, yo, { inicio: '2026-11-13', dias: 5 }).data;
+  assert.equal(S.decidirVacacionesJefe(repo, ctx, jefa, r.id, false, '').code, 'VALIDACION');
+  assert.equal(S.decidirVacacionesJefe(repo, ctx, jefa, r.id, false, 'Cierre de mes').data.estado, 'RECHAZADA');
+  assert.equal(S.datosVacaciones(repo, ctx, yo).data.saldo.total, 25);
+  const r2 = S.solicitarVacaciones(repo, ctx, yo, { inicio: '2026-11-16', dias: 3 }).data;
+  assert.equal(S.cancelarVacaciones(repo, ctx, yo, r2.id).data.estado, 'CANCELADA');
+});
+
+test('vacaciones: sin jefe asignado no se puede solicitar; RRHH ve cuántos faltan', () => {
+  const { repo, ctx, rrhh } = conVacaciones();
+  const t = S.iniciarSesion(repo, ctx, '11111111').data.token;          // la jefa no tiene jefe
+  assert.match(S.solicitarVacaciones(repo, ctx, t, { inicio: '2026-11-13', dias: 1 }).message, /jefe directo/);
+  assert.equal(S.bandejaVacaciones(repo, ctx, rrhh).data.sinJefe, 1);
+});
+
+test('vacaciones: importar el cierre informa egresos e ingresos y reemplaza los saldos', () => {
+  const { repo, ctx, rrhh } = conVacaciones();
+  const r = S.importarCierreVacaciones(repo, ctx, rrhh, [
+    { cedula: 'V305803231', periodos: [{ periodo: '2025-2026', correspondientes: 18, disfrutadosPrevios: 2 }] },   // con RIF también
+    { cedula: 'V88888888', periodos: [{ periodo: '2025-2026', correspondientes: 15, disfrutadosPrevios: 0 }] },
+  ]).data;
+  assert.deepEqual(r, { personas: 2, periodos: 2, noActivos: 1, activosSinCierre: 2 });
+  const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  assert.equal(S.datosVacaciones(repo, ctx, t).data.saldo.total, 16);
+  assert.equal(S.importarCierreVacaciones(repo, ctx, t, []).code, 'SESION');
+});

@@ -81,7 +81,7 @@ function vistaLogin() {
 // así funcionan los botones Atrás/Adelante del navegador y del celular.
 let cuenta = { cont: app, token: '', seccion: 'inicio' };
 const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
-const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso'];
+const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'equipo'];
 // Fideicomiso queda en «Próximamente» para los trabajadores hasta que esté la pantalla de aportes (cambiar a true para abrirlo).
 const FIDEICOMISO_ACTIVO = false;
 const seccionDesdeHash = () => { const m = /^#\/(\w+)$/.exec(location.hash); return m && SECCIONES.includes(m[1]) ? m[1] : 'inicio'; };
@@ -105,6 +105,7 @@ const ICONOS = {
   constancia: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8"/><path d="M8 17h5"/>',
   vacaciones: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>',
   fideicomiso: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+  equipo: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   volver: '<path d="m15 18-6-6 6-6"/>',
   ir: '<path d="m9 18 6-6-6-6"/>',
 };
@@ -116,7 +117,8 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   btnSalir.hidden = false;
   window.scrollTo(0, 0);
   if (seccion === 'constancia') await seccionConstancia(cont);
-  else if (seccion === 'vacaciones') seccionVacaciones(cont);
+  else if (seccion === 'vacaciones') await seccionVacaciones(cont);
+  else if (seccion === 'equipo') await seccionEquipo(cont);
   else if (seccion === 'fideicomiso') await seccionFideicomiso(cont);
   else seccionInicio(cont);
   cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
@@ -139,9 +141,18 @@ function seccionInicio(cont) {
     </section>
     <nav class="accesos" aria-label="Solicitudes">
       ${tarjeta('constancia', 'Constancia de trabajo', 'Descárgala al instante en PDF, con código QR de verificación.', 'rojo')}
-      ${tarjeta('vacaciones', 'Vacaciones', 'Solicita tus días; tu jefe directo y Gestión Humana las aprueban.', 'azul', '<span class="chip chip-neutro">Próximamente</span>')}
+      ${tarjeta('vacaciones', 'Vacaciones', 'Consulta tus días pendientes y solicita tus vacaciones; tu jefe directo las aprueba.', 'azul')}
       ${tarjeta('fideicomiso', 'Fideicomiso', 'Consulta tus aportes de prestaciones y solicita anticipos.', 'carbon', FIDEICOMISO_ACTIVO ? '' : '<span class="chip chip-neutro">Próximamente</span>')}
     </nav>`;
+  // Si es jefe de alguien, aparece «Mi equipo» con las solicitudes por aprobar
+  llamar('equipoVacaciones', conToken()).then((r) => {
+    if (!r.ok || !r.data.esJefe || !cont.querySelector('.accesos')) return;
+    const n = r.data.pendientes.length;
+    cont.querySelector('.accesos').insertAdjacentHTML('afterbegin', tarjeta('equipo', 'Mi equipo',
+      n ? `Tienes ${n} solicitud${n === 1 ? '' : 'es'} de vacaciones por aprobar.` : 'Revisa las solicitudes de vacaciones de tu equipo.', 'oro',
+      n ? `<span class="chip chip-espera">${n} por aprobar</span>` : ''));
+    cont.querySelector('[data-ir=equipo]').addEventListener('click', () => navegar('equipo'));
+  });
 }
 
 /* ---------- Constancia de trabajo ---------- */
@@ -176,14 +187,150 @@ async function seccionConstancia(cont) {
   }));
 }
 
-/* ---------- Vacaciones (próximamente) ---------- */
+/* ---------- Vacaciones ---------- */
 
-function seccionVacaciones(cont) {
+const V = () => window.Vacaciones;
+const DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const fechaVac = (txt) => (txt ? `${DIAS_SEMANA[new Date(txt + 'T12:00:00Z').getUTCDay()]} ${V().corta(txt)}` : '');
+const ESTADOS_VAC = {
+  PENDIENTE_JEFE: ['Con tu jefe', 'espera'], APROBADA_JEFE: ['Aprobada · en Gestión Humana', 'austral'], REGISTRADA: ['Registrada', 'ok'],
+  RECHAZADA: ['Rechazada', 'error'], CANCELADA: ['Cancelada', 'neutro'],
+};
+const chipVac = (e, textos = ESTADOS_VAC) => { const [t, tono] = textos[e] || [e, 'neutro']; return `<span class="chip chip-${tono}">${esc(t)}</span>`; };
+const detallePago = (s) => s.imputacion.filter((i) => i.pagaPeriodo).map((i) => `se paga el período ${i.periodo} completo (${i.diasDelPeriodo} días)`).join(' y ');
+const resumenFechas = (s) => `${s.dias} día${s.dias === 1 ? '' : 's'} hábil${s.dias === 1 ? '' : 'es'} · del ${fechaVac(s.inicio)} al ${fechaVac(s.culminacion)} · reintegro ${fechaVac(s.reintegro)}`;
+
+async function seccionVacaciones(cont) {
+  cont.innerHTML = `${volver()}<p class="vacio">Cargando tus vacaciones…</p>`;
+  const r = await llamar('datosVacaciones', conToken());
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } cont.innerHTML = `${volver()}<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const d = r.data, s = d.saldo;
+  const desde = V().sumarDiasTxt(d.hoy, d.reglas.anticipacionMin), hasta = V().sumarDiasTxt(d.hoy, d.reglas.anticipacionMax);
+
   cont.innerHTML = `${volver()}
+    <section class="tarjeta heroe">
+      <h2>Días de vacaciones pendientes</h2>
+      <div class="gran">${s.total} día${s.total === 1 ? '' : 's'}</div>
+      <p class="suave" style="color:#cfd1d4">Días hábiles por disfrutar, sin contar las solicitudes en trámite.</p>
+    </section>
     <section class="tarjeta">
-      <h2>Vacaciones</h2>
-      <p class="aviso">Muy pronto podrás solicitar tus vacaciones aquí. Tu solicitud irá primero a tu jefe directo y, cuando la apruebe, a Gestión Humana.</p>
+      <h2>Solicitar vacaciones</h2>
+      ${!d.jefe ? '<p class="error-msg">No tienes jefe directo asignado. Comunícate con Gestión Humana para que lo registren y puedas solicitar.</p>'
+        : s.total < 1 ? '<p class="aviso">No tienes días pendientes por disfrutar en este momento.</p>' : `
+      <p class="suave">Debes pedirlas con ${d.reglas.anticipacionMin} a ${d.reglas.anticipacionMax} días de anticipación: la fecha de inicio puede ser entre el <b>${V().corta(desde)}</b> y el <b>${V().corta(hasta)}</b>. Se cuentan días hábiles (sin fines de semana ni feriados).</p>
+      <form id="fv" class="form-vac" novalidate>
+        <div class="fila">
+          <label class="grow">Fecha de inicio <input type="date" name="inicio" min="${desde}" max="${hasta}" required></label>
+          <label class="grow">Días hábiles <input type="number" name="dias" min="1" max="${s.total}" step="1" inputmode="numeric" placeholder="1 a ${s.total}" required></label>
+        </div>
+        <div id="previa-vac" class="previa-vac" hidden></div>
+        <div class="error-msg" id="err-vac" hidden></div>
+        <div><button class="btn" type="submit">Enviar a mi jefe: ${esc(primerNombre(d.jefe.nombre))}</button></div>
+      </form>`}
+    </section>
+    <section class="tarjeta">
+      <h2>Mis días por período</h2>
+      ${s.porPeriodo.length ? `<div class="tabla-caja tabla-compacta"><table>
+        <thead><tr><th>Período</th><th class="num">Corresp.</th><th class="num">Disfrut.</th><th class="num">Pend.</th></tr></thead>
+        <tbody>${s.porPeriodo.slice().reverse().map((p) => `<tr><td>${esc(p.periodo)}</td><td class="num">${p.correspondientes}</td><td class="num">${p.disfrutadosPrevios + p.enSistema}</td><td class="num"><b>${p.pendientes}</b></td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="vacio">Todavía no tienes períodos de vacaciones cumplidos.</p>'}
+    </section>
+    <section class="tarjeta">
+      <h2>Mis solicitudes</h2>
+      ${d.solicitudes.length ? `<div class="lista">${d.solicitudes.map((x) => `
+        <div class="item">
+          <div class="item-cab"><b>${esc(resumenFechas(x).split(' · ')[0])}</b>${chipVac(x.estado)}</div>
+          <p class="suave">${esc(resumenFechas(x).split(' · ').slice(1).join(' · '))}</p>
+          <p class="suave">${esc(x.condicion)}${x.estado === 'PENDIENTE_JEFE' && x.jefeNombre ? ` · esperando a ${esc(primerNombre(x.jefeNombre))}` : ''}</p>
+          ${x.estado === 'RECHAZADA' && x.motivoRechazo ? `<p class="error-msg">Motivo: ${esc(x.motivoRechazo)}</p>` : ''}
+          ${x.estado === 'PENDIENTE_JEFE' ? `<div><button class="btn btn-sec btn-chico" data-cancelar-vac="${esc(x.id)}">Cancelar solicitud</button></div>` : ''}
+        </div>`).join('')}</div>` : '<p class="vacio">Todavía no has hecho solicitudes en el sistema.</p>'}
     </section>`;
+
+  const f = cont.querySelector('#fv');
+  if (f) {
+    const previa = cont.querySelector('#previa-vac'), err = cont.querySelector('#err-vac');
+    const calcular = () => {
+      errorEn(err, '');
+      const v = V().validarSolicitud({ inicio: f.inicio.value, dias: Number(f.dias.value) },
+        { hoy: d.hoy, feriados: d.feriados, saldo: s, solicitudes: d.solicitudes, tieneJefe: !!d.jefe, reglas: d.reglas });
+      if (!f.inicio.value || !f.dias.value) { previa.hidden = true; return v; }
+      if (!v.ok) { previa.hidden = true; errorEn(err, v.errores[0]); return v; }
+      const c = v.calculo, pago = detallePago({ imputacion: c.imputacion });
+      previa.innerHTML = `<div><span>Sales</span><b>${fechaVac(f.inicio.value)}</b></div><div><span>Último día</span><b>${fechaVac(c.culminacion)}</b></div>
+        <div><span>Te reintegras</span><b>${fechaVac(c.reintegro)}</b></div>
+        <p>${esc(c.condicion)}${pago ? `: ${esc(pago)}.` : ' (sin pago: ese período ya se pagó).'}</p>`;
+      previa.hidden = false;
+      return v;
+    };
+    f.inicio.addEventListener('change', calcular); f.dias.addEventListener('input', calcular);
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const v = calcular();
+      if (!f.inicio.value || !f.dias.value) return errorEn(err, 'Elige la fecha de inicio y cuántos días.');
+      if (!v.ok) return;
+      await conBoton(f.querySelector('button[type=submit]'), async () => {
+        const x = await llamar('solicitarVacaciones', { inicio: f.inicio.value, dias: Number(f.dias.value), ...conToken() });
+        if (!x.ok) return errorEn(err, x.message);
+        toast(`Solicitud enviada a ${primerNombre(d.jefe.nombre)}.`); vistaCuenta(cuenta.cont, cuenta.token, 'vacaciones');
+      });
+    });
+  }
+  cont.querySelectorAll('[data-cancelar-vac]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm('¿Cancelar esta solicitud de vacaciones?')) return;
+    const x = await llamar('cancelarVacaciones', { id: b.dataset.cancelarVac, ...conToken() });
+    toast(x.ok ? 'Solicitud cancelada.' : x.message); vistaCuenta(cuenta.cont, cuenta.token, 'vacaciones');
+  })));
+}
+
+/* ---------- Mi equipo: el jefe aprueba o rechaza ---------- */
+
+const ESTADOS_VAC_JEFE = { ...ESTADOS_VAC, PENDIENTE_JEFE: ['Por aprobar', 'espera'], APROBADA_JEFE: ['Aprobada · en Gestión Humana', 'austral'] };
+
+async function seccionEquipo(cont) {
+  cont.innerHTML = `${volver()}<p class="vacio">Cargando…</p>`;
+  const r = await llamar('equipoVacaciones', conToken());
+  if (!r.ok) { toast(r.message); return arrancar(); }
+  const { pendientes, recientes, equipo } = r.data;
+  const item = (x, acciones = '') => `<div class="item">
+      <div class="item-cab"><div><b>${esc(x.nombre)}</b><p class="suave">${esc(resumenFechas(x))}</p></div>${chipVac(x.estado, ESTADOS_VAC_JEFE)}</div>
+      ${x.estado === 'RECHAZADA' && x.motivoRechazo ? `<p class="suave">Motivo: ${esc(x.motivoRechazo)}</p>` : ''}${acciones}</div>`;
+  cont.innerHTML = `${volver()}
+    <section class="tarjeta"><h2>Vacaciones por aprobar (${pendientes.length})</h2>
+      <p class="suave">Tu equipo: ${equipo} persona${equipo === 1 ? '' : 's'}. Al aprobar, la solicitud pasa a Gestión Humana para registrarla.</p>
+      ${pendientes.length ? `<div class="lista">${pendientes.map((x) => item(x, `<div class="fila"><button class="btn btn-chico" data-ap-vac="${esc(x.id)}">Aprobar</button><button class="btn btn-sec btn-chico" data-re-vac="${esc(x.id)}">Rechazar</button></div>`)).join('')}</div>`
+        : '<p class="vacio">No hay solicitudes pendientes.</p>'}
+    </section>
+    ${recientes.length ? `<section class="tarjeta"><h2>Revisadas recientemente</h2><div class="lista">${recientes.map((x) => item(x)).join('')}</div></section>` : ''}`;
+  cont.querySelectorAll('[data-ap-vac]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('decidirVacacionesJefe', { id: b.dataset.apVac, aprobar: true, ...conToken() });
+    toast(x.ok ? 'Aprobada. Pasa a Gestión Humana.' : x.message); vistaCuenta(cuenta.cont, cuenta.token, 'equipo');
+  })));
+  cont.querySelectorAll('[data-re-vac]').forEach((b) => b.addEventListener('click', () => pedirMotivo('Rechazar vacaciones', async (motivo) => {
+    const x = await llamar('decidirVacacionesJefe', { id: b.dataset.reVac, aprobar: false, motivo, ...conToken() });
+    if (x.ok) { toast('Rechazada.'); vistaCuenta(cuenta.cont, cuenta.token, 'equipo'); }
+    return x;
+  })));
+}
+
+/** Diálogo genérico para pedir un motivo. `enviar(motivo)` devuelve la respuesta de la API. */
+function pedirMotivo(titulo, enviar) {
+  dlg.innerHTML = `<form id="fm" novalidate><h2>${esc(titulo)}</h2>
+    <label>Motivo (lo verá el trabajador) <textarea name="motivo" maxlength="200" required></textarea></label>
+    <div class="error-msg" id="err" hidden></div>
+    <div class="fila"><button class="btn grow" type="submit">Rechazar</button><button class="btn btn-sec" type="button" id="no">Cerrar</button></div></form>`;
+  const f = dlg.querySelector('#fm'), err = dlg.querySelector('#err');
+  dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!f.motivo.value.trim()) return errorEn(err, 'Escribe el motivo.');
+    await conBoton(f.querySelector('button[type=submit]'), async () => {
+      const x = await enviar(f.motivo.value.trim());
+      if (!x.ok) return errorEn(err, x.message);
+      dlg.close();
+    });
+  });
+  dlg.showModal(); f.motivo.focus();
 }
 
 /* ---------- Fideicomiso: estado de cuenta y anticipos ---------- */
@@ -274,15 +421,16 @@ function formularioAnticipo(u) {
 
 /* ---------- RRHH: panel ---------- */
 
-let pestana = 'solicitudes';
+let pestana = 'vacaciones';
+let abrirSinJefe = false;   // al venir desde Vacaciones → Empleados con el filtro «solo sin jefe»
 
 async function vistaRRHH() {
   btnSalir.hidden = false;
   const miCuenta = !!(sesion.leer() || {}).tokenTrabajador;
-  if (pestana === 'micuenta' && !miCuenta) pestana = 'solicitudes';
+  if (pestana === 'micuenta' && !miCuenta) pestana = 'vacaciones';
   app.innerHTML = `
     <div class="pestanas" role="tablist">
-      ${[['solicitudes', 'Solicitudes'], ['banco', 'Archivo al banco'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['solicitudes', 'Anticipos'], ['banco', 'Archivo al banco'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel"></div>`;
@@ -292,6 +440,7 @@ async function vistaRRHH() {
   if (pestana === 'banco') return panelBanco(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
+  if (pestana === 'vacaciones') return panelVacaciones(panel);
   if (pestana === 'micuenta') return vistaCuenta(panel, sesion.leer().tokenTrabajador);
   return panelCierres(panel);
 }
@@ -369,6 +518,78 @@ async function panelBanco(panel) {
     const r = await llamar('pagarAnticipos', { ids: ar.data.map((a) => a.id) });
     toast(r.ok ? `${r.data.cambiados} anticipos pagados.` : r.message); panelBanco(panel);
   }));
+}
+
+/* ---------- RRHH: vacaciones ---------- */
+
+const ESTADOS_VAC_RRHH = { PENDIENTE_JEFE: ['Con el jefe', 'espera'], APROBADA_JEFE: ['Por registrar', 'austral'], REGISTRADA: ['Registrada', 'ok'], RECHAZADA: ['Rechazada', 'error'], CANCELADA: ['Cancelada', 'neutro'] };
+let estadoVacRRHH = 'APROBADA_JEFE';
+
+async function panelVacaciones(panel) {
+  panel.innerHTML = '<p class="vacio">Cargando…</p>';
+  const r = await llamar('bandejaVacaciones', { estado: estadoVacRRHH });
+  if (!r.ok) { toast(r.message); return arrancar(); }
+  const { solicitudes, sinJefe, conCierre } = r.data;
+  panel.innerHTML = `
+    ${sinJefe ? `<section class="tarjeta"><p class="error-msg"><b>${sinJefe} empleado${sinJefe === 1 ? '' : 's'} activo${sinJefe === 1 ? '' : 's'} sin jefe directo.</b> No pueden solicitar vacaciones hasta que se lo asignes.</p>
+      <div><button class="btn btn-sec btn-chico" id="ver-sin-jefe">Asignar jefes</button></div></section>` : ''}
+    <section class="tarjeta">
+      <div class="item-cab"><h2>Solicitudes de vacaciones</h2>
+        <label>Mostrar <select id="estado-vac">${Object.entries(ESTADOS_VAC_RRHH).map(([k, [t]]) => `<option value="${k}" ${k === estadoVacRRHH ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
+      ${solicitudes.length ? `<div class="lista">${solicitudes.map((x) => {
+        const pago = detallePago(x);
+        return `<div class="item">
+          <div class="item-cab"><div><b>${esc(x.nombre || x.clave)}</b><p class="suave">${esc(x.clave)} · jefe: ${esc(x.jefeNombre || '—')}</p></div>${chipVac(x.estado, ESTADOS_VAC_RRHH)}</div>
+          <p>${esc(resumenFechas(x))}</p>
+          <p class="suave"><b>${esc(x.condicion)}</b>${pago ? ` — ${esc(pago)}` : ''} · ${x.imputacion.map((i) => `${i.dias} del ${i.periodo}`).join(', ')}</p>
+          ${x.nomina ? `<p class="suave">Nómina: ${esc(x.nomina)}</p>` : ''}${x.motivoRechazo ? `<p class="suave">Motivo: ${esc(x.motivoRechazo)}</p>` : ''}
+          ${x.estado === 'APROBADA_JEFE' ? `
+            ${pago ? `<label>Código de nómina del pago <input placeholder="Ej. NV-80" data-nomina="${esc(x.id)}" autocomplete="off"></label>` : ''}
+            <div class="fila"><button class="btn btn-chico" data-registrar="${esc(x.id)}">Registrar</button><button class="btn btn-sec btn-chico" data-rechazar-vac="${esc(x.id)}">Rechazar</button></div>` : ''}
+        </div>`; }).join('')}</div>` : '<p class="vacio">No hay solicitudes en este estado.</p>'}
+    </section>
+    <section class="tarjeta">
+      <h2>Importar el cierre de vacaciones</h2>
+      <p class="suave">Sube tu Excel «Solicitud Digital de Disfrute de Vacaciones» (hoja CIERRE DE VACACIONES). Reemplaza los saldos por período de cada persona; los ingresos nuevos sin cierre usan la regla de la ley (15 + 1 por año, hasta 30). ${conCierre ? `Hoy hay saldos de <b>${conCierre}</b> personas.` : '<b>Todavía no se ha importado.</b>'}</p>
+      <label>Archivo <input type="file" id="arch-vac" accept=".xlsx,.xls"></label>
+      <div class="error-msg" id="err-vac" hidden></div>
+      <div id="previa-cierre"></div>
+    </section>`;
+
+  panel.querySelector('#estado-vac').addEventListener('change', (e) => { estadoVacRRHH = e.target.value; panelVacaciones(panel); });
+  panel.querySelector('#ver-sin-jefe')?.addEventListener('click', () => { abrirSinJefe = true; pestana = 'empleados'; vistaRRHH(); });
+  panel.querySelectorAll('[data-registrar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const nomina = panel.querySelector(`[data-nomina="${b.dataset.registrar}"]`)?.value || '';
+    const x = await llamar('registrarVacaciones', { id: b.dataset.registrar, nomina });
+    toast(x.ok ? 'Registrada.' : x.message); panelVacaciones(panel);
+  })));
+  panel.querySelectorAll('[data-rechazar-vac]').forEach((b) => b.addEventListener('click', () => pedirMotivo('Rechazar vacaciones', async (motivo) => {
+    const x = await llamar('rechazarVacacionesRRHH', { id: b.dataset.rechazarVac, motivo });
+    if (x.ok) { toast('Rechazada.'); panelVacaciones(panel); }
+    return x;
+  })));
+
+  const err = panel.querySelector('#err-vac'), previa = panel.querySelector('#previa-cierre');
+  panel.querySelector('#arch-vac').addEventListener('change', async (e) => {
+    errorEn(err, ''); previa.innerHTML = '';
+    const archivo = e.target.files[0]; if (!archivo) return;
+    try {
+      const XLSX = await cargarXlsx();
+      const libro = XLSX.read(await archivo.arrayBuffer(), { type: 'array' });
+      const nombre = libro.SheetNames.find((n) => /CIERRE/i.test(n)) || libro.SheetNames[0];
+      const matriz = XLSX.utils.sheet_to_json(libro.Sheets[nombre], { header: 1, raw: true, defval: '' });
+      const m = window.Vacaciones.mapearCierre(matriz);
+      previa.innerHTML = `<div class="aviso">Hoja «${esc(nombre)}»: <b>${m.personas.length}</b> personas, períodos ${m.periodos.map(esc).join(', ')}.</div>
+        <div><button class="btn" id="importar-cierre">Importar saldos</button></div>`;
+      previa.querySelector('#importar-cierre').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
+        const x = await llamar('importarCierreVacaciones', { personas: m.personas });
+        if (!x.ok) return errorEn(err, x.message);
+        const y = x.data;
+        previa.innerHTML = `<div class="aviso">Importadas <b>${y.personas}</b> personas (${y.periodos} períodos). ${y.noActivos} no están activas (egresos: se ignoran). ${y.activosSinCierre} empleados activos sin cierre usarán la regla de la ley.</div>`;
+        toast('Cierre de vacaciones importado.');
+      }));
+    } catch (x) { errorEn(err, x.message || 'No se pudo leer el archivo.'); }
+  });
 }
 
 /* ---------- RRHH: constancias emitidas ---------- */
@@ -471,7 +692,7 @@ async function panelEmpleados(panel) {
       <h2>Empleados</h2>
       <label>Buscar por nombre o cédula <input id="q" placeholder="Escribe para buscar" autocomplete="off"></label>
       <div class="fila"><label class="grow">Departamento <select id="f-dep"><option value="">Todos</option></select></label>
-        <label style="grid-auto-flow:column;align-items:center;gap:8px"><input type="checkbox" id="f-sinjefe" style="width:20px;min-height:20px"> Solo sin jefe</label></div>
+        <label style="grid-auto-flow:column;align-items:center;gap:8px"><input type="checkbox" id="f-sinjefe" style="width:20px;min-height:20px" ${abrirSinJefe ? 'checked' : ''}> Solo sin jefe</label></div>
       <div id="lista"><p class="vacio">Cargando…</p></div>
     </section>`;
   const err = panel.querySelector('#err'), previa = panel.querySelector('#previa');
@@ -513,6 +734,7 @@ async function panelEmpleados(panel) {
     toast(`${r.data.cambiados} empleados actualizados.`); refrescar(); return r;
   }));
   let departamentosCargados = false;
+  abrirSinJefe = false;
 
   async function listar(texto) {
     const caja = panel.querySelector('#lista');

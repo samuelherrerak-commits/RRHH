@@ -119,3 +119,16 @@ dialog form { display: grid; gap: var(--s4); }
   color: var(--tinta-2); font-weight: 500; cursor: pointer; min-height: 40px; }
 .volver .icono { width: 20px; height: 20px; }
 @media (hover: hover) and (pointer: fine) { .volver:hover { color: var(--carbon); } }
+
+/* ---------- Vacaciones ---------- */
+.acceso-oro .acceso-icono { background: var(--espera-velo); color: var(--espera); }
+.form-vac { display: grid; gap: var(--s4); }
+.previa-vac { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); background: var(--austral-velo); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); }
+.previa-vac div { display: grid; } .previa-vac span { font-size: 12px; color: var(--tinta-2); } .previa-vac b { color: var(--carbon); font-size: 15px; }
+.previa-vac p { grid-column: 1 / -1; font-size: 13px; color: #0A4AA8; margin: 0; }
+@media (max-width: 420px) { .previa-vac { grid-template-columns: 1fr 1fr; } }
+.tabla-compacta table { min-width: 0; table-layout: fixed; }
+.tabla-compacta th, .tabla-compacta td { padding: 10px 8px; white-space: normal; }
+.tabla-compacta th { letter-spacing: 0; font-size: 11px; }
+.tabla-compacta th:first-child, .tabla-compacta td:first-child { width: 34%; padding-left: 12px; }
+.tabla-compacta th:last-child, .tabla-compacta td:last-child { padding-right: 12px; }
