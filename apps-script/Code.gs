@@ -47,7 +47,9 @@ function doPost(e) {
     return salida_(ruta(crearRepo_(), crearCtx_(), d));
   } catch (err) {
     console.error(err && err.stack || err);
-    return salida_({ ok: false, code: 'SERVER', message: 'Error del servidor. Intenta de nuevo.' });
+    // Los errores de puesta en marcha ("Falta la hoja…", "Falta la propiedad…") se muestran tal cual para poder corregirlos.
+    var falta = err && /^Falta /.test(String(err.message));
+    return salida_({ ok: false, code: 'SERVER', message: falta ? err.message : 'Error del servidor. Intenta de nuevo.' });
   } finally {
     try { lock.releaseLock(); } catch (x) { /* sin bloqueo */ }
   }

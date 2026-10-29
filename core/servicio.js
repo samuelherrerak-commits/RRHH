@@ -7,11 +7,14 @@
 (function (raiz) {
   'use strict';
 
+  // En Apps Script los archivos se cargan en el orden de la lista; así la dependencia se resuelve al usarla, no al cargar.
+  function dependencia(r, n) { return new Proxy({}, { get: function (_, k) { return r[n][k]; } }); }
+
   var isNode = typeof require === 'function' && typeof module !== 'undefined';
-  var Calculo = isNode ? require('./calculo.js') : raiz.Calculo;
-  var Empleados = isNode ? require('./empleados.js') : raiz.Empleados;
-  var Prestaciones = isNode ? require('./prestaciones.js') : raiz.Prestaciones;
-  var Exportes = isNode ? require('./exportes.js') : raiz.Exportes;
+  var Calculo = isNode ? require('./calculo.js') : dependencia(raiz, 'Calculo');
+  var Empleados = isNode ? require('./empleados.js') : dependencia(raiz, 'Empleados');
+  var Prestaciones = isNode ? require('./prestaciones.js') : dependencia(raiz, 'Prestaciones');
+  var Exportes = isNode ? require('./exportes.js') : dependencia(raiz, 'Exportes');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;

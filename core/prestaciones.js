@@ -5,7 +5,10 @@
 (function (raiz) {
   'use strict';
 
-  var Calculo = (typeof require === 'function' && typeof module !== 'undefined') ? require('./calculo.js') : raiz.Calculo;
+  // En Apps Script los archivos se cargan en el orden de la lista; así la dependencia se resuelve al usarla, no al cargar.
+  function dependencia(r, n) { return new Proxy({}, { get: function (_, k) { return r[n][k]; } }); }
+
+  var Calculo = (typeof require === 'function' && typeof module !== 'undefined') ? require('./calculo.js') : dependencia(raiz, 'Calculo');
 
   var PARAMETROS = {
     porcentajeAnticipoMax: 0.75,      // editable en PARAMETROS
