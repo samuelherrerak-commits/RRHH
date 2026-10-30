@@ -223,3 +223,13 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
   .logo-caja { height: 88px; padding: 8px; border-radius: 10px; }
   .logo-mil b { font-size: 12px; }
 }
+
+/* ---- Logo del sistema (SA/DS) ---- */
+.marca { display: flex; align-items: center; gap: var(--s3); }
+.marca-logo { width: 36px; height: 36px; border-radius: 9px; flex: none; }
+.entrada-cabeza { display: flex; align-items: center; gap: var(--s4); }
+.entrada-logo { width: 64px; height: 64px; border-radius: 15px; flex: none; }
+@media (min-width: 1024px) {
+  .entrada-cabeza { align-self: start; }
+  .entrada-logo { width: 72px; height: 72px; }
+}

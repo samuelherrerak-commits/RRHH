@@ -45,9 +45,9 @@ function vistaLogin() {
   app.innerHTML = `
     <div class="entrada">
       <section class="entrada-marca">
-        <div>
-          <div class="sigla">SADS</div>
-          <p class="nombre">Sistema de Atención de Solicitudes</p>
+        <div class="entrada-cabeza">
+          <img class="entrada-logo" src="assets/logo-sads-claro.svg" alt="SADS">
+          <div><div class="sigla">SADS</div><p class="nombre">Sistema de Atención de Solicitudes</p></div>
         </div>
         <div class="acrostico" role="img" aria-label="SADS: Sistema de Atención de Solicitudes">
           <p><b>S</b>istema<span class="de">de</span></p><p><b>A</b>tención</p><p><b>D</b>e</p><p><b>S</b>olicitudes</p>
