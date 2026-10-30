@@ -1,7 +1,7 @@
 # Sitio estático en Render: sin build, publica la carpeta web/.
 services:
   - type: web
-    name: rrhh-prosein
+    name: cads
     runtime: static
     staticPublishPath: ./web
     headers:
