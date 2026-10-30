@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-02.2';
+var VERSION = '2026-11-02.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
 
@@ -614,13 +614,16 @@ function ponerClaveRRHH() {
   var ui = SpreadsheetApp.getUi();
   requerirModulos_();
   configurarInicial();
-  var lista = leer_('USUARIOS').map(function (u, i) {
+  var usuarios = leer_('USUARIOS');
+  var lista = usuarios.map(function (u, i) {
     return (i + 1) + ') ' + texto_(u.cedula) + ' · ' + (texto_(u.nombre) || '—') + (texto_(u.hash) ? '' : '  (sin clave)');
   }).join('\n');
-  var c = ui.prompt('Clave de RRHH', 'Escribe la cédula de la persona (solo números):\n\n' + lista, ui.ButtonSet.OK_CANCEL);
+  var c = ui.prompt('Clave de RRHH', 'Escribe el número de la lista (por ejemplo 1) o la cédula de la persona.\nPara crear un usuario nuevo, escribe su cédula.\n\n' + lista, ui.ButtonSet.OK_CANCEL);
   if (c.getSelectedButton() !== ui.Button.OK) return;
-  var cedula = Empleados.numeroDeCedulaTexto(c.getResponseText());
-  if (!cedula) { ui.alert('La cédula no es válida.'); return; }
+  var resp = String(c.getResponseText() || '').trim();
+  var pos = /^\d{1,3}$/.test(resp) ? Number(resp) : 0;   // número de la lista
+  var cedula = pos >= 1 && pos <= usuarios.length ? texto_(usuarios[pos - 1].cedula) : Empleados.numeroDeCedulaTexto(resp);
+  if (!cedula) { ui.alert('No entendí «' + resp + '». Escribe el número de la lista (1, 2, 3…) o la cédula completa, solo números.'); return; }
   var existente = leer_('USUARIOS').filter(function (u) { return texto_(u.cedula) === cedula; })[0];
   var emp = crearRepo_().empleadoPorClave('V' + cedula) || crearRepo_().empleadoPorClave('E' + cedula);
   var quien = (existente && texto_(existente.nombre)) || (emp && emp.nombre) || '(no está en la lista de empleados todavía)';

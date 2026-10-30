@@ -267,3 +267,10 @@ test('una lectura que se cruza con una escritura no deja una copia vieja en la c
   // La siguiente petición no debe usarla.
   assert.equal(correr("memo_ = {}; leerCache_('PARAMETROS')"), null);
 });
+
+test('poner clave de RRHH escribiendo el número de la lista en vez de la cédula', () => {
+  const e = crearEntorno({ respuestasUi: ['1', 'YES', 'clave-por-lista'] });
+  e.ejecutar('configurarInicial');
+  e.ejecutar('ponerClaveRRHH');
+  assert.equal(e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-por-lista' }).ok, true);   // la 1 de la lista es Samuel
+});
