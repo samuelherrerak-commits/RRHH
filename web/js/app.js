@@ -683,7 +683,7 @@ async function leerArchivoExcel(archivo) {
   return XLSX.utils.sheet_to_json(hoja, { defval: '', raw: true });
 }
 
-const COL_NOMBRES = { cedula: 'Cédula', nombre: 'Nombre', organizacion: 'Organización', departamento: 'Departamento', puesto: 'Puesto', estado: 'Estado', fechaInicio: 'Fecha Inicio' };
+const COL_NOMBRES = { cedula: 'Cédula', nombre: 'Nombre', organizacion: 'Organización', departamento: 'Departamento', puesto: 'Puesto', estado: 'Estado', fechaInicio: 'Fecha Inicio', jefeNombre: 'Jefe directo', genero: 'Género', salarioMensual: 'Salario M.' };
 
 async function panelEmpleados(panel) {
   panel.innerHTML = `
@@ -719,13 +719,18 @@ async function panelEmpleados(panel) {
       if (m.faltantes.includes('cedula') || m.faltantes.includes('nombre')) {
         return errorEn(err, `Faltan columnas obligatorias: ${m.faltantes.filter((c) => ['cedula', 'nombre'].includes(c)).map((c) => COL_NOMBRES[c]).join(', ')}.`);
       }
-      previa.innerHTML = `<div class="aviso">Listo para cargar <b>${m.filas.length}</b> empleados${m.omitidas ? ` (${m.omitidas} filas vacías omitidas)` : ''}.${m.faltantes.length ? ` Columnas no encontradas: ${m.faltantes.map((c) => COL_NOMBRES[c]).join(', ')}.` : ''}</div>
+      const conJefe = m.filas.filter((f) => f.jefeNombre).length;
+      previa.innerHTML = `<div class="aviso">Listo para cargar <b>${m.filas.length}</b> empleados${m.omitidas ? ` (${m.omitidas} filas vacías omitidas)` : ''}.${conJefe ? ` Trae <b>jefe directo</b> para ${conJefe}.` : ''}${m.faltantes.length ? ` Columnas no encontradas: ${m.faltantes.map((c) => COL_NOMBRES[c]).join(', ')}.` : ''}</div>
         <div><button class="btn" id="subir">Cargar empleados</button></div>`;
       previa.querySelector('#subir').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
         const r = await llamar('cargarEmpleados', { filas: m.filas });
         if (!r.ok) return errorEn(err, r.message);
-        const { resumen: x, revisar, sinFecha, total } = r.data;
+        const { resumen: x, revisar, sinFecha, total, jefes } = r.data;
+        const nf = (jefes && jefes.noEncontrados) || [];
         previa.innerHTML = `<div class="aviso"><b>${x.agregados}</b> agregados · <b>${x.actualizados}</b> actualizados · <b>${x.inactivados}</b> pasaron a inactivos · ${total} en total.</div>
+          ${jefes && jefes.traeColumna ? `<div class="aviso">Jefe directo asignado a <b>${jefes.asignados}</b> empleados.${jefes.sinJefeEnArchivo ? ` ${jefes.sinJefeEnArchivo} vienen sin jefe en el archivo.` : ''}</div>` : ''}
+          ${nf.length ? `<div class="error-msg"><b>Jefes que no se encontraron entre los empleados</b> (esas personas conservan el jefe que tenían; asígnalo abajo):
+            <ul class="lista-simple">${nf.map((j) => `<li>«${esc(j.jefe)}» — ${j.personas} persona${j.personas === 1 ? '' : 's'}${j.tipo === 'ambiguo' ? ' (hay varios empleados con ese nombre)' : j.tipo === 'ciclo' ? ' (sería su propio jefe)' : ' (no está en el detalle)'}</li>`).join('')}</ul></div>` : ''}
           ${sinFecha ? `<div class="error-msg">${sinFecha} empleados activos sin fecha de ingreso.</div>` : ''}
           ${revisar.length ? `<div><h3>Cédulas por revisar (${revisar.length})</h3><p class="suave">Revisa que la cédula esté bien en el sistema de nómina.</p>
             <div class="lista">${revisar.slice(0, 30).map((v) => `<div class="item"><b>${esc(v.nombre)}</b><span class="suave">${esc(v.clave)} · ${esc(v.motivo)}</span></div>`).join('')}</div></div>` : ''}`;

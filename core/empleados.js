@@ -82,6 +82,26 @@
     return d.replace(/^0+/, '');
   }
 
+  /**
+   * Busca al jefe por su nombre (como viene en la columna «JEFE DIRECTO») entre los empleados activos.
+   * 1) nombre exacto (sin tildes ni espacios dobles); 2) si viene abreviado («CARLOS CAMACARO»), el único empleado
+   * cuyo nombre contiene todas esas palabras. Devuelve { clave, nombre, tipo: 'exacto'|'palabras'|'ambiguo'|'no_encontrado' }.
+   */
+  function resolverJefe(nombreJefe, empleados) {
+    var buscado = normalizarNombre(nombreJefe);
+    if (!buscado) return { clave: '', nombre: '', tipo: 'vacio' };
+    var activos = empleados.filter(function (e) { return e.estado !== 'Inactivo'; });
+    var exactos = activos.filter(function (e) { return normalizarNombre(e.nombre) === buscado; });
+    if (exactos.length === 1) return { clave: claveCedula(exactos[0]), nombre: exactos[0].nombre, tipo: 'exacto' };
+    var palabras = buscado.split(' ');
+    var candidatos = (exactos.length ? exactos : activos).filter(function (e) {
+      var suyas = normalizarNombre(e.nombre).split(' ');
+      return palabras.every(function (p) { return suyas.indexOf(p) !== -1; });
+    });
+    if (candidatos.length === 1) return { clave: claveCedula(candidatos[0]), nombre: candidatos[0].nombre, tipo: 'palabras' };
+    return { clave: '', nombre: '', tipo: candidatos.length ? 'ambiguo' : 'no_encontrado' };
+  }
+
   /** ¿Asignar `jefeClave` como jefe de `clave` crearía un ciclo (A jefe de B y B jefe de A, o más largo)? */
   function creaCicloDeJefes(empleados, clave, jefeClave) {
     var porClave = {};
@@ -285,6 +305,7 @@
     departamento: ['DEPARTAMENTO'],
     puesto: ['PUESTO', 'PUESTO NOMINA', 'CARGO'],
     estado: ['ESTADO', 'STATUS'],
+    jefeNombre: ['JEFE DIRECTO', 'JEFE', 'SUPERVISOR', 'SUPERVISOR DIRECTO'],
     genero: ['GENERO', 'SEXO'],
     salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
     fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
@@ -324,6 +345,7 @@
       ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) { o[k] = col[k] ? f[col[k]] : ''; });
       o.salarioMensual = col.salarioMensual ? f[col.salarioMensual] : '';
       o.genero = col.genero ? f[col.genero] : '';
+      o.jefeNombre = col.jefeNombre ? espacios(f[col.jefeNombre]) : '';
       o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
       filas.push(o);
     });
@@ -332,7 +354,7 @@
 
   var api = {
     mapearDetalle: mapearDetalle, fechaDeExcel: fechaDeExcel,
-    numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
+    resolverJefe: resolverJefe, numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
     normalizarNombre: normalizarNombre, parsearCedula: parsearCedula, verificadorRif: verificadorRif, estadoEnEspanol: estadoEnEspanol,
     empresaDesdeDetalle: empresaDesdeDetalle, empresaFideicomiso: empresaFideicomiso,
     claveCedula: claveCedula, empleadoDesdeDetalle: empleadoDesdeDetalle,

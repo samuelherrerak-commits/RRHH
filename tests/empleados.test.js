@@ -109,7 +109,7 @@ test('mapearDetalle: reconoce encabezados con tildes, serial de Excel y filas va
   ]);
   assert.equal(r.filas.length, 1);
   assert.equal(r.omitidas, 1);
-  assert.deepEqual(r.faltantes, ['genero', 'salarioMensual']);   // este archivo de prueba no trae género ni sueldo
+  assert.deepEqual(r.faltantes, ['jefeNombre', 'genero', 'salarioMensual']);   // este archivo de prueba no trae jefe, género ni sueldo
   assert.equal(r.filas[0].fechaInicio, '05/03/2024');
   assert.equal(E.mapearDetalle([{ Nombre: 'X' }]).faltantes.includes('cedula'), true);
 });
@@ -135,4 +135,19 @@ test('género del detalle (para el saludo) y se conserva si el archivo nuevo no 
   const a = E.fusionarDetalle([], r.filas).empleados;
   assert.equal(a[0].genero, 'Femenino');
   assert.equal(E.fusionarDetalle(a, [{ cedula: 'V305803231', nombre: 'Ana' }]).empleados[0].genero, 'Femenino');
+});
+
+test('jefe por nombre: exacto, abreviado (palabras), ambiguo o no encontrado', () => {
+  const emps = E.fusionarDetalle([], [
+    { cedula: 'V111111119', nombre: 'CARLOS LUIS CAMACARO', organizacion: 'X' },
+    { cedula: 'V222222229', nombre: 'CATHERINE YANEYRE PONTE PIMENTEL', organizacion: 'X' },
+    { cedula: 'V333333339', nombre: 'MARIA PEREZ LOPEZ', organizacion: 'X' },
+    { cedula: 'V444444449', nombre: 'MARIA PEREZ GOMEZ', organizacion: 'X' },
+  ]).empleados;
+  assert.deepEqual(E.resolverJefe('Carlos Luis  Camacaro', emps), { clave: 'V11111111', nombre: 'CARLOS LUIS CAMACARO', tipo: 'exacto' });
+  assert.equal(E.resolverJefe('CATHERINE PONTE', emps).tipo, 'palabras');
+  assert.equal(E.resolverJefe('CATHERINE PONTE', emps).clave, 'V22222222');
+  assert.equal(E.resolverJefe('MARIA PEREZ', emps).tipo, 'ambiguo');
+  assert.equal(E.resolverJefe('BETSY RODRIGUEZ', emps).tipo, 'no_encontrado');
+  assert.equal(E.mapearDetalle([{ 'Cédula': 'V1', 'Nombre Socio del Negocio': 'A', 'JEFE DIRECTO': ' BETSY  RODRIGUEZ ' }]).filas[0].jefeNombre, 'BETSY RODRIGUEZ');
 });

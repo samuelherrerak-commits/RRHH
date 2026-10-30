@@ -504,15 +504,44 @@
     if (!Array.isArray(filas) || !filas.length) return err('VALIDACION', 'El archivo no trae empleados.');
     if (filas.length > 5000) return err('VALIDACION', 'El archivo trae demasiadas filas.');
     var r = Empleados.fusionarDetalle(repo.todosEmpleados(), filas);
+    var jefes = asignarJefesDelDetalle(r.empleados, filas);
     repo.guardarEmpleados(r.empleados);
     var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
       .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
     var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
     repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
-    return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha });
+    return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes });
   }
 
   /** opciones: { buscar, departamento, sinJefe } */
+  /**
+   * Columna «JEFE DIRECTO» del detalle (nombre del jefe): se busca entre los empleados y se asigna.
+   * Si el archivo no trae la columna, o el jefe de una persona no se encuentra, se conserva el jefe que ya tenía.
+   * Devuelve { traeColumna, asignados, sinJefeEnArchivo, noEncontrados: [{ jefe, personas, tipo }] }.
+   */
+  function asignarJefesDelDetalle(empleados, filas) {
+    var traeColumna = filas.some(function (f) { return f.jefeNombre; });
+    var res = { traeColumna: traeColumna, asignados: 0, sinJefeEnArchivo: 0, noEncontrados: [] };
+    if (!traeColumna) return res;
+    var porClave = {}, cache = {}, faltan = {};
+    empleados.forEach(function (e) { porClave[Empleados.claveCedula(e)] = e; });
+    filas.forEach(function (f) {
+      var c = Empleados.parsearCedula(f.cedula), e = porClave[c.letra + c.numero];
+      if (!e) return;
+      if (!f.jefeNombre) { res.sinJefeEnArchivo++; return; }
+      var j = cache[f.jefeNombre] || (cache[f.jefeNombre] = Empleados.resolverJefe(f.jefeNombre, empleados));
+      var clave = Empleados.claveCedula(e);
+      if (!j.clave || j.clave === clave || Empleados.creaCicloDeJefes(empleados, clave, j.clave)) {
+        var k = Empleados.normalizarNombre(f.jefeNombre);
+        (faltan[k] = faltan[k] || { jefe: f.jefeNombre, personas: 0, tipo: j.clave ? 'ciclo' : j.tipo }).personas++;
+        return;
+      }
+      e.jefe = j.clave; res.asignados++;
+    });
+    res.noEncontrados = Object.keys(faltan).map(function (k) { return faltan[k]; }).sort(function (a, b) { return b.personas - a.personas; });
+    return res;
+  }
+
   function listarEmpleados(repo, ctx, token, opciones) {
     if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
     if (typeof opciones === 'string') opciones = { buscar: opciones };

@@ -491,3 +491,29 @@ test('vacaciones: importar el cierre informa egresos e ingresos y reemplaza los 
   assert.equal(S.datosVacaciones(repo, ctx, t).data.saldo.total, 16);
   assert.equal(S.importarCierreVacaciones(repo, ctx, t, []).code, 'SESION');
 });
+
+test('cargar el detalle con «JEFE DIRECTO»: asigna los que encuentra y reporta los que no', () => {
+  const repo = crearRepo([]), ctx = crearCtx();
+  repo.st.usuarios['99999999'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
+  const a = S.iniciarSesionAdmin(repo, ctx, '99999999', 'k').data.token;
+  const fila = (ced, nombre, jefe) => ({ cedula: ced, nombre, organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2020', jefeNombre: jefe });
+  const r = S.cargarEmpleados(repo, ctx, a, [
+    fila('V111111119', 'LUIS PAUL ROJAS LISARDO', ''),                 // gerente: sin jefe en el archivo
+    fila('V222222229', 'SAMUEL HERRERA KEY', 'LUIS PAUL ROJAS LISARDO'),
+    fila('V333333339', 'ANA VENDEDORA', 'SAMUEL HERRERA'),             // abreviado
+    fila('V444444449', 'BETO VENDEDOR', 'BETSY RODRIGUEZ'),            // no está en el detalle
+    fila('V555555559', 'CARLA VENDEDORA', 'BETSY RODRIGUEZ'),
+  ]).data;
+  assert.equal(r.jefes.asignados, 2);
+  assert.equal(r.jefes.sinJefeEnArchivo, 1);
+  assert.deepEqual(r.jefes.noEncontrados, [{ jefe: 'BETSY RODRIGUEZ', personas: 2, tipo: 'no_encontrado' }]);
+  const l = S.listarEmpleados(repo, ctx, a, {}).data.empleados;
+  const jefeDe = (n) => l.find((e) => e.nombre === n).jefeNombre;
+  assert.equal(jefeDe('SAMUEL HERRERA KEY'), 'LUIS PAUL ROJAS LISARDO');
+  assert.equal(jefeDe('ANA VENDEDORA'), 'SAMUEL HERRERA KEY');
+  assert.equal(jefeDe('BETO VENDEDOR'), '');
+  // si RRHH le asigna jefe a mano y luego recarga el mismo archivo, no se borra
+  S.asignarJefe(repo, ctx, a, ['V44444444'], 'V22222222');
+  S.cargarEmpleados(repo, ctx, a, [fila('V444444449', 'BETO VENDEDOR', 'BETSY RODRIGUEZ'), fila('V222222229', 'SAMUEL HERRERA KEY', 'LUIS PAUL ROJAS LISARDO')]);
+  assert.equal(S.listarEmpleados(repo, ctx, a, { buscar: 'beto' }).data.empleados[0].jefeNombre, 'SAMUEL HERRERA KEY');
+});

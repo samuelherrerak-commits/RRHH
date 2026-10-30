@@ -250,6 +250,26 @@ var Empleados = (function () {
         return d.replace(/^0+/, '');
       }
     
+      /**
+       * Busca al jefe por su nombre (como viene en la columna «JEFE DIRECTO») entre los empleados activos.
+       * 1) nombre exacto (sin tildes ni espacios dobles); 2) si viene abreviado («CARLOS CAMACARO»), el único empleado
+       * cuyo nombre contiene todas esas palabras. Devuelve { clave, nombre, tipo: 'exacto'|'palabras'|'ambiguo'|'no_encontrado' }.
+       */
+      function resolverJefe(nombreJefe, empleados) {
+        var buscado = normalizarNombre(nombreJefe);
+        if (!buscado) return { clave: '', nombre: '', tipo: 'vacio' };
+        var activos = empleados.filter(function (e) { return e.estado !== 'Inactivo'; });
+        var exactos = activos.filter(function (e) { return normalizarNombre(e.nombre) === buscado; });
+        if (exactos.length === 1) return { clave: claveCedula(exactos[0]), nombre: exactos[0].nombre, tipo: 'exacto' };
+        var palabras = buscado.split(' ');
+        var candidatos = (exactos.length ? exactos : activos).filter(function (e) {
+          var suyas = normalizarNombre(e.nombre).split(' ');
+          return palabras.every(function (p) { return suyas.indexOf(p) !== -1; });
+        });
+        if (candidatos.length === 1) return { clave: claveCedula(candidatos[0]), nombre: candidatos[0].nombre, tipo: 'palabras' };
+        return { clave: '', nombre: '', tipo: candidatos.length ? 'ambiguo' : 'no_encontrado' };
+      }
+    
       /** ¿Asignar `jefeClave` como jefe de `clave` crearía un ciclo (A jefe de B y B jefe de A, o más largo)? */
       function creaCicloDeJefes(empleados, clave, jefeClave) {
         var porClave = {};
@@ -453,6 +473,7 @@ var Empleados = (function () {
         departamento: ['DEPARTAMENTO'],
         puesto: ['PUESTO', 'PUESTO NOMINA', 'CARGO'],
         estado: ['ESTADO', 'STATUS'],
+        jefeNombre: ['JEFE DIRECTO', 'JEFE', 'SUPERVISOR', 'SUPERVISOR DIRECTO'],
         genero: ['GENERO', 'SEXO'],
         salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
         fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
@@ -492,6 +513,7 @@ var Empleados = (function () {
           ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) { o[k] = col[k] ? f[col[k]] : ''; });
           o.salarioMensual = col.salarioMensual ? f[col.salarioMensual] : '';
           o.genero = col.genero ? f[col.genero] : '';
+          o.jefeNombre = col.jefeNombre ? espacios(f[col.jefeNombre]) : '';
           o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
           filas.push(o);
         });
@@ -500,7 +522,7 @@ var Empleados = (function () {
     
       var api = {
         mapearDetalle: mapearDetalle, fechaDeExcel: fechaDeExcel,
-        numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
+        resolverJefe: resolverJefe, numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
         normalizarNombre: normalizarNombre, parsearCedula: parsearCedula, verificadorRif: verificadorRif, estadoEnEspanol: estadoEnEspanol,
         empresaDesdeDetalle: empresaDesdeDetalle, empresaFideicomiso: empresaFideicomiso,
         claveCedula: claveCedula, empleadoDesdeDetalle: empleadoDesdeDetalle,
@@ -1545,15 +1567,44 @@ var Servicio = (function () {
         if (!Array.isArray(filas) || !filas.length) return err('VALIDACION', 'El archivo no trae empleados.');
         if (filas.length > 5000) return err('VALIDACION', 'El archivo trae demasiadas filas.');
         var r = Empleados.fusionarDetalle(repo.todosEmpleados(), filas);
+        var jefes = asignarJefesDelDetalle(r.empleados, filas);
         repo.guardarEmpleados(r.empleados);
         var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
           .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
         var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
         repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
-        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha });
+        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes });
       }
     
       /** opciones: { buscar, departamento, sinJefe } */
+      /**
+       * Columna «JEFE DIRECTO» del detalle (nombre del jefe): se busca entre los empleados y se asigna.
+       * Si el archivo no trae la columna, o el jefe de una persona no se encuentra, se conserva el jefe que ya tenía.
+       * Devuelve { traeColumna, asignados, sinJefeEnArchivo, noEncontrados: [{ jefe, personas, tipo }] }.
+       */
+      function asignarJefesDelDetalle(empleados, filas) {
+        var traeColumna = filas.some(function (f) { return f.jefeNombre; });
+        var res = { traeColumna: traeColumna, asignados: 0, sinJefeEnArchivo: 0, noEncontrados: [] };
+        if (!traeColumna) return res;
+        var porClave = {}, cache = {}, faltan = {};
+        empleados.forEach(function (e) { porClave[Empleados.claveCedula(e)] = e; });
+        filas.forEach(function (f) {
+          var c = Empleados.parsearCedula(f.cedula), e = porClave[c.letra + c.numero];
+          if (!e) return;
+          if (!f.jefeNombre) { res.sinJefeEnArchivo++; return; }
+          var j = cache[f.jefeNombre] || (cache[f.jefeNombre] = Empleados.resolverJefe(f.jefeNombre, empleados));
+          var clave = Empleados.claveCedula(e);
+          if (!j.clave || j.clave === clave || Empleados.creaCicloDeJefes(empleados, clave, j.clave)) {
+            var k = Empleados.normalizarNombre(f.jefeNombre);
+            (faltan[k] = faltan[k] || { jefe: f.jefeNombre, personas: 0, tipo: j.clave ? 'ciclo' : j.tipo }).personas++;
+            return;
+          }
+          e.jefe = j.clave; res.asignados++;
+        });
+        res.noEncontrados = Object.keys(faltan).map(function (k) { return faltan[k]; }).sort(function (a, b) { return b.personas - a.personas; });
+        return res;
+      }
+    
       function listarEmpleados(repo, ctx, token, opciones) {
         if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
         if (typeof opciones === 'string') opciones = { buscar: opciones };
@@ -1681,7 +1732,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.4';
+var VERSION = '2026-10-30.5';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
