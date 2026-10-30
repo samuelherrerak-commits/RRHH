@@ -1,4 +1,4 @@
-import { llamar, sesion } from './api.js';
+import { llamar, sesion, obtener, precargar, olvidar } from './api.js';
 import { bs, esc, chip, fechaHora, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 
@@ -31,10 +31,10 @@ async function arrancar() {
   const s = sesion.leer();
   btnSalir.hidden = !s;
   if (s && s.rol !== 'TRABAJADOR') return vistaRRHH();
-  if (s) return vistaCuenta(app, '', seccionDesdeHash());
+  if (s) { precargarTrabajador(); return vistaCuenta(app, '', seccionDesdeHash()); }
   return vistaLogin();
 }
-btnSalir.addEventListener('click', () => { sesion.borrar(); history.replaceState(null, '', location.pathname); arrancar(); });
+btnSalir.addEventListener('click', () => { sesion.borrar(); olvidar(); history.replaceState(null, '', location.pathname); arrancar(); });
 window.addEventListener('hashchange', () => arrancar());
 
 /* ---------- Trabajador: entrada ---------- */
@@ -60,6 +60,9 @@ function vistaLogin() {
         const r = await llamar('loginAdmin', { cedula: f.cedula.value, clave: f.clave.value, token: '' });
         if (!r.ok) return errorEn(err, r.message);
         sesion.guardar({ token: r.data.token, rol: r.data.rol, nombre: r.data.nombre, genero: r.data.genero || '', tokenTrabajador: r.data.tokenTrabajador || '', esJefe: !!r.data.esJefe });
+        precargar('bandejaVacaciones', { estado: estadoVacRRHH });
+        if (r.data.tokenTrabajador) precargarTrabajador({ token: r.data.tokenTrabajador });
+        if (r.data.esJefe && !r.data.tokenTrabajador) precargar('equipoVacaciones');   // si es empleado, su equipo va en «Mi cuenta» (ya precargado)
         return arrancar();
       }
       const r = await llamar('login', { cedula: f.cedula.value, token: '' });
@@ -69,6 +72,7 @@ function vistaLogin() {
         return;
       }
       sesion.guardar({ token: r.data.token, rol: 'TRABAJADOR', nombre: r.data.nombre, genero: r.data.genero || '' });
+      precargarTrabajador();
       arrancar();
     });
   });
@@ -125,6 +129,16 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
 }
 
+/** Mientras la persona ve su inicio, se piden en segundo plano los datos de cada tarjeta. */
+function precargarTrabajador(tk = {}) {
+  precargar('equipoVacaciones', tk);
+  precargar('datosVacaciones', tk);
+  precargar('misConstancias', tk);
+}
+
+/** Bloques grises animados mientras llega la respuesta (se nota menos la espera que con un texto). */
+const esqueleto = (n = 2) => `<div class="esqueleto" aria-busy="true" aria-label="Cargando">${'<div class="esq-tarjeta"><span></span><span></span><span></span></div>'.repeat(n)}</div>`;
+
 /* ---------- Inicio: saludo y tres tarjetas ---------- */
 
 function seccionInicio(cont) {
@@ -146,7 +160,7 @@ function seccionInicio(cont) {
       ${tarjeta('fideicomiso', 'Fideicomiso', 'Consulta tus aportes de prestaciones y solicita anticipos.', 'carbon', FIDEICOMISO_ACTIVO ? '' : '<span class="chip chip-neutro">Próximamente</span>')}
     </nav>`;
   // Si es jefe de alguien, aparece «Mi equipo» con las solicitudes por aprobar
-  llamar('equipoVacaciones', conToken()).then((r) => {
+  obtener('equipoVacaciones', conToken()).then((r) => {
     if (!r.ok || !r.data.esJefe || !cont.querySelector('.accesos')) return;
     const n = r.data.pendientes.length;
     cont.querySelector('.accesos').insertAdjacentHTML('afterbegin', tarjeta('equipo', 'Mi equipo',
@@ -159,8 +173,8 @@ function seccionInicio(cont) {
 /* ---------- Constancia de trabajo ---------- */
 
 async function seccionConstancia(cont) {
-  cont.innerHTML = `${volver()}<p class="vacio">Cargando…</p>`;
-  const rc = await llamar('misConstancias', conToken());
+  cont.innerHTML = `${volver()}${esqueleto(2)}`;
+  const rc = await obtener('misConstancias', conToken());
   if (!rc.ok && rc.code === 'SESION') { toast(rc.message); return arrancar(); }
   const constancias = rc.ok ? rc.data : [];
   const vigente = constancias.find((c) => c.estado === 'VIGENTE');
@@ -202,8 +216,8 @@ const detallePago = (s) => s.imputacion.filter((i) => i.pagaPeriodo).map((i) => 
 const resumenFechas = (s) => `${s.dias} día${s.dias === 1 ? '' : 's'} hábil${s.dias === 1 ? '' : 'es'} · del ${fechaVac(s.inicio)} al ${fechaVac(s.culminacion)} · reintegro ${fechaVac(s.reintegro)}`;
 
 async function seccionVacaciones(cont) {
-  cont.innerHTML = `${volver()}<p class="vacio">Cargando tus vacaciones…</p>`;
-  const r = await llamar('datosVacaciones', conToken());
+  cont.innerHTML = `${volver()}${esqueleto(3)}`;
+  const r = await obtener('datosVacaciones', conToken());
   if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } cont.innerHTML = `${volver()}<p class="error-msg">${esc(r.message)}</p>`; return; }
   const d = r.data, s = d.saldo;
   const desde = V().sumarDiasTxt(d.hoy, d.reglas.anticipacionMin), hasta = V().sumarDiasTxt(d.hoy, d.reglas.anticipacionMax);
@@ -299,8 +313,8 @@ function activarPdfVac(cont, lista) {
 const ESTADOS_VAC_JEFE = { ...ESTADOS_VAC, PENDIENTE_JEFE: ['Por aprobar', 'espera'], APROBADA_JEFE: ['Aprobada · en Gestión Humana', 'austral'] };
 
 async function seccionEquipo(cont) {
-  cont.innerHTML = `${volver()}<p class="vacio">Cargando…</p>`;
-  const r = await llamar('equipoVacaciones', conToken());
+  cont.innerHTML = `${volver()}${esqueleto(2)}`;
+  const r = await obtener('equipoVacaciones', conToken());
   if (!r.ok) { toast(r.message); return arrancar(); }
   const { pendientes, recientes, equipo } = r.data;
   const item = (x, acciones = '') => `<div class="item">
@@ -355,8 +369,8 @@ async function seccionFideicomiso(cont) {
       </section>`;
     return;
   }
-  cont.innerHTML = `${volver()}<p class="vacio">Cargando tu estado de cuenta…</p>`;
-  const r = await llamar('estadoDeCuenta', conToken());
+  cont.innerHTML = `${volver()}${esqueleto(3)}`;
+  const r = await obtener('estadoDeCuenta', conToken());
   if (!r.ok) { toast(r.message); return arrancar(); }
   const { resumen: u, anticipos } = r.data;
   const pct = Math.round(u.porcentajeMax * 100);
@@ -466,7 +480,7 @@ const tarjetaAnticipo = (a, acciones = '') => `
   </div>`;
 
 async function panelSolicitudes(panel) {
-  panel.innerHTML = '<p class="vacio">Cargando…</p>';
+  panel.innerHTML = esqueleto(2);
   const r = await llamar('bandejaAnticipos', { estado: 'PENDIENTE' });
   if (!r.ok) { toast(r.message); return arrancar(); }
   panel.innerHTML = `<section class="tarjeta"><h2>Anticipos por revisar (${r.data.length})</h2>
@@ -505,7 +519,7 @@ function descargar(nombre, texto) {
 }
 
 async function panelBanco(panel) {
-  panel.innerHTML = '<p class="vacio">Cargando…</p>';
+  panel.innerHTML = esqueleto(2);
   const [ap, ar] = await Promise.all([llamar('bandejaAnticipos', { estado: 'APROBADA' }), llamar('bandejaAnticipos', { estado: 'EN_ARCHIVO' })]);
   if (!ap.ok || !ar.ok) { toast((ap.ok ? ar : ap).message); return arrancar(); }
   const cuenta = (e) => ap.data.filter((a) => a.empresa === e).length;
@@ -539,8 +553,8 @@ const ESTADOS_VAC_RRHH = { PENDIENTE_JEFE: ['Con el jefe', 'espera'], APROBADA_J
 let estadoVacRRHH = 'APROBADA_JEFE';
 
 async function panelVacaciones(panel) {
-  panel.innerHTML = '<p class="vacio">Cargando…</p>';
-  const r = await llamar('bandejaVacaciones', { estado: estadoVacRRHH });
+  panel.innerHTML = esqueleto(2);
+  const r = await obtener('bandejaVacaciones', { estado: estadoVacRRHH });
   if (!r.ok) { toast(r.message); return arrancar(); }
   const { solicitudes, sinJefe, conCierre } = r.data;
   panel.innerHTML = `
@@ -611,8 +625,8 @@ async function panelVacaciones(panel) {
 /* ---------- RRHH: constancias emitidas ---------- */
 
 async function panelConstancias(panel) {
-  panel.innerHTML = '<p class="vacio">Cargando…</p>';
-  const r = await llamar('listarConstancias');
+  panel.innerHTML = esqueleto(2);
+  const r = await obtener('listarConstancias');
   if (!r.ok) { toast(r.message); return arrancar(); }
   panel.innerHTML = `<section class="tarjeta"><h2>Constancias emitidas (${r.data.length})</h2>
     <p class="suave">Si anulas una, al escanear su código aparecerá como anulada.</p>
@@ -714,7 +728,7 @@ async function panelEmpleados(panel) {
       <label>Buscar por nombre o cédula <input id="q" placeholder="Escribe para buscar" autocomplete="off"></label>
       <div class="fila"><label class="grow">Departamento <select id="f-dep"><option value="">Todos</option></select></label>
         <label style="grid-auto-flow:column;align-items:center;gap:8px"><input type="checkbox" id="f-sinjefe" style="width:20px;min-height:20px" ${abrirSinJefe ? 'checked' : ''}> Solo sin jefe</label></div>
-      <div id="lista"><p class="vacio">Cargando…</p></div>
+      <div id="lista">${esqueleto(1)}</div>
     </section>`;
   const err = panel.querySelector('#err'), previa = panel.querySelector('#previa');
 
@@ -766,7 +780,7 @@ async function panelEmpleados(panel) {
 
   async function listar(texto) {
     const caja = panel.querySelector('#lista');
-    const r = await llamar('listarEmpleados', { buscar: texto, departamento: fDep.value, sinJefe: fSin.checked });
+    const r = await obtener('listarEmpleados', { buscar: texto, departamento: fDep.value, sinJefe: fSin.checked });
     if (!r.ok) { caja.innerHTML = `<div class="error-msg">${esc(r.message)}</div>`; return; }
     if (!departamentosCargados && r.data.departamentos.length) {
       departamentosCargados = true;

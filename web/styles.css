@@ -133,3 +133,11 @@ dialog form { display: grid; gap: var(--s4); }
 .tabla-compacta th:first-child, .tabla-compacta td:first-child { width: 34%; padding-left: 12px; }
 .tabla-compacta th:last-child, .tabla-compacta td:last-child { padding-right: 12px; }
 .lista-simple { margin: var(--s2) 0 0; padding-left: 20px; display: grid; gap: 2px; }
+
+/* ---------- Esqueletos de carga ---------- */
+.esqueleto { display: grid; gap: var(--s4); }
+.esq-tarjeta { background: var(--superficie); border: 1px solid var(--linea); border-radius: var(--radio); padding: var(--s5); display: grid; gap: var(--s3); }
+.esq-tarjeta span { display: block; height: 14px; border-radius: 7px; background: linear-gradient(90deg, #eeeff0 25%, #f6f6f7 37%, #eeeff0 63%); background-size: 400% 100%; animation: brillo 1.4s ease infinite; }
+.esq-tarjeta span:first-child { width: 45%; height: 18px; } .esq-tarjeta span:nth-child(2) { width: 90%; } .esq-tarjeta span:nth-child(3) { width: 70%; }
+@keyframes brillo { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .esq-tarjeta span { animation: none; } }

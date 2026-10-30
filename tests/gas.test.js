@@ -200,3 +200,31 @@ test('configurar crea a Johanna (usuaria) y a María Teresa y Danilo (fuera de n
   assert.equal(e.llamar({ action: 'login', cedula: '8542390' }).ok, true);
   assert.equal(e.llamar({ action: 'login', cedula: 'E-81053506' }).ok, true);
 });
+
+test('rendimiento: cada hoja se lee una vez por petición y las que cambian poco salen de la caché', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '10/03/2022' },
+    { cedula: 'V111111119', nombre: 'ANA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '10/03/2022', jefeNombre: 'SAMUEL HERRERA' }] });
+  let lecturas = {};
+  for (const [n, h] of Object.entries(e.hojas)) { const o = h.getDataRange.bind(h); h.getDataRange = function () { lecturas[n] = (lecturas[n] || 0) + 1; return o(); }; }
+  const t = e.llamar({ action: 'login', cedula: '11111111' }).data.token;
+  lecturas = {};
+  e.llamar({ action: 'datosVacaciones', token: t });            // primera vez: llena la caché
+  assert.ok(Object.values(lecturas).every((n) => n === 1), 'ninguna hoja se lee dos veces: ' + JSON.stringify(lecturas));
+  lecturas = {};
+  const d = e.llamar({ action: 'datosVacaciones', token: t });  // segunda vez: solo lo que cambia seguido
+  assert.deepEqual(lecturas, { VAC_SOLICITUDES: 1 });
+  assert.equal(d.data.jefe.nombre, 'SAMUEL HERRERA');
+
+  // una escritura del sistema borra la caché de esa hoja
+  e.llamar({ action: 'asignarJefe', token: admin, claves: ['V11111111'], jefe: '' });
+  assert.equal(e.llamar({ action: 'datosVacaciones', token: t }).data.jefe, null);
+  // una edición a mano (onEdit) también
+  e.hojas.EMPLEADOS.filas.find((f) => f && f[2] === 'ANA')[13] = 'V30580323';
+  assert.equal(e.llamar({ action: 'datosVacaciones', token: t }).data.jefe, null);              // todavía de la caché
+  vm.runInContext('onEdit', e.ctx)({ range: { getSheet: () => ({ getName: () => 'EMPLEADOS' }) } });
+  assert.equal(e.llamar({ action: 'datosVacaciones', token: t }).data.jefe.nombre, 'SAMUEL HERRERA');
+});

@@ -1842,7 +1842,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.7';
+var VERSION = '2026-10-30.8';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
@@ -1942,11 +1942,21 @@ var RUTAS_RRHH = {
   },
 };
 
+/**
+ * Acciones que solo leen: no esperan el bloqueo (varias personas consultan a la vez sin hacer fila).
+ * Las que escriben se hacen de una en una para no pisarse.
+ */
+var LECTURAS = {
+  login: 1, loginAdmin: 1, estadoDeCuenta: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
+  bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
+};
+
 function doPost(e) {
-  var lock = LockService.getScriptLock();
+  var lock = LockService.getScriptLock(), bloqueado = false;
+  memo_ = {}; constanciasCache = null;   // en Google cada petición empieza de cero; así también en el simulador
   try {
-    lock.waitLock(20000);
     var d = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (!LECTURAS[d.action]) { lock.waitLock(20000); bloqueado = true; }
     // Filtro básico: el sitio envía este token. No es un secreto (va en config.js), solo frena visitas al azar.
     var esperado = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
     if (esperado && d.api_token !== esperado) return salida_({ ok: false, code: 'TOKEN', message: 'Acceso no autorizado.' });
@@ -1965,7 +1975,7 @@ function doPost(e) {
       : sinCodigo ? 'Falta código en Apps Script (' + err.message + '). ' + AVISO_CODIGO
       : 'Error del servidor. Intenta de nuevo.' });
   } finally {
-    try { lock.releaseLock(); } catch (x) { /* sin bloqueo */ }
+    if (bloqueado) try { lock.releaseLock(); } catch (x) { /* sin bloqueo */ }
   }
 }
 
@@ -2012,8 +2022,68 @@ function hoja_(nombre) {
   return h;
 }
 
+/* ---------- Lecturas rápidas ----------
+ * 1) Memoria por petición: cada hoja se lee una sola vez aunque el código la pida varias veces.
+ * 2) Caché de Google (CacheService, hasta 6 h) para las hojas que cambian poco. Se borra al escribir en ellas
+ *    desde el sistema, al editarlas a mano (onEdit) y con el menú RRHH → «Refrescar datos».
+ */
+var CACHEABLES = { EMPLEADOS: 1, USUARIOS: 1, PARAMETROS: 1, FERIADOS: 1, EMPRESAS: 1, VAC_PERIODOS: 1 };
+var CACHE_SEGUNDOS = 21600, CACHE_TROZO = 90000;
+var memo_ = {};
+
+function valores_(nombre) {
+  if (memo_[nombre]) return memo_[nombre];
+  var vals = CACHEABLES[nombre] ? leerCache_(nombre) : null;
+  if (!vals) {
+    vals = hoja_(nombre).getDataRange().getValues();
+    if (CACHEABLES[nombre]) guardarCache_(nombre, vals);
+  }
+  return (memo_[nombre] = vals);
+}
+
+function leerCache_(nombre) {
+  try {
+    var c = CacheService.getScriptCache(), partes = Number(c.get('hoja:' + nombre + ':partes'));
+    if (!partes) return null;
+    var txt = '';
+    for (var i = 0; i < partes; i++) { var p = c.get('hoja:' + nombre + ':' + i); if (p == null) return null; txt += p; }
+    return JSON.parse(txt);
+  } catch (e) { return null; }
+}
+
+function guardarCache_(nombre, vals) {
+  try {
+    var txt = JSON.stringify(vals, function (k, v) {
+      var o = this[k];
+      return o instanceof Date ? Utilities.formatDate(o, 'America/Caracas', "yyyy-MM-dd'T'HH:mm:ss") : v;
+    });
+    if (txt.length > CACHE_TROZO * 50) return;   // demasiado grande: se lee siempre de la hoja
+    var c = CacheService.getScriptCache(), n = Math.ceil(txt.length / CACHE_TROZO) || 1;
+    for (var i = 0; i < n; i++) c.put('hoja:' + nombre + ':' + i, txt.slice(i * CACHE_TROZO, (i + 1) * CACHE_TROZO), CACHE_SEGUNDOS);
+    c.put('hoja:' + nombre + ':partes', String(n), CACHE_SEGUNDOS);
+  } catch (e) { /* sin caché: no pasa nada, se lee de la hoja */ }
+}
+
+function invalidar_(nombre) {
+  delete memo_[nombre];
+  if (CACHEABLES[nombre]) try { CacheService.getScriptCache().remove('hoja:' + nombre + ':partes'); } catch (e) { /* sin caché */ }
+}
+
+function invalidarTodo_() { Object.keys(HOJAS).forEach(invalidar_); memo_ = {}; }
+
+/** Al editar la hoja a mano, el sistema deja de usar la copia guardada de esa pestaña. */
+function onEdit(e) {
+  try { invalidar_(e.range.getSheet().getName()); } catch (x) { /* sin evento */ }
+}
+
+/** Menú RRHH → «Refrescar datos»: por si se cambió la hoja de otra forma (por ejemplo, pegando datos desde otro archivo). */
+function refrescarDatos() {
+  invalidarTodo_();
+  SpreadsheetApp.getUi().alert('Listo', 'El sistema volverá a leer todas las hojas.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
 function leer_(nombre) {
-  var h = hoja_(nombre), vals = h.getDataRange().getValues();
+  var vals = valores_(nombre);
   var cab = vals[0], filas = [];
   for (var i = 1; i < vals.length; i++) {
     var o = { _fila: i + 1 };
@@ -2028,6 +2098,7 @@ function escribirFila_(nombre, obj) {
   var fila = cab.map(function (c) { return obj[c] == null ? '' : obj[c]; });
   if (obj._fila) h.getRange(obj._fila, 1, 1, cab.length).setValues([fila]);
   else { h.appendRow(fila); obj._fila = h.getLastRow(); }
+  invalidar_(nombre);
 }
 
 function texto_(v) { return v == null ? '' : String(v); }
@@ -2115,10 +2186,12 @@ function crearRepo_() {
     guardarVacPeriodos: function (filas) {
       var h = hoja_('VAC_PERIODOS'), cab = HOJAS.VAC_PERIODOS, ultima = h.getLastRow();
       if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+      invalidar_('VAC_PERIODOS');
       if (!filas.length) return;
       var r = h.getRange(2, 1, filas.length, cab.length);
       h.getRange(2, 1, filas.length, 2).setNumberFormat('@');
       r.setValues(filas.map(function (f) { return [f.clave, f.periodo, f.correspondientes, f.disfrutadosPrevios]; }));
+      invalidar_('VAC_PERIODOS');
     },
     vacSolicitudesDe: function (clave) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.clave === clave; }); },
     vacSolicitudesPorJefe: function (clave) { return leer_('VAC_SOLICITUDES').map(vacSolicitud_).filter(function (s) { return s.jefe === clave; }); },
@@ -2147,6 +2220,7 @@ function crearRepo_() {
       var h = hoja_('EMPLEADOS'), cab = HOJAS.EMPLEADOS;
       var ultima = h.getLastRow();
       if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+      invalidar_('EMPLEADOS');
       if (!lista.length) return;
       var filas = lista.map(function (e) {
         return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
@@ -2155,6 +2229,7 @@ function crearRepo_() {
       var rango = h.getRange(2, 1, filas.length, cab.length);
       rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte
       rango.setValues(filas);
+      invalidar_('EMPLEADOS');
     },
     empleadoPorClave: function (clave) {
       var filas = leer_('EMPLEADOS');
@@ -2208,6 +2283,7 @@ function crearRepo_() {
 
 /** Crea las hojas con sus encabezados, los parámetros y la clave secreta. Se puede repetir sin dañar datos. */
 function configurarInicial() {
+  invalidarTodo_();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   Object.keys(HOJAS).forEach(function (nombre) {
     var h = ss.getSheetByName(nombre) || ss.insertSheet(nombre);
@@ -2257,6 +2333,7 @@ function configurarInicial() {
     // cédulas y claves como texto, para que Sheets no les quite ceros ni letras
     ss.getSheetByName(n).getRange(2, 1, 1000, n === 'EMPLEADOS' ? 2 : 1).setNumberFormat('@');
   });
+  invalidarTodo_();
 }
 
 /* ---------- Menú «RRHH» dentro de la hoja ---------- */
@@ -2265,6 +2342,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('RRHH')
     .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
     .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
+    .addItem('Refrescar datos', 'refrescarDatos')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
 }
