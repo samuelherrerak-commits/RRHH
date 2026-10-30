@@ -417,8 +417,9 @@ async function seccionFideicomiso(cont) {
   cont.innerHTML = `${volver()}${esqueleto(2)}`;
   const r = await obtener('datosAnticipo', conToken());
   if (!r.ok) { toast(r.message); return arrancar(); }
-  const { ventana: v, motivos, puedeSolicitar, actual, anticipos } = r.data;
-  const proxima = `<b>${esc(v.siguiente.mes)}</b> (${esc(v.siguiente.etiqueta)})`;
+  const { activa, proxima: prox, motivos, puedeSolicitar, actual, anticipos } = r.data;
+  const rango = (a) => `del <b>${V().corta(a.inicio)}</b> al <b>${V().corta(a.fin)}</b>`;
+  const luego = prox ? `La próxima apertura es ${rango(prox)} (${esc(prox.etiqueta)}).` : 'Gestión Humana anunciará la próxima apertura.';
   const historial = anticipos.length ? `<div class="lista">${anticipos.map((a) => `
       <div class="item">
         <div class="item-cab"><b>${bs(a.monto)}</b>${chip(a.estado)}</div>
@@ -429,13 +430,13 @@ async function seccionFideicomiso(cont) {
 
   cont.innerHTML = `${volver()}<div class="dos-col"><div class="col">
     <section class="tarjeta">
-      <div><h2>Anticipo de prestaciones sociales</h2><p class="suave">Solicitud del ${esc(v.etiqueta)}</p></div>
-      ${puedeSolicitar ? `
+      <div><h2>Anticipo de prestaciones sociales</h2>${activa ? `<p class="suave">Solicitud del ${esc(activa.etiqueta)} · abierta ${rango(activa)}</p>` : ''}</div>
+      ${!activa ? `<p class="aviso">La solicitud de anticipos <b>no está abierta</b> en este momento. ${luego}</p>` : puedeSolicitar ? `
       <ol class="pasos">
         <li>Ingresa a la página de <b>tu banco</b> y revisa tu <b>monto disponible</b> del fideicomiso.</li>
         <li>Escribe aquí el monto que quieres anticipar y el motivo.</li>
       </ol>
-      <p class="advertencia">Envías el monto <b>bajo tu responsabilidad</b>. Si es <b>mayor a tu disponible</b>, el banco rechazará la solicitud y podrás hacer una nueva a partir de ${proxima}. Solo se acepta una solicitud por trimestre.</p>
+      <p class="advertencia">Envías el monto <b>bajo tu responsabilidad</b>. Si es <b>mayor a tu disponible</b>, el banco rechazará la solicitud y podrás hacer una nueva en la próxima apertura${prox ? ` (${rango(prox)})` : ''}. Solo se acepta una solicitud por apertura.</p>
       <form id="fant" class="form-vac" novalidate>
         <label>Monto a solicitar (Bs.) <input name="monto" inputmode="decimal" placeholder="0,00" autocomplete="off"></label>
         <label>Motivo <select name="motivo"><option value="">Elige el motivo</option>${motivos.map((m) => `<option>${esc(m)}</option>`).join('')}</select></label>
@@ -449,7 +450,7 @@ async function seccionFideicomiso(cont) {
         <p class="suave">${esc(actual.motivo)} · enviada el ${fechaHora(actual.creada)}</p>
         ${actual.estado === 'RECHAZADA' && actual.motivoRechazo ? `<p class="error-msg">Motivo: ${esc(actual.motivoRechazo)}</p>` : ''}
       </div>
-      <p class="aviso">Ya enviaste tu solicitud del ${esc(v.etiqueta)}. Podrás hacer otra a partir de ${proxima}.</p>`}
+      <p class="aviso">Ya enviaste tu solicitud del ${esc(activa.etiqueta)}. ${luego}</p>`}
     </section>
     </div><div class="col">
     <section class="tarjeta"><h2>Mis solicitudes</h2>${historial}</section>
@@ -466,16 +467,16 @@ async function seccionFideicomiso(cont) {
       if (!f.motivo.value) return errorEn(err, 'Elige el motivo.');
       if (f.motivo.value === 'Otro' && !f.detalle.value.trim()) return errorEn(err, 'Explica el motivo.');
       if (!f.acepta.checked) return errorEn(err, 'Marca la casilla para confirmar que revisaste tu disponible en el banco.');
-      if (!confirm(`¿Enviar la solicitud de anticipo por ${bs(monto)}? Solo puedes enviar una por trimestre.`)) return;
+      if (!confirm(`¿Enviar la solicitud de anticipo por ${bs(monto)}? Solo puedes enviar una por apertura.`)) return;
       await conBoton(f.querySelector('button[type=submit]'), async () => {
         const x = await llamar('solicitarAnticipo', { monto, motivo: f.motivo.value, detalle: f.detalle.value, acepta: true, ...conToken() });
         if (!x.ok) return errorEn(err, x.message);
-        toast('Solicitud enviada. Gestión Humana la revisará.'); vistaCuenta(cuenta.cont, cuenta.token, 'fideicomiso');
+        toast('Solicitud enviada. Gestión Humana la enviará al banco.'); vistaCuenta(cuenta.cont, cuenta.token, 'fideicomiso');
       });
     });
   }
   cont.querySelectorAll('[data-cancelar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
-    if (!confirm('¿Cancelar esta solicitud? Podrás enviar otra en este mismo trimestre.')) return;
+    if (!confirm('¿Cancelar esta solicitud? Podrás enviar otra mientras la solicitud siga abierta.')) return;
     const x = await llamar('cancelarAnticipo', { id: b.dataset.cancelar, ...conToken() });
     toast(x.ok ? 'Solicitud cancelada.' : x.message);
     vistaCuenta(cuenta.cont, cuenta.token, 'fideicomiso');
@@ -491,17 +492,17 @@ async function vistaRRHH() {
   btnSalir.hidden = false;
   const miCuenta = !!(sesion.leer() || {}).tokenTrabajador;
   const miEquipo = !!(sesion.leer() || {}).esJefe && !miCuenta;   // si es empleado, su equipo está en «Mi cuenta»
+  if (pestana === 'solicitudes' || pestana === 'banco') pestana = 'anticipos';
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['solicitudes', 'Anticipos'], ['banco', 'Archivo al banco'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['anticipos', 'Anticipos'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel" class="contenido"></div></div>`;
   app.querySelectorAll('.pestana').forEach((b) => b.addEventListener('click', () => { pestana = b.dataset.p; vistaRRHH(); }));
   const panel = app.querySelector('#panel');
-  if (pestana === 'solicitudes') return panelSolicitudes(panel);
-  if (pestana === 'banco') return panelBanco(panel);
+  if (pestana === 'anticipos') return panelAnticipos(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'vacaciones') return panelVacaciones(panel);
@@ -517,81 +518,105 @@ const tarjetaAnticipo = (a, acciones = '') => `
     ${a.detalle ? `<p class="suave">“${esc(a.detalle)}”</p>` : ''}${acciones}
   </div>`;
 
-async function panelSolicitudes(panel) {
-  panel.innerHTML = esqueleto(2);
-  const r = await llamar('bandejaAnticipos', { estado: 'PENDIENTE' });
-  if (!r.ok) { toast(r.message); return arrancar(); }
-  panel.innerHTML = `<section class="tarjeta"><h2>Anticipos por revisar (${r.data.length})</h2>
-    ${r.data.length ? `<div class="lista">${r.data.map((a) => tarjetaAnticipo(a,
-      `<div class="fila"><button class="btn btn-chico" data-ap="${esc(a.id)}">Aprobar</button><button class="btn btn-sec btn-chico" data-re="${esc(a.id)}">Rechazar</button></div>`)).join('')}</div>`
-      : '<p class="vacio">No hay solicitudes pendientes.</p>'}</section>`;
-  panel.querySelectorAll('[data-ap]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
-    const x = await llamar('decidirAnticipo', { id: b.dataset.ap, aprobar: true });
-    toast(x.ok ? 'Aprobada.' : x.message); panelSolicitudes(panel);
-  })));
-  panel.querySelectorAll('[data-re]').forEach((b) => b.addEventListener('click', () => pedirMotivoRechazo(b.dataset.re, () => panelSolicitudes(panel))));
-}
-
-function pedirMotivoRechazo(id, despues) {
-  dlg.innerHTML = `<form id="fr" novalidate><h2>Rechazar solicitud</h2>
-    <label>Motivo (lo verá el trabajador) <textarea name="motivo" maxlength="200" required></textarea></label>
-    <div class="error-msg" id="err" hidden></div>
-    <div class="fila"><button class="btn grow" type="submit">Rechazar</button><button class="btn btn-sec" type="button" id="no">Cerrar</button></div></form>`;
-  const f = dlg.querySelector('#fr'), err = dlg.querySelector('#err');
-  dlg.querySelector('#no').addEventListener('click', () => dlg.close());
-  f.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await conBoton(f.querySelector('button[type=submit]'), async () => {
-      const x = await llamar('decidirAnticipo', { id, aprobar: false, motivoRechazo: f.motivo.value });
-      if (!x.ok) return errorEn(err, x.message);
-      dlg.close(); toast('Rechazada.'); despues();
-    });
-  });
-  dlg.showModal();
-}
-
 function descargar(nombre, texto) {
   const url = URL.createObjectURL(new Blob(['﻿' + texto], { type: 'text/csv;charset=utf-8' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: nombre });
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function panelBanco(panel) {
-  panel.innerHTML = esqueleto(2);
-  const [ap, ar] = await Promise.all([llamar('bandejaAnticipos', { estado: 'APROBADA' }), llamar('bandejaAnticipos', { estado: 'EN_ARCHIVO' })]);
-  if (!ap.ok || !ar.ok) { toast((ap.ok ? ar : ap).message); return arrancar(); }
-  const cuenta = (e) => ap.data.filter((a) => a.empresa === e).length;
-  panel.innerHTML = `
-    <section class="tarjeta"><h2>1 · Generar archivo para el banco</h2>
-      <p class="suave">Incluye los anticipos aprobados de la empresa (TIPO T = 5). Al generarlo pasan a «Enviada al banco».</p>
-      <div class="fila">${['PCA', 'AIV'].map((e) => `<button class="btn ${e === 'AIV' ? 'btn-azul' : ''}" data-gen="${e}" ${cuenta(e) ? '' : 'disabled'}>Generar ${e} (${cuenta(e)})</button>`).join('')}</div>
+const TRIMESTRES = [['T1', '1.er trimestre'], ['T2', '2.º trimestre'], ['T3', '3.er trimestre'], ['T4', '4.º trimestre']];
+const ESTADO_APERTURA = { ABIERTA: ['Abierta', 'ok'], PROXIMA: ['Programada', 'austral'], CERRADA: ['Cerrada', 'neutro'] };
+const csvCampo = (v) => { const t = String(v ?? ''); return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+
+/** Anticipos: RRHH abre la solicitud (fechas), descarga el archivo del banco y reporta los rechazos; el resto, pagadas. */
+async function panelAnticipos(panel) {
+  panel.innerHTML = esqueleto(3);
+  const [ra, rp, rap, ren, rre] = await Promise.all([obtener('listarAperturas'), obtener('bandejaAnticipos', { estado: 'PENDIENTE' }),
+    obtener('bandejaAnticipos', { estado: 'APROBADA' }), obtener('bandejaAnticipos', { estado: 'EN_ARCHIVO' }), obtener('bandejaAnticipos', { estado: 'RECHAZADA' })]);
+  const falla = [ra, rp, rap, ren, rre].find((x) => !x.ok);
+  if (falla) { toast(falla.message); return arrancar(); }
+  const aperturas = ra.data, recibidas = rp.data.concat(rap.data), enBanco = ren.data;
+  const rechazadas = rre.data.sort((a, b) => b.creada - a.creada);
+  const cuenta = (e) => recibidas.filter((a) => a.empresa === e).length;
+  const anio = new Date().getFullYear();
+
+  panel.innerHTML = `<div class="dos-col der-angosta"><div class="col">
+    <section class="tarjeta">
+      <h2>Abrir la solicitud de anticipos</h2>
+      <p class="suave">Los colaboradores solo pueden solicitar entre la fecha de inicio y la fecha final, una vez por apertura.</p>
+      <form id="fap" class="form-vac" novalidate><input type="hidden" name="id">
+        <div class="fila"><label class="grow">Trimestre <select name="trim">${TRIMESTRES.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label>
+          <label class="grow">Año <input name="anio" type="number" min="2020" max="2100" value="${anio}"></label></div>
+        <div class="fila"><label class="grow">Fecha de inicio <input name="inicio" type="date"></label><label class="grow">Fecha final <input name="fin" type="date"></label></div>
+        <div class="error-msg" id="err-ap" hidden></div>
+        <div class="fila"><button class="btn" type="submit" id="btn-ap">Abrir solicitudes</button><button class="btn btn-sec" type="button" id="ap-cancelar" hidden>Cancelar cambio</button></div>
+      </form>
+      ${aperturas.length ? `<div class="lista">${aperturas.map((c) => { const [t, tono] = ESTADO_APERTURA[c.estado]; return `<div class="item">
+        <div class="item-cab"><div><b>${esc(c.etiqueta)}</b><p class="suave">Del ${V().corta(c.inicio)} al ${V().corta(c.fin)} · ${c.solicitudes} solicitud${c.solicitudes === 1 ? '' : 'es'}</p></div><span class="chip chip-${tono}">${t}</span></div>
+        <div class="fila"><button class="btn btn-sec btn-chico" data-ap-editar="${esc(c.id)}">Cambiar fechas</button>${c.solicitudes ? '' : `<button class="btn btn-sec btn-chico" data-ap-borrar="${esc(c.id)}">Eliminar</button>`}</div></div>`; }).join('')}</div>` : '<p class="vacio">Todavía no has abierto ninguna solicitud.</p>'}
     </section>
-    <section class="tarjeta"><h2>2 · Respuesta del banco (${ar.data.length})</h2>
-      <p class="suave">Marca cada anticipo como <b>pagado</b>, o como <b>rechazado por el banco</b> si el monto superaba el disponible (el colaborador podrá pedir otro en el próximo trimestre).</p>
-      ${ar.data.length ? `<div class="lista">${ar.data.map((a) => tarjetaAnticipo(a, `<div class="fila"><button class="btn btn-chico" data-pagada="${esc(a.id)}">Pagada</button><button class="btn btn-sec btn-chico" data-rech-banco="${esc(a.id)}">Rechazada por el banco</button></div>`)).join('')}</div>
-      <div><button class="btn btn-sec" id="pagar">Marcar todas como pagadas</button></div>` : '<p class="vacio">No hay anticipos enviados al banco.</p>'}
-    </section>`;
+    <section class="tarjeta"><h2>1 · Solicitudes recibidas (${recibidas.length})</h2>
+      <p class="suave">Descarga el archivo del banco de cada empresa (TIPO T = 5). Al descargarlo, sus solicitudes pasan a «Enviada al banco».</p>
+      <div class="fila">${['PCA', 'AIV'].map((e) => `<button class="btn" data-gen="${e}" ${cuenta(e) ? '' : 'disabled'}>Descargar archivo ${e} (${cuenta(e)})</button>`).join('')}</div>
+      ${recibidas.length ? `<div class="lista">${recibidas.map((a) => tarjetaAnticipo(a)).join('')}</div>` : '<p class="vacio">No hay solicitudes por enviar al banco.</p>'}
+    </section>
+    <section class="tarjeta"><h2>2 · Respuesta del banco (${enBanco.length})</h2>
+      <p class="suave">Reporta las que el banco <b>rechazó</b> (por ejemplo, el monto superaba el disponible) y luego marca <b>las demás como pagadas</b>.</p>
+      ${enBanco.length ? `<div class="lista">${enBanco.map((a) => tarjetaAnticipo(a, `<div><button class="btn btn-sec btn-chico" data-rech-banco="${esc(a.id)}">Rechazada por el banco</button></div>`)).join('')}</div>
+      <div><button class="btn" id="pagar">Marcar las ${enBanco.length} como pagadas</button></div>` : '<p class="vacio">No hay anticipos esperando respuesta del banco.</p>'}
+    </section>
+    </div><div class="col">
+    <section class="tarjeta"><h2>Rechazadas por el banco (${rechazadas.length})</h2>
+      <p class="suave">El colaborador ve el motivo y puede volver a solicitar en la próxima apertura.</p>
+      ${rechazadas.length ? `<div><button class="btn btn-sec btn-chico" id="reporte-rech">Descargar reporte (CSV)</button></div>
+      <div class="lista">${rechazadas.slice(0, 30).map((a) => tarjetaAnticipo(a, a.motivoRechazo ? `<p class="suave">Motivo: ${esc(a.motivoRechazo)}</p>` : '')).join('')}</div>` : '<p class="vacio">Sin rechazos.</p>'}
+    </section></div></div>`;
+
+  // aperturas: abrir, cambiar fechas, eliminar
+  const f = panel.querySelector('#fap'), errAp = panel.querySelector('#err-ap');
+  const limpiar = () => { f.reset(); f.id.value = ''; f.anio.value = anio; panel.querySelector('#btn-ap').textContent = 'Abrir solicitudes'; panel.querySelector('#ap-cancelar').hidden = true; };
+  panel.querySelector('#ap-cancelar').addEventListener('click', limpiar);
+  panel.querySelectorAll('[data-ap-editar]').forEach((b) => b.addEventListener('click', () => {
+    const c = aperturas.find((x) => x.id === b.dataset.apEditar);
+    f.id.value = c.id; f.trim.value = c.clave.slice(5); f.anio.value = c.clave.slice(0, 4); f.inicio.value = c.inicio; f.fin.value = c.fin;
+    panel.querySelector('#btn-ap').textContent = 'Guardar fechas'; panel.querySelector('#ap-cancelar').hidden = false; f.inicio.focus();
+  }));
+  panel.querySelectorAll('[data-ap-borrar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm('¿Eliminar esta apertura?')) return;
+    const x = await llamar('eliminarApertura', { id: b.dataset.apBorrar });
+    toast(x.ok ? 'Apertura eliminada.' : x.message); panelAnticipos(panel);
+  })));
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault(); errorEn(errAp, '');
+    await conBoton(panel.querySelector('#btn-ap'), async () => {
+      const x = await llamar('guardarApertura', { id: f.id.value, clave: `${f.anio.value}-${f.trim.value}`, inicio: f.inicio.value, fin: f.fin.value });
+      if (!x.ok) return errorEn(errAp, x.message);
+      toast(`${x.data.etiqueta}: solicitudes del ${V().corta(x.data.inicio)} al ${V().corta(x.data.fin)}.`); panelAnticipos(panel);
+    });
+  });
+
+  // archivo del banco, rechazos y pagadas
   panel.querySelectorAll('[data-gen]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
     const r = await llamar('archivoAnticipos', { empresa: b.dataset.gen });
     if (!r.ok) return toast(r.message);
-    const hoy = new Date().toISOString().slice(0, 10);
-    descargar(`ANTICIPOS_${b.dataset.gen}_${hoy}.csv`, r.data.csv);
-    toast(`Archivo generado con ${r.data.cantidad} anticipos.`); panelBanco(panel);
+    descargar(`ANTICIPOS_${b.dataset.gen}_${new Date().toISOString().slice(0, 10)}.csv`, r.data.csv);
+    toast(`Archivo con ${r.data.cantidad} anticipos. Pasan a «Enviada al banco».`); panelAnticipos(panel);
   })));
-  panel.querySelectorAll('[data-pagada]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
-    const r = await llamar('pagarAnticipos', { ids: [b.dataset.pagada] });
-    toast(r.ok ? 'Marcado como pagado.' : r.message); panelBanco(panel);
-  })));
-  panel.querySelectorAll('[data-rech-banco]').forEach((b) => b.addEventListener('click', () => pedirMotivo('Rechazado por el banco', async (motivo) => {
+  panel.querySelectorAll('[data-rech-banco]').forEach((b) => b.addEventListener('click', () => pedirMotivo('Rechazada por el banco', async (motivo) => {
     const r = await llamar('rechazarAnticipoBanco', { id: b.dataset.rechBanco, motivo });
-    if (r.ok) { toast('Marcado como rechazado por el banco.'); panelBanco(panel); }
+    if (r.ok) { toast('Rechazo reportado.'); panelAnticipos(panel); }
     return r;
   })));
   panel.querySelector('#pagar')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
-    if (!confirm(`¿Marcar ${ar.data.length} anticipos como pagados?`)) return;
-    const r = await llamar('pagarAnticipos', { ids: ar.data.map((a) => a.id) });
-    toast(r.ok ? `${r.data.cambiados} anticipos pagados.` : r.message); panelBanco(panel);
+    if (!confirm(`¿Marcar ${enBanco.length} anticipos como pagados? Hazlo después de reportar los rechazos del banco.`)) return;
+    const r = await llamar('pagarAnticipos', { ids: enBanco.map((a) => a.id) });
+    toast(r.ok ? `${r.data.cambiados} anticipos pagados.` : r.message); panelAnticipos(panel);
   }));
+  panel.querySelector('#reporte-rech')?.addEventListener('click', () => {
+    const filas = [['Cédula', 'Nombre', 'Empresa', 'Trimestre', 'Monto', 'Motivo del rechazo', 'Fecha de la solicitud']]
+      .concat(rechazadas.map((a) => [a.clave, a.nombre, a.empresa, a.ventanaEtiqueta, a.monto.toFixed(2), a.motivoRechazo, fechaHora(a.creada)]));
+    descargar(`RECHAZOS_ANTICIPOS_${new Date().toISOString().slice(0, 10)}.csv`, filas.map((f) => f.map(csvCampo).join(';')).join('\r\n'));
+  });
 }
 
 /* ---------- RRHH: vacaciones ---------- */

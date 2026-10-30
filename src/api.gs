@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.9';
+var VERSION = '2026-10-30.10';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
@@ -28,6 +28,7 @@ var HOJAS = {
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo', 'ventana', 'acepto'],
   CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
+  APERTURAS_ANTICIPO: ['id', 'clave', 'inicio', 'fin', 'por', 'actualizada'],
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
   VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
@@ -85,6 +86,9 @@ var RUTAS_RRHH = {
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
   listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
+  listarAperturas: function (repo, ctx, d) { return Servicio.listarAperturas(repo, ctx, d.token); },
+  guardarApertura: function (repo, ctx, d) { return Servicio.guardarApertura(repo, ctx, d.token, d); },
+  eliminarApertura: function (repo, ctx, d) { return Servicio.eliminarApertura(repo, ctx, d.token, d.id); },
   rechazarAnticipoBanco: function (repo, ctx, d) { return Servicio.rechazarAnticipoBanco(repo, ctx, d.token, d.id, d.motivo); },
   bandejaVacaciones: function (repo, ctx, d) { return Servicio.bandejaVacaciones(repo, ctx, d.token, d.estado); },
   registrarVacaciones: function (repo, ctx, d) { return Servicio.registrarVacaciones(repo, ctx, d.token, d.id, d.nomina); },
@@ -113,7 +117,7 @@ var RUTAS_RRHH = {
  * Las que escriben se hacen de una en una para no pisarse.
  */
 var LECTURAS = {
-  login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
+  login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
 };
 
@@ -193,7 +197,7 @@ function hoja_(nombre) {
  * 2) Caché de Google (CacheService, hasta 6 h) para las hojas que cambian poco. Se borra al escribir en ellas
  *    desde el sistema, al editarlas a mano (onEdit) y con el menú RRHH → «Refrescar datos».
  */
-var CACHEABLES = { EMPLEADOS: 1, USUARIOS: 1, PARAMETROS: 1, FERIADOS: 1, EMPRESAS: 1, VAC_PERIODOS: 1 };
+var CACHEABLES = { EMPLEADOS: 1, USUARIOS: 1, PARAMETROS: 1, FERIADOS: 1, EMPRESAS: 1, VAC_PERIODOS: 1, APERTURAS_ANTICIPO: 1 };
 var CACHE_SEGUNDOS = 21600, CACHE_TROZO = 90000;
 var memo_ = {};
 
@@ -414,6 +418,21 @@ function crearRepo_() {
     },
     anticiposDe: function (clave) { return anticiposTodos().filter(function (a) { return a.clave === clave; }); },
     anticipoPorId: function (id) { return anticiposTodos().filter(function (a) { return a.id === id; })[0] || null; },
+    todosAnticipos: function () { return anticiposTodos(); },
+    aperturasAnticipo: function () {
+      return leer_('APERTURAS_ANTICIPO').map(function (f) {
+        return { _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), inicio: fechaIso_(f.inicio), fin: fechaIso_(f.fin), por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+      }).filter(function (c) { return c.id; });
+    },
+    guardarAperturaAnticipo: function (c) {
+      if (!c._fila) { var h = hoja_('APERTURAS_ANTICIPO'); h.getRange(h.getLastRow() + 1, 1, 1, 4).setNumberFormat('@'); }
+      escribirFila_('APERTURAS_ANTICIPO', c);
+    },
+    eliminarAperturaAnticipo: function (id) {
+      var f = leer_('APERTURAS_ANTICIPO').filter(function (x) { return texto_(x.id) === id; })[0];
+      if (f) { hoja_('APERTURAS_ANTICIPO').deleteRow(f._fila); invalidar_('APERTURAS_ANTICIPO'); }
+    },
+    nuevoIdApertura: function () { return 'AP-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     anticiposPorEstado: function (estado) { return anticiposTodos().filter(function (a) { return a.estado === estado; }); },
     guardarAnticipo: function (a) {
       escribirFila_('ANTICIPOS', a);

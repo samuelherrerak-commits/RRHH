@@ -1,10 +1,13 @@
 # Módulo 1 · Prestaciones sociales
 
 ## Hoy: solo solicitudes de anticipo (sin saldo en el sistema)
-- El colaborador **revisa su disponible en su banco** y escribe monto y motivo. Debe marcar que lo envía **bajo su responsabilidad**.
-- **Una solicitud por trimestre**: cada trimestre calendario se solicita por el anterior (en enero de 2027, por el 4.º trimestre de 2026). Si la cancela mientras está «En revisión», puede enviar otra en el mismo trimestre.
-- RRHH aprueba o rechaza → genera el archivo para el banco (TIPO T = 5) → marca cada una como **Pagada** o **Rechazada por el banco** (por ejemplo, si el monto superaba el disponible). Rechazada por el banco: la próxima oportunidad es el trimestre siguiente.
-- El tope del 75 % sobre lo aportado queda listo para cuando se carguen los aportes: se activa con el parámetro `anticipoValidarDisponible = SI`.
+1. **RRHH abre la solicitud** (pestaña Anticipos): trimestre, **fecha de inicio** y **fecha final** (hoja `APERTURAS_ANTICIPO`). Puede programar la siguiente, cambiar fechas (por ejemplo, cerrarla antes) o eliminarla si aún no tiene solicitudes. Un trimestre se abre una sola vez y las aperturas no se cruzan.
+2. **El colaborador** solo puede solicitar mientras la apertura esté vigente: revisa su **disponible en su banco**, escribe monto y motivo y marca que lo envía **bajo su responsabilidad**. Una solicitud por apertura (si la cancela mientras está «Recibida», puede enviar otra). Fuera de fechas ve cuándo es la próxima apertura.
+3. **RRHH no aprueba**: descarga el **archivo del banco** por empresa con todas las recibidas (TIPO T = 5) y pasan a «Enviada al banco».
+4. Con la respuesta del banco, RRHH **reporta los rechazos** (con motivo, que ve el colaborador) y marca **las demás como pagadas**. El reporte de rechazos se descarga en CSV.
+5. Rechazada por el banco → puede volver a pedir en la próxima apertura.
+
+El tope del 75 % sobre lo aportado queda listo para cuando se carguen los aportes: se activa con el parámetro `anticipoValidarDisponible = SI`.
 
 ## Diseño completo (cuando el sistema tenga los aportes)
 

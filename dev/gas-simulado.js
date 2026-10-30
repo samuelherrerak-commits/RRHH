@@ -20,6 +20,7 @@ function crearHoja(nombre) {
     getRange: rango, setFrozenRows() {},
     getDataRange() { const n = this.getLastRow(), m = Math.max(0, ...filas.map((f) => (f || []).length)); return rango(1, 1, n, m); },
     appendRow(f) { filas[this.getLastRow()] = f.slice(); },
+    deleteRow(n) { filas.splice(n - 1, 1); },
   };
 }
 

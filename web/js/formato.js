@@ -14,7 +14,7 @@ export function leerMonto(texto) {
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export const ESTADOS = {
-  PENDIENTE: ['En revisión', 'espera'], APROBADA: ['Aprobada', 'ok'], EN_ARCHIVO: ['Enviada al banco', 'austral'],
+  PENDIENTE: ['Recibida', 'espera'], APROBADA: ['Recibida', 'espera'], EN_ARCHIVO: ['Enviada al banco', 'austral'],
   PAGADA: ['Pagada', 'ok'], RECHAZADA: ['Rechazada', 'error'], CANCELADA: ['Cancelada', 'neutro'],
 };
 export const chip = (estado) => {

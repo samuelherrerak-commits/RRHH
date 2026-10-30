@@ -105,33 +105,77 @@
     if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
     var emp = repo.empleadoPorClave(s.clave), p = repo.parametros();
     var sol = { monto: Calculo.redondear2(Number(datos && datos.monto)), motivo: datos && datos.motivo, detalle: datos && datos.detalle, acepta: datos && datos.acepta === true };
-    var previas = repo.anticiposDe(s.clave), ventana = Prestaciones.ventanaAnticipo(hoyCaracas(ctx));
+    var previas = repo.anticiposDe(s.clave), ap = Prestaciones.aperturas(repo.aperturasAnticipo(), hoyCaracas(ctx));
     var v;
     if (String(p.anticipoValidarDisponible || '').toUpperCase() === 'SI') {   // cuando el sistema tenga los aportes acreditados
       v = Prestaciones.validarSolicitudAnticipo(sol, Prestaciones.resumenTrabajador(repo.aportesDe(s.clave), previas, parametrosPrestaciones(p)), emp, parametrosPrestaciones(p));
     } else {                                                                  // hoy: el colaborador ve su disponible en el banco
-      v = Prestaciones.validarSolicitudBanco(sol, { empleado: emp, previas: previas, ventana: ventana, parametros: parametrosPrestaciones(p) });
+      v = Prestaciones.validarSolicitudBanco(sol, { empleado: emp, previas: previas, activa: ap.activa, proxima: ap.proxima, parametros: parametrosPrestaciones(p) });
     }
     if (!v.ok) return err('VALIDACION', v.errores.join(' '));
     var a = {
       id: repo.nuevoId(), clave: s.clave, monto: sol.monto, motivo: sol.motivo, detalle: String(sol.detalle || '').trim(),
-      estado: 'PENDIENTE', creada: ctx.ahora(), decididaPor: '', motivoRechazo: '', ventana: ventana.clave, acepto: ctx.ahora(),
+      estado: 'PENDIENTE', creada: ctx.ahora(), decididaPor: '', motivoRechazo: '', ventana: ap.activa ? ap.activa.clave : '', acepto: ctx.ahora(),
     };
     repo.guardarAnticipo(a);
     repo.log('ANTICIPO_SOLICITADO', s.clave, a.id + ' · ' + a.monto);
     return ok(vistaAnticipo(a));
   }
 
-  /** Lo que ve el colaborador en Fideicomiso: la ventana actual, si puede solicitar y sus solicitudes. */
+  function vistaApertura(c, hoy) {
+    return c ? { id: c.id, clave: c.clave, etiqueta: Prestaciones.etiquetaVentana(c.clave), inicio: c.inicio, fin: c.fin, estado: Prestaciones.estadoApertura(c, hoy) } : null;
+  }
+
+  /** Lo que ve el colaborador en Fideicomiso: la apertura vigente o la próxima, si puede solicitar y sus solicitudes. */
   function datosAnticipo(repo, ctx, token) {
     var s = leerToken(ctx, token, ['TRABAJADOR']);
     if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
-    var ventana = Prestaciones.ventanaAnticipo(hoyCaracas(ctx)), anticipos = repo.anticiposDe(s.clave);
-    var actual = anticipos.filter(function (a) { return a.ventana === ventana.clave && a.estado !== 'CANCELADA'; })[0];
+    var hoy = hoyCaracas(ctx), ap = Prestaciones.aperturas(repo.aperturasAnticipo(), hoy), anticipos = repo.anticiposDe(s.clave);
+    var actual = ap.activa ? anticipos.filter(function (a) { return a.ventana === ap.activa.clave && a.estado !== 'CANCELADA'; })[0] : null;
     return ok({
-      ventana: ventana, motivos: Prestaciones.PARAMETROS.motivos, puedeSolicitar: !actual, actual: actual ? vistaAnticipo(actual) : null,
+      activa: vistaApertura(ap.activa, hoy), proxima: vistaApertura(ap.proxima, hoy), motivos: Prestaciones.PARAMETROS.motivos,
+      puedeSolicitar: !!ap.activa && !actual, actual: actual ? vistaAnticipo(actual) : null,
       anticipos: anticipos.sort(function (a, b) { return b.creada - a.creada; }).map(vistaAnticipo),
     });
+  }
+
+  /** RRHH: aperturas de solicitudes con cuántas solicitudes recibió cada una. */
+  function listarAperturas(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var hoy = hoyCaracas(ctx), conteo = {};
+    repo.todosAnticipos().forEach(function (a) { if (a.estado !== 'CANCELADA') conteo[a.ventana] = (conteo[a.ventana] || 0) + 1; });
+    return ok(repo.aperturasAnticipo().sort(function (a, b) { return a.inicio < b.inicio ? 1 : -1; })
+      .map(function (c) { return Object.assign(vistaApertura(c, hoy), { solicitudes: conteo[c.clave] || 0 }); }));
+  }
+
+  /** RRHH abre (o corrige) una apertura: trimestre, fecha de inicio y fecha final. */
+  function guardarApertura(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var lista = repo.aperturasAnticipo();
+    var c = { id: datos && datos.id || repo.nuevoIdApertura(), clave: String(datos && datos.clave || ''), inicio: String(datos && datos.inicio || ''), fin: String(datos && datos.fin || '') };
+    var previa = lista.filter(function (x) { return x.id === c.id; })[0];
+    if (previa && previa.clave !== c.clave && repo.todosAnticipos().some(function (a) { return a.ventana === previa.clave && a.estado !== 'CANCELADA'; })) {
+      return err('VALIDACION', 'Esta apertura ya tiene solicitudes: puedes cambiar sus fechas, pero no el trimestre.');
+    }
+    var v = Prestaciones.validarApertura(c, lista);
+    if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+    repo.guardarAperturaAnticipo(Object.assign(previa || {}, c, { por: s.clave, actualizada: ctx.ahora() }));
+    repo.log('ANTICIPO_APERTURA', s.clave, c.clave + ' · ' + c.inicio + ' a ' + c.fin);
+    return ok(vistaApertura(c, hoyCaracas(ctx)));
+  }
+
+  function eliminarApertura(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var c = repo.aperturasAnticipo().filter(function (x) { return x.id === id; })[0];
+    if (!c) return err('NO_ENCONTRADO', 'No encontramos esa apertura.');
+    if (repo.todosAnticipos().some(function (a) { return a.ventana === c.clave && a.estado !== 'CANCELADA'; })) {
+      return err('VALIDACION', 'No se puede eliminar: ya tiene solicitudes. Si quieres cerrarla antes, cambia su fecha final.');
+    }
+    repo.eliminarAperturaAnticipo(id);
+    repo.log('ANTICIPO_APERTURA_ELIMINADA', s.clave, c.clave);
+    return ok({ id: id });
   }
 
   /** RRHH: el banco rechazó el anticipo (por ejemplo, el monto superaba el disponible). */
@@ -172,19 +216,20 @@
   }
 
   /**
-   * Genera el archivo de anticipos de una empresa con las APROBADAS y las pasa
-   * a EN_ARCHIVO. Mismo diseño que NOMINA APORTES con TIPO T = 5.
+   * Genera el archivo de anticipos de una empresa con las solicitudes RECIBIDAS (PENDIENTE; también las
+   * APROBADAS de antes) y las pasa a EN_ARCHIVO. RRHH no aprueba: el banco es quien acepta o rechaza.
+   * Mismo diseño que NOMINA APORTES con TIPO T = 5.
    */
   function generarArchivoAnticipos(repo, ctx, token, empresa) {
     var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
     if (!s) return err('SESION', 'No autorizado.');
     var cfg = repo.empresaConfig(empresa);
     if (!cfg) return err('VALIDACION', 'Empresa desconocida.');
-    var pendientes = repo.anticiposPorEstado('APROBADA').filter(function (a) {
+    var pendientes = repo.anticiposPorEstado('PENDIENTE').concat(repo.anticiposPorEstado('APROBADA')).filter(function (a) {
       var e = repo.empleadoPorClave(a.clave);
       return e && Empleados.empresaFideicomiso(e) === empresa;
     });
-    if (!pendientes.length) return err('VACIO', 'No hay anticipos aprobados para ' + empresa + '.');
+    if (!pendientes.length) return err('VACIO', 'No hay solicitudes de anticipo recibidas para ' + empresa + '.');
     var items = pendientes.map(function (a) {
       var e = repo.empleadoPorClave(a.clave);
       return { cedulaLetra: e.cedulaLetra, cedulaNumero: e.cedulaNumero, nombre: e.nombre, monto: a.monto };
@@ -746,6 +791,7 @@
     iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
     miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
     datosAnticipo: datosAnticipo, rechazarAnticipoBanco: rechazarAnticipoBanco,
+    listarAperturas: listarAperturas, guardarApertura: guardarApertura, eliminarApertura: eliminarApertura,
     bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
     generarArchivoAnticipos: generarArchivoAnticipos, marcarAnticiposPagados: marcarAnticiposPagados,
     cambiarEstadoCierre: cambiarEstadoCierre, leerToken: leerToken,

@@ -64,6 +64,9 @@ test('flujo completo sobre las hojas: cargar empleados, jefe, anticipo, constanc
   e.hojas.APORTES.appendRow(['V11111111', 2026, 1, 'AIV', 4000, 0, 3, 0, false, false]);
   e.hojas.CIERRES.appendRow([2026, 1, 'AIV', 'ACREDITADO', 'x', 0]);
   assert.equal(e.llamar({ action: 'estadoDeCuenta', token: ana }).data.resumen.disponible, 3000);
+  const hoy = new Date(Date.now() - 4 * 3600e3).toISOString().slice(0, 10), en = (n) => new Date(Date.parse(hoy) + n * 864e5).toISOString().slice(0, 10);
+  const ap = e.llamar({ action: 'guardarApertura', token: admin, clave: '2026-T3', inicio: en(-1), fin: en(5) });
+  assert.equal(ap.data.estado, 'ABIERTA', JSON.stringify(ap));
   const sol = e.llamar({ action: 'solicitarAnticipo', token: ana, monto: 1000, motivo: 'Salud', acepta: true });
   assert.equal(sol.ok, true, JSON.stringify(sol));
   assert.equal(e.llamar({ action: 'decidirAnticipo', token: admin, id: sol.data.id, aprobar: true }).ok, true);

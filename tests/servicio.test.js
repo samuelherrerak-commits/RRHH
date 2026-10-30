@@ -613,34 +613,57 @@ test('importar el cierre: la fila sin cédula se asigna por nombre exacto; si no
   assert.equal(S.datosVacaciones(repo, ctx, t).data.saldo.total, 22);
 });
 
-test('anticipo sin saldo: una por trimestre; si el banco la rechaza, la próxima es en enero 2027', () => {
-  const repo = crearRepo(filas), ctx = crearCtx(Date.UTC(2026, 9, 30, 15));
+test('anticipos: RRHH abre la solicitud con fechas; sin aprobación, archivo al banco, rechazo y pagadas', () => {
+  const repo = crearRepo(filas), ctx = crearCtx(Date.UTC(2026, 9, 30, 15));            // 30/10/2026
   repo.st.usuarios['99999999'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
   const rrhh = S.iniciarSesionAdmin(repo, ctx, '99999999', 'k').data.token;
   let t = S.iniciarSesion(repo, ctx, '12345678').data.token;
+  // sin apertura no se puede
+  assert.equal(S.datosAnticipo(repo, ctx, t).data.puedeSolicitar, false);
+  assert.match(S.solicitarAnticipo(repo, ctx, t, { monto: 5, motivo: 'Salud', acepta: true }).message, /no está abierta/);
+  // RRHH abre el 3.er trimestre (26/10 al 06/11) y programa el 4.º (05/01 al 16/01)
+  assert.equal(S.guardarApertura(repo, ctx, t, { clave: '2026-T3', inicio: '2026-10-26', fin: '2026-11-06' }).code, 'SESION');
+  const a3 = S.guardarApertura(repo, ctx, rrhh, { clave: '2026-T3', inicio: '2026-10-26', fin: '2026-11-06' }).data;
+  assert.equal(a3.estado, 'ABIERTA');
+  S.guardarApertura(repo, ctx, rrhh, { clave: '2026-T4', inicio: '2027-01-05', fin: '2027-01-16' });
   let d = S.datosAnticipo(repo, ctx, t).data;
   assert.equal(d.puedeSolicitar, true);
-  assert.equal(d.ventana.etiqueta, '3.er trimestre de 2026');
-  assert.match(S.solicitarAnticipo(repo, ctx, t, { monto: 50000, motivo: 'Vivienda' }).message, /bajo tu responsabilidad/);
-  const a = S.solicitarAnticipo(repo, ctx, t, { monto: 50000, motivo: 'Vivienda', acepta: true });     // sin tope del sistema
-  assert.equal(a.ok, true, a.message);
-  assert.equal(a.data.ventanaEtiqueta, '3.er trimestre de 2026');
-  assert.match(S.solicitarAnticipo(repo, ctx, t, { monto: 10, motivo: 'Salud', acepta: true }).message, /Ya enviaste/);
-  // RRHH la aprueba y la manda al banco; el banco la rechaza
-  S.decidirAnticipo(repo, ctx, rrhh, a.data.id, true);
-  S.generarArchivoAnticipos(repo, ctx, rrhh, 'PCA');
-  assert.equal(S.rechazarAnticipoBanco(repo, ctx, t, a.data.id).code, 'SESION');
-  const r = S.rechazarAnticipoBanco(repo, ctx, rrhh, a.data.id);
-  assert.equal(r.data.estado, 'RECHAZADA');
-  assert.match(r.data.motivoRechazo, /supera el disponible/);
-  d = S.datosAnticipo(repo, ctx, t).data;
-  assert.equal(d.puedeSolicitar, false);
-  assert.equal(d.ventana.siguiente.mes, 'enero de 2027');
-  // en enero de 2027 puede solicitar otra (por el 4.º trimestre de 2026)
-  ctx.reloj.t = Date.UTC(2027, 0, 5, 15);
+  assert.equal(d.activa.etiqueta, '3.er trimestre de 2026');
+  assert.equal(d.proxima.inicio, '2027-01-05');
+  const sol1 = S.solicitarAnticipo(repo, ctx, t, { monto: 50000, motivo: 'Vivienda', acepta: true }).data;
+  const t2 = S.iniciarSesion(repo, ctx, '98765432').data.token;
+  const sol2 = S.solicitarAnticipo(repo, ctx, t2, { monto: 3000, motivo: 'Salud', acepta: true }).data;
+  assert.match(S.solicitarAnticipo(repo, ctx, t, { monto: 10, motivo: 'Salud', acepta: true }).message, /Ya enviaste.*05\/01\/2027/);
+  assert.equal(S.listarAperturas(repo, ctx, rrhh).data.find((x) => x.clave === '2026-T3').solicitudes, 2);
+  assert.match(S.eliminarApertura(repo, ctx, rrhh, a3.id).message, /ya tiene solicitudes/);
+  // RRHH no aprueba: descarga el archivo directo con las recibidas
+  assert.equal(S.generarArchivoAnticipos(repo, ctx, rrhh, 'PCA').data.cantidad, 1);
+  assert.equal(S.generarArchivoAnticipos(repo, ctx, rrhh, 'AIV').data.cantidad, 1);
+  assert.equal(S.cancelarAnticipo(repo, ctx, t, sol1.id).code, 'TRANSICION');      // ya está en el banco
+  // el banco rechaza una; las demás, pagadas
+  S.rechazarAnticipoBanco(repo, ctx, rrhh, sol1.id, 'El monto supera el disponible');
+  const resto = S.bandejaAnticipos(repo, ctx, rrhh, 'EN_ARCHIVO').data.map((x) => x.id);
+  assert.deepEqual(resto, [sol2.id]);
+  assert.equal(S.marcarAnticiposPagados(repo, ctx, rrhh, resto).data.cambiados, 1);
+  // en enero (4.º trimestre) puede volver a pedir
+  ctx.reloj.t = Date.UTC(2027, 0, 6, 15);
   t = S.iniciarSesion(repo, ctx, '12345678').data.token;
   d = S.datosAnticipo(repo, ctx, t).data;
+  assert.equal(d.activa.etiqueta, '4.º trimestre de 2026');
   assert.equal(d.puedeSolicitar, true);
-  assert.equal(d.ventana.etiqueta, '4.º trimestre de 2026');
-  assert.equal(S.solicitarAnticipo(repo, ctx, t, { monto: 20000, motivo: 'Salud', acepta: true }).ok, true);
+  assert.equal(S.solicitarAnticipo(repo, ctx, t, { monto: 20000, motivo: 'Salud', acepta: true }).data.ventanaEtiqueta, '4.º trimestre de 2026');
 });
+
+test('aperturas: no se cambia el trimestre si ya tiene solicitudes; se puede cerrar antes cambiando la fecha final', () => {
+  const repo = crearRepo(filas), ctx = crearCtx(Date.UTC(2026, 9, 30, 15));
+  repo.st.usuarios['99999999'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
+  const rrhh = S.iniciarSesionAdmin(repo, ctx, '99999999', 'k').data.token;
+  const a = S.guardarApertura(repo, ctx, rrhh, { clave: '2026-T3', inicio: '2026-10-26', fin: '2026-11-06' }).data;
+  const t = S.iniciarSesion(repo, ctx, '12345678').data.token;
+  S.solicitarAnticipo(repo, ctx, t, { monto: 100, motivo: 'Salud', acepta: true });
+  assert.match(S.guardarApertura(repo, ctx, rrhh, { id: a.id, clave: '2026-T4', inicio: '2026-10-26', fin: '2026-11-06' }).message, /no el trimestre/);
+  assert.equal(S.guardarApertura(repo, ctx, rrhh, { id: a.id, clave: '2026-T3', inicio: '2026-10-26', fin: '2026-10-29' }).data.estado, 'CERRADA');
+  const vacia = S.guardarApertura(repo, ctx, rrhh, { clave: '2027-T1', inicio: '2027-04-05', fin: '2027-04-16' }).data;
+  assert.equal(S.eliminarApertura(repo, ctx, rrhh, vacia.id).ok, true);
+});
+
