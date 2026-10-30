@@ -103,18 +103,45 @@
   function solicitarAnticipo(repo, ctx, token, datos) {
     var s = leerToken(ctx, token, ['TRABAJADOR']);
     if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
-    var emp = repo.empleadoPorClave(s.clave);
-    var resumen = Prestaciones.resumenTrabajador(repo.aportesDe(s.clave), repo.anticiposDe(s.clave), parametrosPrestaciones(repo.parametros()));
-    var sol = { monto: Calculo.redondear2(Number(datos && datos.monto)), motivo: datos && datos.motivo, detalle: datos && datos.detalle };
-    var v = Prestaciones.validarSolicitudAnticipo(sol, resumen, emp, parametrosPrestaciones(repo.parametros()));
+    var emp = repo.empleadoPorClave(s.clave), p = repo.parametros();
+    var sol = { monto: Calculo.redondear2(Number(datos && datos.monto)), motivo: datos && datos.motivo, detalle: datos && datos.detalle, acepta: datos && datos.acepta === true };
+    var previas = repo.anticiposDe(s.clave), ventana = Prestaciones.ventanaAnticipo(hoyCaracas(ctx));
+    var v;
+    if (String(p.anticipoValidarDisponible || '').toUpperCase() === 'SI') {   // cuando el sistema tenga los aportes acreditados
+      v = Prestaciones.validarSolicitudAnticipo(sol, Prestaciones.resumenTrabajador(repo.aportesDe(s.clave), previas, parametrosPrestaciones(p)), emp, parametrosPrestaciones(p));
+    } else {                                                                  // hoy: el colaborador ve su disponible en el banco
+      v = Prestaciones.validarSolicitudBanco(sol, { empleado: emp, previas: previas, ventana: ventana, parametros: parametrosPrestaciones(p) });
+    }
     if (!v.ok) return err('VALIDACION', v.errores.join(' '));
     var a = {
       id: repo.nuevoId(), clave: s.clave, monto: sol.monto, motivo: sol.motivo, detalle: String(sol.detalle || '').trim(),
-      estado: 'PENDIENTE', creada: ctx.ahora(), decididaPor: '', motivoRechazo: '',
+      estado: 'PENDIENTE', creada: ctx.ahora(), decididaPor: '', motivoRechazo: '', ventana: ventana.clave, acepto: ctx.ahora(),
     };
     repo.guardarAnticipo(a);
     repo.log('ANTICIPO_SOLICITADO', s.clave, a.id + ' · ' + a.monto);
     return ok(vistaAnticipo(a));
+  }
+
+  /** Lo que ve el colaborador en Fideicomiso: la ventana actual, si puede solicitar y sus solicitudes. */
+  function datosAnticipo(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var ventana = Prestaciones.ventanaAnticipo(hoyCaracas(ctx)), anticipos = repo.anticiposDe(s.clave);
+    var actual = anticipos.filter(function (a) { return a.ventana === ventana.clave && a.estado !== 'CANCELADA'; })[0];
+    return ok({
+      ventana: ventana, motivos: Prestaciones.PARAMETROS.motivos, puedeSolicitar: !actual, actual: actual ? vistaAnticipo(actual) : null,
+      anticipos: anticipos.sort(function (a, b) { return b.creada - a.creada; }).map(vistaAnticipo),
+    });
+  }
+
+  /** RRHH: el banco rechazó el anticipo (por ejemplo, el monto superaba el disponible). */
+  function rechazarAnticipoBanco(repo, ctx, token, id, motivo) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var a = repo.anticipoPorId(id);
+    if (!a) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
+    if (a.estado !== 'EN_ARCHIVO') return err('TRANSICION', 'Solo se marca así una solicitud enviada al banco.');
+    return cambiarEstado(repo, ctx, a, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo || '').trim() || 'Rechazada por el banco: el monto supera el disponible.' });
   }
 
   function cancelarAnticipo(repo, ctx, token, id) {
@@ -707,7 +734,8 @@
   }
 
   function vistaAnticipo(a) {
-    return { id: a.id, monto: a.monto, motivo: a.motivo, detalle: a.detalle, estado: a.estado, creada: a.creada, motivoRechazo: a.motivoRechazo || '' };
+    return { id: a.id, monto: a.monto, motivo: a.motivo, detalle: a.detalle, estado: a.estado, creada: a.creada, motivoRechazo: a.motivoRechazo || '',
+      ventana: a.ventana || '', ventanaEtiqueta: Prestaciones.etiquetaVentana(a.ventana) };
   }
 
   function parametrosPrestaciones(p) {
@@ -717,6 +745,7 @@
   var api = {
     iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
     miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
+    datosAnticipo: datosAnticipo, rechazarAnticipoBanco: rechazarAnticipoBanco,
     bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
     generarArchivoAnticipos: generarArchivoAnticipos, marcarAnticiposPagados: marcarAnticiposPagados,
     cambiarEstadoCierre: cambiarEstadoCierre, leerToken: leerToken,

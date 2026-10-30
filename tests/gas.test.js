@@ -64,7 +64,7 @@ test('flujo completo sobre las hojas: cargar empleados, jefe, anticipo, constanc
   e.hojas.APORTES.appendRow(['V11111111', 2026, 1, 'AIV', 4000, 0, 3, 0, false, false]);
   e.hojas.CIERRES.appendRow([2026, 1, 'AIV', 'ACREDITADO', 'x', 0]);
   assert.equal(e.llamar({ action: 'estadoDeCuenta', token: ana }).data.resumen.disponible, 3000);
-  const sol = e.llamar({ action: 'solicitarAnticipo', token: ana, monto: 1000, motivo: 'Salud' });
+  const sol = e.llamar({ action: 'solicitarAnticipo', token: ana, monto: 1000, motivo: 'Salud', acepta: true });
   assert.equal(sol.ok, true, JSON.stringify(sol));
   assert.equal(e.llamar({ action: 'decidirAnticipo', token: admin, id: sol.data.id, aprobar: true }).ok, true);
   const arch = e.llamar({ action: 'archivoAnticipos', token: admin, empresa: 'AIV' });

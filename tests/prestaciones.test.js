@@ -42,3 +42,24 @@ test('transiciones permitidas', () => {
   assert.equal(P.puedePasar(P.SIGUIENTE_SOLICITUD, 'PENDIENTE', 'PAGADA'), false);
   assert.equal(P.puedePasar(P.SIGUIENTE_SOLICITUD, 'EN_ARCHIVO', 'PAGADA'), true);
 });
+
+test('ventana trimestral: en enero se solicita por el 4.º trimestre del año anterior', () => {
+  const v = P.ventanaAnticipo('2026-10-30');
+  assert.equal(v.clave, '2026-T3');
+  assert.equal(v.etiqueta, '3.er trimestre de 2026');
+  assert.deepEqual(v.siguiente, { clave: '2026-T4', etiqueta: '4.º trimestre de 2026', abre: '2027-01-01', mes: 'enero de 2027' });
+  assert.equal(P.ventanaAnticipo('2027-01-15').clave, '2026-T4');
+  assert.equal(P.ventanaAnticipo('2027-01-15').siguiente.mes, 'abril de 2027');
+  assert.equal(P.ventanaAnticipo('2027-05-02').clave, '2027-T1');
+});
+
+test('solicitud sin saldo en el sistema: monto, motivo, aceptación y una por ventana', () => {
+  const v = P.ventanaAnticipo('2026-10-30'), emp = { estado: 'Activo' };
+  const base = { monto: 1500, motivo: 'Vivienda', acepta: true };
+  assert.equal(P.validarSolicitudBanco(base, { empleado: emp, previas: [], ventana: v }).ok, true);
+  assert.match(P.validarSolicitudBanco({ ...base, acepta: false }, { empleado: emp, previas: [], ventana: v }).errores[0], /bajo tu responsabilidad/);
+  assert.equal(P.validarSolicitudBanco({ ...base, monto: 0 }, { empleado: emp, previas: [], ventana: v }).ok, false);
+  const ya = [{ ventana: '2026-T3', estado: 'RECHAZADA' }];
+  assert.match(P.validarSolicitudBanco(base, { empleado: emp, previas: ya, ventana: v }).errores[0], /Podrás hacer otra a partir de enero de 2027 \(4\.º trimestre de 2026\)/);
+  assert.equal(P.validarSolicitudBanco(base, { empleado: emp, previas: [{ ventana: '2026-T3', estado: 'CANCELADA' }], ventana: v }).ok, true);   // cancelada no cuenta
+});

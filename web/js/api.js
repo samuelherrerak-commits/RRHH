@@ -38,7 +38,7 @@ export async function llamar(action, datos = {}) {
  * Las consultas se guardan 1 minuto: al volver a una pantalla o al precargar no se espera otra vez al servidor.
  * Cualquier acción que cambia algo (solicitar, aprobar, cargar…) borra esta memoria.
  */
-const LECTURAS = new Set(['estadoDeCuenta', 'misConstancias', 'verificarConstancia', 'datosVacaciones', 'equipoVacaciones', 'bandejaAnticipos',
+const LECTURAS = new Set(['estadoDeCuenta', 'datosAnticipo', 'misConstancias', 'verificarConstancia', 'datosVacaciones', 'equipoVacaciones', 'bandejaAnticipos',
   'bandejaVacaciones', 'listarEmpleados', 'listarConstancias', 'listarUsuariosJefes', 'saldoVacacionesEmpleado']);
 const memoria = new Map();
 const VIGENCIA_MS = 60000;

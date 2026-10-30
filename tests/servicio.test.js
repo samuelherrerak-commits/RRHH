@@ -10,6 +10,7 @@ const filas = [
 
 function escenario() {
   const repo = crearRepo(filas), ctx = crearCtx();
+  repo.st.parametros.anticipoValidarDisponible = 'SI';   // estas pruebas cubren el modo con saldo en el sistema (75 %)
   // Esther: 4000 aportados y acreditados en T1 → disponible 3000
   repo.st.aportes.push({ clave: 'V12345678', anio: 2026, trimestre: 1, empresa: 'PCA', total: 4000 });
   repo.st.cierres['2026-1-PCA'] = { anio: 2026, trimestre: 1, empresa: 'PCA', estado: 'ACREDITADO' };
@@ -610,4 +611,36 @@ test('importar el cierre: la fila sin cédula se asigna por nombre exacto; si no
   assert.deepEqual(r.sinIdentificar, ['NADIE CONOCIDO']);
   const t = S.iniciarSesion(repo, ctx, '8542390').data.token;          // entra con su cédula real
   assert.equal(S.datosVacaciones(repo, ctx, t).data.saldo.total, 22);
+});
+
+test('anticipo sin saldo: una por trimestre; si el banco la rechaza, la próxima es en enero 2027', () => {
+  const repo = crearRepo(filas), ctx = crearCtx(Date.UTC(2026, 9, 30, 15));
+  repo.st.usuarios['99999999'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
+  const rrhh = S.iniciarSesionAdmin(repo, ctx, '99999999', 'k').data.token;
+  let t = S.iniciarSesion(repo, ctx, '12345678').data.token;
+  let d = S.datosAnticipo(repo, ctx, t).data;
+  assert.equal(d.puedeSolicitar, true);
+  assert.equal(d.ventana.etiqueta, '3.er trimestre de 2026');
+  assert.match(S.solicitarAnticipo(repo, ctx, t, { monto: 50000, motivo: 'Vivienda' }).message, /bajo tu responsabilidad/);
+  const a = S.solicitarAnticipo(repo, ctx, t, { monto: 50000, motivo: 'Vivienda', acepta: true });     // sin tope del sistema
+  assert.equal(a.ok, true, a.message);
+  assert.equal(a.data.ventanaEtiqueta, '3.er trimestre de 2026');
+  assert.match(S.solicitarAnticipo(repo, ctx, t, { monto: 10, motivo: 'Salud', acepta: true }).message, /Ya enviaste/);
+  // RRHH la aprueba y la manda al banco; el banco la rechaza
+  S.decidirAnticipo(repo, ctx, rrhh, a.data.id, true);
+  S.generarArchivoAnticipos(repo, ctx, rrhh, 'PCA');
+  assert.equal(S.rechazarAnticipoBanco(repo, ctx, t, a.data.id).code, 'SESION');
+  const r = S.rechazarAnticipoBanco(repo, ctx, rrhh, a.data.id);
+  assert.equal(r.data.estado, 'RECHAZADA');
+  assert.match(r.data.motivoRechazo, /supera el disponible/);
+  d = S.datosAnticipo(repo, ctx, t).data;
+  assert.equal(d.puedeSolicitar, false);
+  assert.equal(d.ventana.siguiente.mes, 'enero de 2027');
+  // en enero de 2027 puede solicitar otra (por el 4.º trimestre de 2026)
+  ctx.reloj.t = Date.UTC(2027, 0, 5, 15);
+  t = S.iniciarSesion(repo, ctx, '12345678').data.token;
+  d = S.datosAnticipo(repo, ctx, t).data;
+  assert.equal(d.puedeSolicitar, true);
+  assert.equal(d.ventana.etiqueta, '4.º trimestre de 2026');
+  assert.equal(S.solicitarAnticipo(repo, ctx, t, { monto: 20000, motivo: 'Salud', acepta: true }).ok, true);
 });

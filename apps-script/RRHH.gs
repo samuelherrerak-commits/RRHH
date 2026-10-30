@@ -598,7 +598,7 @@ var Prestaciones = (function () {
       var SIGUIENTE_SOLICITUD = {
         PENDIENTE: ['APROBADA', 'RECHAZADA', 'CANCELADA'],
         APROBADA: ['EN_ARCHIVO', 'RECHAZADA'],
-        EN_ARCHIVO: ['PAGADA', 'APROBADA'],   // enviada al banco; se puede devolver
+        EN_ARCHIVO: ['PAGADA', 'APROBADA', 'RECHAZADA'],   // enviada al banco; se puede devolver, o el banco la rechaza
         PAGADA: [], RECHAZADA: [], CANCELADA: [],
       };
     
@@ -647,7 +647,52 @@ var Prestaciones = (function () {
         return { ok: e.length === 0, errores: e };
       }
     
+      /* ---------- Ventana trimestral de solicitudes (sin saldo en el sistema: el colaborador lo ve en su banco) ---------- */
+    
+      var ORDINAL = { 1: '1.er', 2: '2.º', 3: '3.er', 4: '4.º' };
+      var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    
+      /** '2026-T4' → '4.º trimestre de 2026' */
+      function etiquetaVentana(clave) {
+        var m = /^(\d{4})-T([1-4])$/.exec(String(clave || ''));
+        return m ? ORDINAL[m[2]] + ' trimestre de ' + m[1] : '';
+      }
+    
+      /**
+       * Cada trimestre calendario se puede enviar UNA solicitud, y corresponde al trimestre anterior
+       * (en enero de 2027 se solicita por el 4.º trimestre de 2026). hoy: 'AAAA-MM-DD'.
+       */
+      function ventanaAnticipo(hoy) {
+        var y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7)), q = Math.ceil(m / 3);
+        var vy = q === 1 ? y - 1 : y, vq = q === 1 ? 4 : q - 1;
+        var sy = q === 4 ? y + 1 : y, sq = q === 4 ? 1 : q + 1;          // próxima ventana (calendario)
+        var mesProx = (sq - 1) * 3;                                      // 0 = enero
+        var clave = vy + '-T' + vq, siguiente = (q === 4 ? y : sy) + '-T' + q;
+        return {
+          clave: clave, etiqueta: etiquetaVentana(clave),
+          siguiente: { clave: siguiente, etiqueta: etiquetaVentana(siguiente), abre: sy + '-' + ('0' + (mesProx + 1)).slice(-2) + '-01', mes: MESES[mesProx] + ' de ' + sy },
+        };
+      }
+    
+      /**
+       * Solicitud sin saldo en el sistema: monto y motivo, aceptación de responsabilidad y una por ventana.
+       * c: { empleado, previas (anticipos del colaborador), ventana, parametros }
+       */
+      function validarSolicitudBanco(sol, c) {
+        var p = Object.assign({}, PARAMETROS, c.parametros || {}), e = [];
+        if (!c.empleado || c.empleado.estado === 'Inactivo') e.push('El empleado no está activo.');
+        var monto = Number(sol.monto);
+        if (!isFinite(monto) || monto <= 0) e.push('Escribe el monto que quieres solicitar.');
+        if (p.motivos.indexOf(sol.motivo) === -1) e.push('Elige el motivo.');
+        if (sol.motivo === 'Otro' && !String(sol.detalle || '').trim()) e.push('Explica el motivo.');
+        if (sol.acepta !== true) e.push('Debes confirmar que revisaste tu disponible en el banco y que envías el monto bajo tu responsabilidad.');
+        var ya = (c.previas || []).filter(function (a) { return a.ventana === c.ventana.clave && a.estado !== 'CANCELADA'; })[0];
+        if (ya) e.unshift('Ya enviaste tu solicitud del ' + c.ventana.etiqueta + '. Podrás hacer otra a partir de ' + c.ventana.siguiente.mes + ' (' + c.ventana.siguiente.etiqueta + ').');
+        return { ok: e.length === 0, errores: e };
+      }
+    
       var api = {
+        etiquetaVentana: etiquetaVentana, ventanaAnticipo: ventanaAnticipo, validarSolicitudBanco: validarSolicitudBanco,
         PARAMETROS: PARAMETROS, ESTADOS_CIERRE: ESTADOS_CIERRE,
         SIGUIENTE_CIERRE: SIGUIENTE_CIERRE, SIGUIENTE_SOLICITUD: SIGUIENTE_SOLICITUD,
         puedePasar: puedePasar, resumenTrabajador: resumenTrabajador,
@@ -1200,18 +1245,45 @@ var Servicio = (function () {
       function solicitarAnticipo(repo, ctx, token, datos) {
         var s = leerToken(ctx, token, ['TRABAJADOR']);
         if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
-        var emp = repo.empleadoPorClave(s.clave);
-        var resumen = Prestaciones.resumenTrabajador(repo.aportesDe(s.clave), repo.anticiposDe(s.clave), parametrosPrestaciones(repo.parametros()));
-        var sol = { monto: Calculo.redondear2(Number(datos && datos.monto)), motivo: datos && datos.motivo, detalle: datos && datos.detalle };
-        var v = Prestaciones.validarSolicitudAnticipo(sol, resumen, emp, parametrosPrestaciones(repo.parametros()));
+        var emp = repo.empleadoPorClave(s.clave), p = repo.parametros();
+        var sol = { monto: Calculo.redondear2(Number(datos && datos.monto)), motivo: datos && datos.motivo, detalle: datos && datos.detalle, acepta: datos && datos.acepta === true };
+        var previas = repo.anticiposDe(s.clave), ventana = Prestaciones.ventanaAnticipo(hoyCaracas(ctx));
+        var v;
+        if (String(p.anticipoValidarDisponible || '').toUpperCase() === 'SI') {   // cuando el sistema tenga los aportes acreditados
+          v = Prestaciones.validarSolicitudAnticipo(sol, Prestaciones.resumenTrabajador(repo.aportesDe(s.clave), previas, parametrosPrestaciones(p)), emp, parametrosPrestaciones(p));
+        } else {                                                                  // hoy: el colaborador ve su disponible en el banco
+          v = Prestaciones.validarSolicitudBanco(sol, { empleado: emp, previas: previas, ventana: ventana, parametros: parametrosPrestaciones(p) });
+        }
         if (!v.ok) return err('VALIDACION', v.errores.join(' '));
         var a = {
           id: repo.nuevoId(), clave: s.clave, monto: sol.monto, motivo: sol.motivo, detalle: String(sol.detalle || '').trim(),
-          estado: 'PENDIENTE', creada: ctx.ahora(), decididaPor: '', motivoRechazo: '',
+          estado: 'PENDIENTE', creada: ctx.ahora(), decididaPor: '', motivoRechazo: '', ventana: ventana.clave, acepto: ctx.ahora(),
         };
         repo.guardarAnticipo(a);
         repo.log('ANTICIPO_SOLICITADO', s.clave, a.id + ' · ' + a.monto);
         return ok(vistaAnticipo(a));
+      }
+    
+      /** Lo que ve el colaborador en Fideicomiso: la ventana actual, si puede solicitar y sus solicitudes. */
+      function datosAnticipo(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var ventana = Prestaciones.ventanaAnticipo(hoyCaracas(ctx)), anticipos = repo.anticiposDe(s.clave);
+        var actual = anticipos.filter(function (a) { return a.ventana === ventana.clave && a.estado !== 'CANCELADA'; })[0];
+        return ok({
+          ventana: ventana, motivos: Prestaciones.PARAMETROS.motivos, puedeSolicitar: !actual, actual: actual ? vistaAnticipo(actual) : null,
+          anticipos: anticipos.sort(function (a, b) { return b.creada - a.creada; }).map(vistaAnticipo),
+        });
+      }
+    
+      /** RRHH: el banco rechazó el anticipo (por ejemplo, el monto superaba el disponible). */
+      function rechazarAnticipoBanco(repo, ctx, token, id, motivo) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var a = repo.anticipoPorId(id);
+        if (!a) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
+        if (a.estado !== 'EN_ARCHIVO') return err('TRANSICION', 'Solo se marca así una solicitud enviada al banco.');
+        return cambiarEstado(repo, ctx, a, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo || '').trim() || 'Rechazada por el banco: el monto supera el disponible.' });
       }
     
       function cancelarAnticipo(repo, ctx, token, id) {
@@ -1804,7 +1876,8 @@ var Servicio = (function () {
       }
     
       function vistaAnticipo(a) {
-        return { id: a.id, monto: a.monto, motivo: a.motivo, detalle: a.detalle, estado: a.estado, creada: a.creada, motivoRechazo: a.motivoRechazo || '' };
+        return { id: a.id, monto: a.monto, motivo: a.motivo, detalle: a.detalle, estado: a.estado, creada: a.creada, motivoRechazo: a.motivoRechazo || '',
+          ventana: a.ventana || '', ventanaEtiqueta: Prestaciones.etiquetaVentana(a.ventana) };
       }
     
       function parametrosPrestaciones(p) {
@@ -1814,6 +1887,7 @@ var Servicio = (function () {
       var api = {
         iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
         miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
+        datosAnticipo: datosAnticipo, rechazarAnticipoBanco: rechazarAnticipoBanco,
         bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
         generarArchivoAnticipos: generarArchivoAnticipos, marcarAnticiposPagados: marcarAnticiposPagados,
         cambiarEstadoCierre: cambiarEstadoCierre, leerToken: leerToken,
@@ -1842,7 +1916,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.8';
+var VERSION = '2026-10-30.9';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
@@ -1862,7 +1936,7 @@ var HOJAS = {
   EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
-  ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
+  ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo', 'ventana', 'acepto'],
   CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
@@ -1902,6 +1976,7 @@ var FERIADOS_INICIALES = [
 ];
 
 var RUTAS_TRABAJADOR = {
+  datosAnticipo: function (repo, ctx, d) { return Servicio.datosAnticipo(repo, ctx, d.token); },
   datosVacaciones: function (repo, ctx, d) { return Servicio.datosVacaciones(repo, ctx, d.token); },
   solicitarVacaciones: function (repo, ctx, d) { return Servicio.solicitarVacaciones(repo, ctx, d.token, d); },
   cancelarVacaciones: function (repo, ctx, d) { return Servicio.cancelarVacaciones(repo, ctx, d.token, d.id); },
@@ -1920,6 +1995,7 @@ var RUTAS_RRHH = {
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
   listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
+  rechazarAnticipoBanco: function (repo, ctx, d) { return Servicio.rechazarAnticipoBanco(repo, ctx, d.token, d.id, d.motivo); },
   bandejaVacaciones: function (repo, ctx, d) { return Servicio.bandejaVacaciones(repo, ctx, d.token, d.estado); },
   registrarVacaciones: function (repo, ctx, d) { return Servicio.registrarVacaciones(repo, ctx, d.token, d.id, d.nomina); },
   rechazarVacacionesRRHH: function (repo, ctx, d) { return Servicio.rechazarVacacionesRRHH(repo, ctx, d.token, d.id, d.motivo); },
@@ -1947,7 +2023,7 @@ var RUTAS_RRHH = {
  * Las que escriben se hacen de una en una para no pisarse.
  */
 var LECTURAS = {
-  login: 1, loginAdmin: 1, estadoDeCuenta: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
+  login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
 };
 
@@ -2125,7 +2201,7 @@ function anticipo_(f) {
   return {
     _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), monto: Number(f.monto), motivo: texto_(f.motivo),
     detalle: texto_(f.detalle), estado: texto_(f.estado), creada: Number(f.creada) || 0, actualizada: Number(f.actualizada) || 0,
-    decididaPor: texto_(f.decididaPor), motivoRechazo: texto_(f.motivoRechazo),
+    decididaPor: texto_(f.decididaPor), motivoRechazo: texto_(f.motivoRechazo), ventana: texto_(f.ventana), acepto: Number(f.acepto) || 0,
   };
 }
 
