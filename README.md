@@ -1,4 +1,4 @@
-# SADS · Sistema de Atención de Solicitudes (Gestión Humana · Prosein, Austral y Mil Cerámicas)
+# CADS · Centro de Atención de Solicitudes (Gestión Humana · Prosein, Austral y Mil Cerámicas)
 
 Sistema de recursos humanos: aporte trimestral al fideicomiso y portal del trabajador.
 

@@ -1,4 +1,4 @@
-/* SADS · Sistema de Atención de Solicitudes (Prosein · Austral · Mil Cerámicas).
+/* CADS · Centro de Atención de Solicitudes (Prosein · Austral · Mil Cerámicas).
    Marca en negro (neutral para las tres empresas); el rojo queda solo para errores y rechazos. */
 :root {
   --marca: #141618; --marca-hondo: #000000; --marca-2: #2A2D31; --marca-velo: #ECEDEE;
@@ -144,7 +144,7 @@ dialog form { display: grid; gap: var(--s4); }
 @keyframes brillo { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 @media (prefers-reduced-motion: reduce) { .esq-tarjeta span { animation: none; } }
 
-/* ================= SADS: encabezado, entrada y vista de computadora ================= */
+/* ================= CADS: encabezado, entrada y vista de computadora ================= */
 .marca b { display: block; font-size: 20px; letter-spacing: .12em; }
 .marca small { font-weight: 400; opacity: .7; letter-spacing: 0; }
 .cabecera-der { display: flex; align-items: center; gap: var(--s3); }
@@ -211,11 +211,11 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 .pestanas .lateral-titulo { display: none; }
 @media (min-width: 1024px) { .layout .pestanas .lateral-titulo { display: block; } }
 
-/* ---- Logo del sistema (SA/DS) ---- */
+/* ---- Logo del sistema (CA/DS) ---- */
 .marca { display: flex; align-items: center; gap: var(--s3); }
 .marca-logo { width: 36px; height: 36px; border-radius: 9px; flex: none; }
 
-/* ---- Sugerencia «Instalar SADS» ---- */
+/* ---- Sugerencia «Instalar CADS» ---- */
 .sugerir-instalar { position: fixed; z-index: 20; left: var(--s3); right: var(--s3); bottom: calc(var(--s3) + env(safe-area-inset-bottom));
   display: grid; grid-template-columns: auto 1fr; gap: var(--s3); align-items: center; background: #fff; border: 1px solid var(--linea);
   border-radius: var(--radio); padding: var(--s4); box-shadow: 0 12px 40px rgb(20 22 24 / .18); animation: subir 260ms var(--ease); }

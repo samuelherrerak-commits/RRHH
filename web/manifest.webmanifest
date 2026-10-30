@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "SADS · Sistema de Atención de Solicitudes",
-  "short_name": "SADS",
+  "name": "CADS · Centro de Atención de Solicitudes",
+  "short_name": "CADS",
   "description": "Gestión Humana · Prosein, Austral y Mil Cerámicas: constancias de trabajo, vacaciones y más.",
   "start_url": "./",
   "scope": "./",
