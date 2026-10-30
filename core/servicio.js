@@ -21,7 +21,7 @@
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
-  var MAX_FALLOS_GLOBAL = 60;
+  var MAX_FALLOS_GLOBAL = 400;   // freno a quien prueba cédulas al azar; alto para que los errores de tipeo de 150 personas no bloqueen a todos
 
   function ok(data) { return { ok: true, data: data }; }
   function err(code, message) { return { ok: false, code: code, message: message }; }

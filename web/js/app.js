@@ -179,11 +179,11 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
 }
 
 /** Mientras la persona ve su inicio, se piden en segundo plano los datos de cada tarjeta. */
-function precargarTrabajador(tk = {}) {
-  precargar('equipoVacaciones', tk);
-  precargar('datosVacaciones', tk);
-  precargar('misConstancias', tk);
-  precargar('datosAnticipo', tk);
+async function precargarTrabajador(tk = {}) {
+  // De una en una: así cada persona ocupa un solo cupo de Google a la vez (el límite es 30 simultáneas).
+  for (const accion of ['datosVacaciones', 'misConstancias', 'datosAnticipo', 'equipoVacaciones']) {
+    await obtener(accion, tk).catch(() => {});
+  }
 }
 
 /** Bloques grises animados mientras llega la respuesta (se nota menos la espera que con un texto). */

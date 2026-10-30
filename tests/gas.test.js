@@ -253,3 +253,17 @@ test('fideicomiso sobre las hojas: cerrar aporte sin duplicar, archivo y cancela
   assert.match(e.llamar({ action: 'archivoCancelaciones', token: t, empresa: 'PCA' }).data.csv, /V;11111111;ESTHER LILIA RODRIGUEZ HERNANDEZ;05\/03\/2025;15\/10\/2026;/);
   assert.equal(e.llamar({ action: 'listarCancelaciones', token: t }).data[0].estado, 'EN_ARCHIVO');
 });
+
+test('una lectura que se cruza con una escritura no deja una copia vieja en la caché', () => {
+  const e = crearEntorno();
+  e.ejecutar('configurarInicial');
+  const correr = (codigo) => vm.runInContext(codigo, e.ctx);
+  // Lector: toma la versión y lee la hoja (aún sin el cambio).
+  correr("memo_ = {}; var preLector = prefijoCache_('PARAMETROS'); var viejos = hoja_('PARAMETROS').getDataRange().getValues();");
+  // Escritor: guarda y marca la hoja como cambiada.
+  correr("memo_ = {}; invalidar_('PARAMETROS');");
+  // El lector termina y guarda su copia vieja.
+  correr('guardarCache_(preLector, viejos);');
+  // La siguiente petición no debe usarla.
+  assert.equal(correr("memo_ = {}; leerCache_('PARAMETROS')"), null);
+});

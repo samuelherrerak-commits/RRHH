@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-31.1';
+var VERSION = '2026-11-02.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
 
@@ -139,7 +139,10 @@ function doPost(e) {
   memo_ = {}; constanciasCache = null;   // en Google cada petición empieza de cero; así también en el simulador
   try {
     var d = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (!LECTURAS[d.action]) { lock.waitLock(20000); bloqueado = true; }
+    if (!LECTURAS[d.action]) {
+      if (!lock.tryLock(15000)) return salida_({ ok: false, code: 'OCUPADO', message: 'Hay muchas solicitudes guardándose en este momento. Intenta de nuevo en unos segundos.' });
+      bloqueado = true;
+    }
     // Filtro básico: el sitio envía este token. No es un secreto (va en config.js), solo frena visitas al azar.
     var esperado = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
     if (esperado && d.api_token !== esperado) return salida_({ ok: false, code: 'TOKEN', message: 'Acceso no autorizado.' });
@@ -218,23 +221,34 @@ function valores_(nombre) {
   if (memo_[nombre]) return memo_[nombre];
   var vals = CACHEABLES[nombre] ? leerCache_(nombre) : null;
   if (!vals) {
+    var pre = CACHEABLES[nombre] ? prefijoCache_(nombre) : '';   // versión ANTES de leer: si alguien escribe mientras, esta copia queda en una versión vieja que nadie usa
     vals = hoja_(nombre).getDataRange().getValues();
-    if (CACHEABLES[nombre]) guardarCache_(nombre, vals);
+    if (CACHEABLES[nombre]) guardarCache_(pre, vals);
   }
   return (memo_[nombre] = vals);
 }
 
 function leerCache_(nombre) {
   try {
-    var c = CacheService.getScriptCache(), partes = Number(c.get('hoja:' + nombre + ':partes'));
+    var c = CacheService.getScriptCache(), pre = prefijoCache_(nombre), partes = Number(c.get(pre + 'partes'));
     if (!partes) return null;
     var txt = '';
-    for (var i = 0; i < partes; i++) { var p = c.get('hoja:' + nombre + ':' + i); if (p == null) return null; txt += p; }
+    for (var i = 0; i < partes; i++) { var p = c.get(pre + i); if (p == null) return null; txt += p; }
     return JSON.parse(txt);
   } catch (e) { return null; }
 }
 
-function guardarCache_(nombre, vals) {
+/** Cada hoja tiene un número de versión en la caché; escribir en ella lo cambia y así nunca se usa una copia vieja. */
+function prefijoCache_(nombre) {
+  if (!memo_['v:' + nombre]) {
+    var v = null;
+    try { v = CacheService.getScriptCache().get('ver:' + nombre); } catch (e) { /* sin caché */ }
+    memo_['v:' + nombre] = v || '0';
+  }
+  return 'hoja:' + nombre + ':' + memo_['v:' + nombre] + ':';
+}
+
+function guardarCache_(pre, vals) {
   try {
     var txt = JSON.stringify(vals, function (k, v) {
       var o = this[k];
@@ -242,14 +256,14 @@ function guardarCache_(nombre, vals) {
     });
     if (txt.length > CACHE_TROZO * 50) return;   // demasiado grande: se lee siempre de la hoja
     var c = CacheService.getScriptCache(), n = Math.ceil(txt.length / CACHE_TROZO) || 1;
-    for (var i = 0; i < n; i++) c.put('hoja:' + nombre + ':' + i, txt.slice(i * CACHE_TROZO, (i + 1) * CACHE_TROZO), CACHE_SEGUNDOS);
-    c.put('hoja:' + nombre + ':partes', String(n), CACHE_SEGUNDOS);
+    for (var i = 0; i < n; i++) c.put(pre + i, txt.slice(i * CACHE_TROZO, (i + 1) * CACHE_TROZO), CACHE_SEGUNDOS);
+    c.put(pre + 'partes', String(n), CACHE_SEGUNDOS);
   } catch (e) { /* sin caché: no pasa nada, se lee de la hoja */ }
 }
 
 function invalidar_(nombre) {
-  delete memo_[nombre];
-  if (CACHEABLES[nombre]) try { CacheService.getScriptCache().remove('hoja:' + nombre + ':partes'); } catch (e) { /* sin caché */ }
+  delete memo_[nombre]; delete memo_['v:' + nombre];
+  if (CACHEABLES[nombre]) try { CacheService.getScriptCache().put('ver:' + nombre, String(Date.now()) + Math.floor(Math.random() * 1000), CACHE_SEGUNDOS); } catch (e) { /* sin caché */ }
 }
 
 function invalidarTodo_() { Object.keys(HOJAS).forEach(invalidar_); memo_ = {}; }

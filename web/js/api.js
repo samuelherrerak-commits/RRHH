@@ -12,10 +12,26 @@ const MENSAJES = {
   NETWORK: 'No hay conexión. Revisa tu internet e intenta de nuevo.',
   TIMEOUT: 'El servidor tardó demasiado. Intenta de nuevo.',
   SERVER: 'El servidor respondió algo inesperado. Intenta de nuevo en unos segundos.',
+  OCUPADO: 'El sistema está atendiendo a muchas personas en este momento. Intenta de nuevo en unos segundos.',
 };
 
-/** POST de texto plano al Web App (evita el preflight CORS). Siempre resuelve { ok, data } o { ok:false, code, message }. */
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Google atiende hasta 30 peticiones a la vez; si se pasa responde una página de error (no JSON).
+ * Las consultas se reintentan solas con una pausa; las que guardan no, para no enviar nada dos veces.
+ */
 export async function llamar(action, datos = {}) {
+  const reintentos = LECTURAS_SET().has(action) || action === 'login' ? 2 : 0;
+  for (let i = 0; ; i++) {
+    const r = await llamarUnaVez(action, datos);
+    if (r.code !== 'OCUPADO' || i >= reintentos) return r;
+    await espera(1500 * (i + 1) + Math.random() * 1500);
+  }
+}
+
+/** POST de texto plano al Web App (evita el preflight CORS). Siempre resuelve { ok, data } o { ok:false, code, message }. */
+async function llamarUnaVez(action, datos) {
   if (!LECTURAS_SET().has(action)) memoria.clear();
   const s = sesion.leer();
   const cuerpo = { action, api_token: CONFIG.API_TOKEN, ...(s && !('token' in datos) ? { token: s.token } : {}), ...datos };
@@ -23,7 +39,8 @@ export async function llamar(action, datos = {}) {
   const reloj = setTimeout(() => control.abort(), CONFIG.TIMEOUT_MS);
   try {
     const r = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(cuerpo), signal: control.signal });
-    const j = await r.json();
+    let j;
+    try { j = await r.json(); } catch { return { ok: false, code: 'OCUPADO', message: MENSAJES.OCUPADO }; }   // página de error de Google (saturado)
     if (!j || typeof j.ok !== 'boolean') return { ok: false, code: 'SERVER', message: MENSAJES.SERVER };
     if (!j.ok && j.code === 'SESION') sesion.borrar();
     return j;
