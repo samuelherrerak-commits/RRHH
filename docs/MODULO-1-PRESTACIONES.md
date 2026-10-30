@@ -1,4 +1,19 @@
-# Módulo 1 · Prestaciones sociales
+# Módulo 1 · Fideicomiso (prestaciones sociales)
+
+En el panel de RRHH es una sola pestaña **Fideicomiso** con tres submódulos: **Aportes**, **Anticipos** y **Cancelaciones**.
+
+## Aportes (trimestrales)
+1. Elegir año, trimestre y empresa (PCA/AIV) y subir el Excel con **nombre** y **monto** ganado en el trimestre (.xlsx o .csv).
+2. **Vista previa** (no guarda): cruce por nombre (exacto o sugerencias a confirmar), alertas agrupadas (nombres sin empleado, activos sin monto, sin fecha de ingreso, montos en cero, filas repetidas), nuevos ingresos y retirados frente al trimestre anterior, y el cálculo de cada persona. Se pueden **forzar los días adicionales** y recalcular.
+3. **Cerrar aporte**: se recalcula en el servidor y se guarda en `APORTES`; el cierre queda CERRADO. No se duplica: reemplazarlo exige «Reabrir y reemplazar»; uno **acreditado** no se toca.
+4. Archivos: **NOMINA APORTES** (todos, TIPO T = 1) y **nuevos ingresos** (mismo diseño, solo nuevos).
+5. **Marcar acreditado por el banco** → desde ahí el aporte cuenta para el estado de cuenta del colaborador.
+- Primer aporte de una empresa en el sistema: no hay trimestre anterior; solo son «nuevos» quienes ingresaron en el trimestre y no se detectan retirados.
+
+## Cancelaciones (empleados retirados)
+- Candidatos: empleados **inactivos** con aportes en el sistema y sin cancelación registrada (con su total aportado).
+- RRHH registra **fecha de egreso** y, si lo define, el **monto a cancelar** → archivo por empresa (cédula, nombre, ingreso, egreso, monto; formato por confirmar con el banco) → «En el banco» → **Procesada**. Se puede anular mientras está por enviar. Hoja `CANCELACIONES`.
+
 
 ## Hoy: solo solicitudes de anticipo (sin saldo en el sistema)
 1. **RRHH abre la solicitud** (pestaña Anticipos): trimestre, **fecha de inicio** y **fecha final** (hoja `APERTURAS_ANTICIPO`). Puede programar la siguiente, cambiar fechas (por ejemplo, cerrarla antes) o eliminarla si aún no tiene solicitudes. Un trimestre se abre una sola vez y las aperturas no se cruzan.

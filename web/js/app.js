@@ -492,23 +492,23 @@ async function vistaRRHH() {
   btnSalir.hidden = false;
   const miCuenta = !!(sesion.leer() || {}).tokenTrabajador;
   const miEquipo = !!(sesion.leer() || {}).esJefe && !miCuenta;   // si es empleado, su equipo está en «Mi cuenta»
-  if (pestana === 'solicitudes' || pestana === 'banco') pestana = 'anticipos';
+  if (['solicitudes', 'banco', 'anticipos', 'cierres'].includes(pestana)) { subFide = pestana === 'cierres' ? 'aportes' : 'anticipos'; pestana = 'fideicomiso'; }
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['anticipos', 'Anticipos'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel" class="contenido"></div></div>`;
   app.querySelectorAll('.pestana').forEach((b) => b.addEventListener('click', () => { pestana = b.dataset.p; vistaRRHH(); }));
   const panel = app.querySelector('#panel');
-  if (pestana === 'anticipos') return panelAnticipos(panel);
+  if (pestana === 'fideicomiso') return panelFideicomiso(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'vacaciones') return panelVacaciones(panel);
   if (pestana === 'miequipo') return vistaCuenta(panel, '', 'equipo');
   if (pestana === 'micuenta') return vistaCuenta(panel, sesion.leer().tokenTrabajador);
-  return panelCierres(panel);
+  return panelVacaciones(panel);
 }
 
 const tarjetaAnticipo = (a, acciones = '') => `
@@ -522,6 +522,238 @@ function descargar(nombre, texto) {
   const url = URL.createObjectURL(new Blob(['﻿' + texto], { type: 'text/csv;charset=utf-8' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: nombre });
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ---------- RRHH: Fideicomiso (Aportes · Anticipos · Cancelaciones) ---------- */
+
+let subFide = 'aportes';
+const SUBMODULOS = [['aportes', 'Aportes'], ['anticipos', 'Anticipos'], ['cancelaciones', 'Cancelaciones']];
+
+function panelFideicomiso(panel) {
+  panel.innerHTML = `<div class="submodulos" role="tablist">${SUBMODULOS.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subFide}">${t}</button>`).join('')}</div><div id="sub"></div>`;
+  panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subFide = b.dataset.sub; panelFideicomiso(panel); }));
+  const sub = panel.querySelector('#sub');
+  if (subFide === 'anticipos') return panelAnticipos(sub);
+  if (subFide === 'cancelaciones') return panelCancelaciones(sub);
+  return panelAportes(sub);
+}
+
+/* ---- Aportes trimestrales ---- */
+
+const ESTADO_APORTE = { '': ['Sin aporte', 'neutro'], ABIERTO: ['Reabierto', 'espera'], CERRADO: ['Cerrado', 'austral'], ACREDITADO: ['Acreditado por el banco', 'ok'] };
+// Por defecto, el trimestre que acaba de terminar (en enero: el 4.º del año anterior)
+const periodoAporte = (() => { const h = new Date(), q = Math.ceil((h.getMonth() + 1) / 3); return q === 1 ? { anio: h.getFullYear() - 1, trimestre: 4, empresa: 'PCA' } : { anio: h.getFullYear(), trimestre: q - 1, empresa: 'PCA' }; })();
+let borradorAporte = null;   // { filas, forzados, vista } mientras se revisa la vista previa
+
+/** Lee el Excel del aporte: columnas «nombre» y «monto» (por título o, si no hay, las dos primeras). */
+async function leerExcelAporte(archivo) {
+  const XLSX = await cargarXlsx();
+  const libro = await leerLibro(archivo);
+  const m = XLSX.utils.sheet_to_json(libro.Sheets[libro.SheetNames[0]], { header: 1, raw: true, defval: '' });
+  const norm = (x) => window.Empleados.normalizarNombre(x);
+  let fila0 = m.findIndex((r) => r.some((c) => /NOMBRE|EMPLEADO|TRABAJADOR/.test(norm(c))) && r.some((c) => /MONTO|TOTAL|DEVENGADO|GANADO|SALARIO/.test(norm(c))));
+  let iN = 0, iM = 1;
+  if (fila0 !== -1) { iN = m[fila0].findIndex((c) => /NOMBRE|EMPLEADO|TRABAJADOR/.test(norm(c))); iM = m[fila0].findIndex((c) => /MONTO|TOTAL|DEVENGADO|GANADO|SALARIO/.test(norm(c))); }
+  return m.slice(fila0 + 1).map((r) => ({ nombre: String(r[iN] ?? '').trim(), monto: typeof r[iM] === 'number' ? r[iM] : leerMonto(r[iM]) }))
+    .filter((f) => f.nombre && !/^TOTAL/i.test(f.nombre) && Number.isFinite(f.monto));
+}
+
+async function panelAportes(panel) {
+  const P = periodoAporte;
+  panel.innerHTML = `<section class="tarjeta">
+      <div class="fila">
+        <label class="grow">Año <input id="ap-anio" type="number" min="2020" max="2100" value="${P.anio}"></label>
+        <label class="grow">Trimestre <select id="ap-trim">${[1, 2, 3, 4].map((q) => `<option value="${q}" ${q === P.trimestre ? 'selected' : ''}>${['', '1.er', '2.º', '3.er', '4.º'][q]} trimestre</option>`).join('')}</select></label>
+        <label class="grow">Empresa <select id="ap-emp"><option value="PCA">Prosein (PCA)</option><option value="AIV" ${P.empresa === 'AIV' ? 'selected' : ''}>Austral (AIV)</option></select></label>
+      </div></section><div id="ap-cuerpo">${esqueleto(2)}</div>`;
+  const cambiar = () => { P.anio = Number(panel.querySelector('#ap-anio').value); P.trimestre = Number(panel.querySelector('#ap-trim').value); P.empresa = panel.querySelector('#ap-emp').value; borradorAporte = null; panelAportes(panel); };
+  ['#ap-anio', '#ap-trim', '#ap-emp'].forEach((q) => panel.querySelector(q).addEventListener('change', cambiar));
+  const cuerpo = panel.querySelector('#ap-cuerpo');
+  if (borradorAporte && borradorAporte.clavePeriodo === JSON.stringify(P)) return pintarVistaAporte(cuerpo, panel);
+  const r = await obtener('estadoAporte', { ...P });
+  if (!r.ok) { cuerpo.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const d = r.data, [et, tono] = ESTADO_APORTE[d.estado] || ESTADO_APORTE[''];
+  const etiqueta = `${['', '1.er', '2.º', '3.er', '4.º'][P.trimestre]} trimestre de ${P.anio} · ${P.empresa}`;
+  const cerrado = d.estado === 'CERRADO' || d.estado === 'ACREDITADO';
+  cuerpo.innerHTML = `<div class="dos-col der-angosta"><div class="col">
+    <section class="tarjeta">
+      <div class="item-cab"><div><h2>Aporte del ${etiqueta}</h2>${d.actualizado ? `<p class="suave">Actualizado el ${fechaHora(d.actualizado)}</p>` : ''}</div><span class="chip chip-${tono}">${et}</span></div>
+      ${cerrado ? `<div class="cifras"><div class="cifra"><b>${d.totales.personas}</b><span>Personas</span></div><div class="cifra"><b>${bs(d.totales.total)}</b><span>Total del aporte</span></div><div class="cifra"><b>${d.totales.nuevos}</b><span>Nuevos ingresos</span></div></div>
+        <div class="fila"><button class="btn" data-arch="NOMINA">Descargar NOMINA APORTES</button><button class="btn btn-sec" data-arch="NUEVOS" ${d.totales.nuevos ? '' : 'disabled'}>Descargar nuevos ingresos</button></div>
+        ${d.estado === 'CERRADO' ? `<p class="suave">Cuando el banco procese el aporte, márcalo como acreditado: desde ese momento cada colaborador lo verá en su estado de cuenta.</p>
+        <div class="fila"><button class="btn btn-sec" id="ap-acreditar">Marcar acreditado por el banco</button><button class="btn btn-sec" id="ap-reabrir">Reabrir y reemplazar</button></div>` : ''}`
+      : `<p class="suave">Sube el Excel del trimestre con dos columnas: <b>nombre</b> del empleado y <b>monto</b> ganado en el trimestre. Verás el cálculo de cada persona antes de cerrarlo.${d.primeraCarga ? ' Es el primer aporte de esta empresa en el sistema: solo se marcarán como nuevos quienes ingresaron en el trimestre.' : ''}</p>
+        <label>Excel del trimestre <input type="file" id="ap-arch" accept=".xlsx,.xls,.csv"></label><div class="error-msg" id="ap-err" hidden></div>`}
+    </section>
+    </div><div class="col">
+    <section class="tarjeta"><h2>Cómo se calcula</h2>
+      <p class="suave">Salario diario = monto ÷ (30 × meses) · Alícuota de utilidades = diario × 120 ÷ 360 · Alícuota de vacaciones = diario × días de vacaciones ÷ 360 · Días = 5 por mes + adicionales (en el trimestre del aniversario: 2 × (años − 1), hasta 30).</p>
+      <p class="suave">Total = (diario + alícuotas) × (días de antigüedad + adicionales). Los parámetros (año base, días mínimos del mes, días de utilidades) están en la hoja PARAMETROS.</p>
+    </section></div></div>
+    ${cerrado && d.lineas.length ? `<section class="tarjeta"><h2>Detalle por empleado (${d.lineas.length})</h2>${tablaAporte(d.lineas.slice().sort((a, b) => (a.nombre < b.nombre ? -1 : 1)), false)}<p class="suave">* Días adicionales forzados a mano.</p></section>` : ''}`;
+
+  cuerpo.querySelectorAll('[data-arch]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('archivoAporte', { ...P, tipo: b.dataset.arch });
+    if (!x.ok) return toast(x.message);
+    descargar(`${b.dataset.arch === 'NUEVOS' ? 'NUEVOS_INGRESOS' : 'NOMINA_APORTES'}_${P.empresa}_${P.anio}_T${P.trimestre}.csv`, x.data.csv);
+  })));
+  cuerpo.querySelector('#ap-acreditar')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    if (!confirm('¿El banco ya procesó este aporte? Los colaboradores lo verán en su estado de cuenta y ya no se podrá cambiar.')) return;
+    const x = await llamar('estadoCierre', { ...P, estado: 'ACREDITADO' });
+    toast(x.ok ? 'Aporte acreditado.' : x.message); panelAportes(panel);
+  }));
+  cuerpo.querySelector('#ap-reabrir')?.addEventListener('click', () => {
+    if (!confirm('¿Reabrir este aporte? Subirás un Excel nuevo y su cálculo reemplazará al actual.')) return;
+    borradorAporte = { clavePeriodo: JSON.stringify(P), reemplazar: true, filas: null };
+    pintarVistaAporte(cuerpo, panel);
+  });
+  cuerpo.querySelector('#ap-arch')?.addEventListener('change', (e) => cargarExcelAporte(e.target.files[0], cuerpo, panel, false));
+}
+
+async function cargarExcelAporte(archivo, cuerpo, panel, reemplazar) {
+  if (!archivo) return;
+  const err = cuerpo.querySelector('#ap-err');
+  try {
+    const filas = await leerExcelAporte(archivo);
+    if (!filas.length) return errorEn(err, 'No encontré filas con nombre y monto en el Excel.');
+    borradorAporte = { clavePeriodo: JSON.stringify(periodoAporte), reemplazar, filas, forzados: {} };
+    await recalcularAporte(cuerpo, panel);
+  } catch (x) { errorEn(err, x.message || 'No se pudo leer el Excel.'); }
+}
+
+async function recalcularAporte(cuerpo, panel) {
+  cuerpo.innerHTML = esqueleto(2);
+  const r = await llamar('prepararAporte', { ...periodoAporte, filas: borradorAporte.filas, forzados: borradorAporte.forzados });
+  if (!r.ok) { borradorAporte = null; toast(r.message); return panelAportes(panel); }
+  borradorAporte.vista = r.data;
+  pintarVistaAporte(cuerpo, panel);
+}
+
+function tablaAporte(lineas, editable) {
+  return `<div class="tabla-caja"><table class="tabla-aporte"><thead><tr><th>Empleado</th><th>Ingreso</th><th class="num">Meses</th><th class="num">Monto</th><th class="num">Diario</th><th class="num">Días</th><th class="num">Adic.</th><th class="num">Total</th></tr></thead><tbody>
+    ${lineas.map((l) => `<tr><td>${esc(l.nombre)} ${l.nuevo ? '<span class="chip chip-austral">Nuevo</span>' : ''}</td><td>${esc(l.fechaIngreso || '—')}</td><td class="num">${l.meses}</td><td class="num">${bs(l.monto)}</td>
+      <td class="num">${bs(l.salarioDiario)}</td><td class="num">${l.diasAntiguedad}</td>
+      <td class="num">${editable ? `<input class="adic" type="number" min="0" max="30" step="1" data-forzar="${esc(l.clave)}" value="${l.diasAdicionales}" title="Días adicionales (cámbialo para forzarlo)">` : `${l.diasAdicionales}${l.adicionalesForzados ? '*' : ''}`}</td>
+      <td class="num"><b>${bs(l.total)}</b></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+const GRUPOS_ALERTA = [['EXCEL_SIN_EMPLEADO', 'Nombres del Excel sin empleado (no se incluyen)'], ['SIN_MONTO', 'Activos de la empresa sin monto en el Excel'],
+  ['MONTO_NO_POSITIVO', 'Montos en cero o negativos'], ['SIN_FECHA_INGRESO', 'Sin fecha de ingreso'], ['SIN_MESES', 'Ingresaron después del trimestre'], ['DUPLICADA', 'Filas repetidas']];
+function alertasAgrupadas(alertas) {
+  return GRUPOS_ALERTA.map(([tipo, titulo]) => {
+    const g = alertas.filter((a) => a.tipo === tipo);
+    return g.length ? `<details class="grupo-alerta" ${g.length <= 5 ? 'open' : ''}><summary><b>${g.length}</b> ${titulo}</summary><ul class="lista-simple">${g.map((a) => `<li>${esc(a.texto)}</li>`).join('')}</ul></details>` : '';
+  }).join('');
+}
+
+function pintarVistaAporte(cuerpo, panel) {
+  const B = borradorAporte, P = periodoAporte;
+  if (!B.filas) {          // reabriendo: falta el Excel nuevo
+    cuerpo.innerHTML = `<section class="tarjeta"><h2>Reemplazar el aporte</h2><p class="suave">Sube el Excel corregido del trimestre. El cálculo nuevo reemplazará al actual (no se duplica).</p>
+      <label>Excel del trimestre <input type="file" id="ap-arch" accept=".xlsx,.xls,.csv"></label><div class="error-msg" id="ap-err" hidden></div>
+      <div><button class="btn btn-sec" id="ap-volver">Cancelar</button></div></section>`;
+    cuerpo.querySelector('#ap-arch').addEventListener('change', (e) => cargarExcelAporte(e.target.files[0], cuerpo, panel, true));
+    cuerpo.querySelector('#ap-volver').addEventListener('click', () => { borradorAporte = null; panelAportes(panel); });
+    return;
+  }
+  const v = B.vista, t = v.totales;
+  cuerpo.innerHTML = `<div class="dos-col der-angosta"><div class="col">
+    <section class="tarjeta"><div class="item-cab"><h2>Vista previa · ${['', '1.er', '2.º', '3.er', '4.º'][P.trimestre]} trimestre de ${P.anio} · ${P.empresa}</h2><span class="chip chip-espera">Sin guardar</span></div>
+      <div class="cifras"><div class="cifra"><b>${t.personas}</b><span>Personas</span></div><div class="cifra"><b>${bs(t.total)}</b><span>Total del aporte</span></div>
+        <div class="cifra"><b>${t.nuevos}</b><span>Nuevos · ${bs(t.totalNuevos)}</span></div><div class="cifra"><b>${t.retirados}</b><span>Retirados</span></div></div>
+      ${v.primeraCarga ? '<p class="aviso">Primer aporte de esta empresa en el sistema: no hay trimestre anterior para comparar. Solo son «nuevos» quienes ingresaron en el trimestre y no se detectan retirados.</p>' : ''}
+      ${v.sugeridas.length ? `<div class="advertencia"><b>Confirma ${v.sugeridas.length} nombre${v.sugeridas.length === 1 ? '' : 's'} del Excel</b> que no coinciden exacto:
+        <div class="lista" style="margin-top:8px">${v.sugeridas.map((x) => `<label>«${esc(x.nombre)}» (${bs(x.monto)}) <select data-resolver="${x.fila}"><option value="">Elige al empleado…</option>${x.candidatos.map((c) => `<option value="${esc(c.clave)}">${esc(c.nombre)} (${c.puntaje} %)</option>`).join('')}<option value="-">No es ninguno: no incluir</option></select></label>`).join('')}</div></div>` : ''}
+      <div class="fila"><button class="btn btn-sec" id="ap-recalcular">Recalcular</button><button class="btn" id="ap-cerrar" ${v.listo ? '' : 'disabled'}>${B.reemplazar ? 'Reemplazar aporte' : 'Cerrar aporte'}</button><button class="btn btn-sec" id="ap-descartar">Descartar</button></div>
+      <div class="error-msg" id="ap-err" hidden></div>
+    </section>
+    </div><div class="col">
+    ${v.alertas.length ? `<section class="tarjeta"><h2>Alertas</h2>${alertasAgrupadas(v.alertas)}</section>` : '<section class="tarjeta"><h2>Alertas</h2><p class="vacio">Sin alertas.</p></section>'}
+    ${v.retirados.length ? `<section class="tarjeta"><h2>Retirados (${v.retirados.length})</h2><p class="suave">Estaban en el aporte anterior y ya no están activos. Registra su cancelación en «Cancelaciones».</p>
+      <ul class="lista-simple">${v.retirados.map((x) => `<li>${esc(x.nombre || x.clave)}${x.fechaIngreso ? ` · ingreso ${esc(x.fechaIngreso)}` : ''}</li>`).join('')}</ul></section>` : ''}
+    </div></div>
+    <section class="tarjeta"><h2>Detalle por empleado (${v.lineas.length})</h2><p class="suave">Puedes forzar los días adicionales de una persona; luego toca «Recalcular».</p>${tablaAporte(v.lineas, true)}</section>`;
+  const leer = () => {
+    cuerpo.querySelectorAll('[data-resolver]').forEach((s) => { if (s.value) { const f = B.filas[Number(s.dataset.resolver)]; if (s.value === '-') f.excluir = true; else f.clave = s.value; } });
+    B.filas = B.filas.filter((f) => !f.excluir);
+    cuerpo.querySelectorAll('[data-forzar]').forEach((i) => { const l = v.lineas.find((x) => x.clave === i.dataset.forzar); if (Number(i.value) !== l.diasAdicionales || l.adicionalesForzados) B.forzados[i.dataset.forzar] = Number(i.value); });
+  };
+  cuerpo.querySelector('#ap-recalcular').addEventListener('click', () => { leer(); recalcularAporte(cuerpo, panel); });
+  cuerpo.querySelector('#ap-descartar').addEventListener('click', () => { borradorAporte = null; panelAportes(panel); });
+  cuerpo.querySelectorAll('[data-resolver]').forEach((s) => s.addEventListener('change', () => { leer(); recalcularAporte(cuerpo, panel); }));
+  cuerpo.querySelector('#ap-cerrar').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    leer();
+    if (!confirm(`¿${B.reemplazar ? 'Reemplazar' : 'Cerrar'} el aporte de ${P.empresa} por ${bs(t.total)} (${t.personas} personas)?`)) return;
+    const x = await llamar('cerrarAporte', { ...P, filas: B.filas, forzados: B.forzados, reemplazar: !!B.reemplazar });
+    if (!x.ok) return errorEn(cuerpo.querySelector('#ap-err'), x.message);
+    borradorAporte = null; toast('Aporte cerrado. Ya puedes descargar los archivos del banco.'); panelAportes(panel);
+  }));
+}
+
+/* ---- Cancelaciones (empleados retirados) ---- */
+
+const ESTADO_CANC = { PENDIENTE: ['Por enviar', 'espera'], EN_ARCHIVO: ['En el banco', 'austral'], PROCESADA: ['Procesada', 'ok'], ANULADA: ['Anulada', 'neutro'] };
+
+async function panelCancelaciones(panel) {
+  panel.innerHTML = esqueleto(2);
+  const [rc, rl] = await Promise.all([obtener('candidatosCancelacion'), obtener('listarCancelaciones')]);
+  if (!rc.ok || !rl.ok) { toast((rc.ok ? rl : rc).message); return; }
+  const cand = rc.data, lista = rl.data;
+  const por = (e) => lista.filter((c) => c.estado === e);
+  const pend = por('PENDIENTE'), enBanco = por('EN_ARCHIVO');
+  const item = (c, acciones = '') => `<div class="item"><div class="item-cab"><div><b>${esc(c.nombre)}</b><p class="suave">${esc(c.clave)} · ${esc(c.empresa)} · ingreso ${esc(c.fechaIngreso || '—')}${c.fechaEgreso ? ` · egreso ${esc(c.fechaEgreso)}` : ''}</p></div>${c.estado ? `<span class="chip chip-${ESTADO_CANC[c.estado][1]}">${ESTADO_CANC[c.estado][0]}</span>` : ''}</div>
+    ${c.monto !== undefined && c.monto !== '' ? `<p class="suave">Monto a cancelar: <b>${bs(c.monto)}</b></p>` : c.totalAportado != null ? `<p class="suave">Total aportado en el sistema: ${bs(c.totalAportado)}</p>` : ''}${acciones}</div>`;
+  panel.innerHTML = `<div class="dos-col"><div class="col">
+    <section class="tarjeta"><h2>Retirados por cancelar (${cand.length})</h2>
+      <p class="suave">Empleados inactivos que tienen aportes en el sistema. Registra su fecha de egreso y, si lo defines, el monto a cancelar.</p>
+      ${cand.length ? `<div class="lista">${cand.map((c) => item(c, `<div><button class="btn btn-chico" data-registrar-canc="${esc(c.clave)}">Registrar cancelación</button></div>`)).join('')}</div>` : '<p class="vacio">No hay retirados pendientes.</p>'}
+    </section></div><div class="col">
+    <section class="tarjeta"><h2>1 · Por enviar al banco (${pend.length})</h2>
+      <div class="fila">${['PCA', 'AIV'].map((e) => { const n = pend.filter((c) => c.empresa === e).length; return `<button class="btn" data-arch-canc="${e}" ${n ? '' : 'disabled'}>Descargar archivo ${e} (${n})</button>`; }).join('')}</div>
+      <p class="suave">Columnas: cédula, nombre, fecha de ingreso, fecha de egreso y monto a cancelar.</p>
+      ${pend.length ? `<div class="lista">${pend.map((c) => item(c, `<div><button class="btn btn-sec btn-chico" data-anular-canc="${esc(c.id)}">Anular</button></div>`)).join('')}</div>` : ''}
+    </section>
+    <section class="tarjeta"><h2>2 · En el banco (${enBanco.length})</h2>
+      ${enBanco.length ? `<div class="lista">${enBanco.map((c) => item(c)).join('')}</div><div><button class="btn" id="canc-procesadas">Marcar como procesadas</button></div>` : '<p class="vacio">Nada en el banco.</p>'}
+    </section>
+    ${por('PROCESADA').length ? `<section class="tarjeta"><h2>Procesadas (${por('PROCESADA').length})</h2><div class="lista">${por('PROCESADA').slice(0, 20).map((c) => item(c)).join('')}</div></section>` : ''}
+    </div></div>`;
+  panel.querySelectorAll('[data-registrar-canc]').forEach((b) => b.addEventListener('click', () => {
+    const c = cand.find((x) => x.clave === b.dataset.registrarCanc);
+    dlg.innerHTML = `<form id="fcan" novalidate><h2>Cancelación de ${esc(c.nombre)}</h2>
+      <p class="suave">${esc(c.empresa)} · ingreso ${esc(c.fechaIngreso || '—')} · aportado en el sistema ${bs(c.totalAportado)}</p>
+      <label>Fecha de egreso <input type="date" name="egreso" required></label>
+      <label>Monto a cancelar (opcional) <input name="monto" inputmode="decimal" placeholder="0,00"></label>
+      <div class="error-msg" id="err" hidden></div>
+      <div class="fila"><button class="btn grow" type="submit">Registrar</button><button class="btn btn-sec" type="button" id="no">Cerrar</button></div></form>`;
+    const f = dlg.querySelector('#fcan');
+    dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await conBoton(f.querySelector('button[type=submit]'), async () => {
+        const monto = f.monto.value.trim() ? leerMonto(f.monto.value) : '';
+        const x = await llamar('registrarCancelacion', { clave: c.clave, fechaEgreso: f.egreso.value, monto });
+        if (!x.ok) return errorEn(dlg.querySelector('#err'), x.message);
+        dlg.close(); toast('Cancelación registrada.'); panelCancelaciones(panel);
+      });
+    });
+    dlg.showModal();
+  }));
+  panel.querySelectorAll('[data-arch-canc]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('archivoCancelaciones', { empresa: b.dataset.archCanc });
+    if (!x.ok) return toast(x.message);
+    descargar(`CANCELACIONES_${b.dataset.archCanc}_${new Date().toISOString().slice(0, 10)}.csv`, x.data.csv);
+    toast(`Archivo con ${x.data.cantidad} cancelaciones.`); panelCancelaciones(panel);
+  })));
+  panel.querySelectorAll('[data-anular-canc]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm('¿Anular esta cancelación?')) return;
+    const x = await llamar('marcarCancelaciones', { ids: [b.dataset.anularCanc], estado: 'ANULADA' });
+    toast(x.ok ? 'Anulada.' : x.message); panelCancelaciones(panel);
+  })));
+  panel.querySelector('#canc-procesadas')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    const x = await llamar('marcarCancelaciones', { ids: enBanco.map((c) => c.id), estado: 'PROCESADA' });
+    toast(x.ok ? `${x.data.cambiados} procesadas.` : x.message); panelCancelaciones(panel);
+  }));
 }
 
 const TRIMESTRES = [['T1', '1.er trimestre'], ['T2', '2.º trimestre'], ['T3', '3.er trimestre'], ['T4', '4.º trimestre']];
@@ -757,18 +989,21 @@ function cargarXlsx() {
 }
 
 /** Lee el primer libro/hoja del archivo y devuelve las filas como objetos con los encabezados del Excel. */
-async function leerArchivoExcel(archivo) {
+/** Abre un .xlsx/.xls o .csv. Los CSV se leen como texto (UTF-8, o Windows-1252 si trae caracteres rotos) y sin adivinar fechas. */
+async function leerLibro(archivo) {
   const XLSX = await cargarXlsx();
   const bytes = await archivo.arrayBuffer();
-  let libro;
   if (/\.csv$/i.test(archivo.name)) {
-    // Los CSV se leen como texto: UTF-8 y, si trae caracteres rotos, Windows-1252 (Excel en español).
     let texto = new TextDecoder('utf-8').decode(bytes).replace(/^\ufeff/, '');
     if (texto.includes('\ufffd')) texto = new TextDecoder('windows-1252').decode(bytes);
-    libro = XLSX.read(texto, { type: 'string', raw: true });   // raw: no adivinar fechas (evita confundir día y mes)
-  } else {
-    libro = XLSX.read(bytes, { type: 'array' });
+    return XLSX.read(texto, { type: 'string', raw: true });
   }
+  return XLSX.read(bytes, { type: 'array' });
+}
+
+async function leerArchivoExcel(archivo) {
+  const XLSX = await cargarXlsx();
+  const libro = await leerLibro(archivo);
   const hoja = libro.Sheets[libro.SheetNames[0]];
   // raw: las fechas de Excel llegan como número de serie y se convierten exactamente en core/empleados.js (fechaDeExcel)
   return XLSX.utils.sheet_to_json(hoja, { defval: '', raw: true });
@@ -959,29 +1194,6 @@ function elegirJefe(titulo, aplicar) {
   dlg.showModal(); dlg.querySelector('#qj').focus();
 }
 
-function panelCierres(panel) {
-  const anio = new Date().getFullYear();
-  panel.innerHTML = `<form class="tarjeta" id="fc" novalidate>
-    <h2>Acreditar un trimestre</h2>
-    <p class="aviso">Cuando el banco procese el aporte, acredítalo aquí. Desde ese momento los trabajadores lo ven en su estado de cuenta. El aporte debe estar en estado «Cerrado».</p>
-    <div class="fila">
-      <label class="grow">Año <input name="anio" type="number" value="${anio}" min="2020" max="2100"></label>
-      <label class="grow">Trimestre <select name="trimestre"><option value="1">T1 · ene-mar</option><option value="2">T2 · abr-jun</option><option value="3">T3 · jul-sep</option><option value="4">T4 · oct-dic</option></select></label>
-      <label class="grow">Empresa <select name="empresa"><option>PCA</option><option>AIV</option></select></label>
-    </div>
-    <div class="error-msg" id="err" hidden></div>
-    <div><button class="btn" type="submit">Marcar como acreditado</button></div>
-  </form>`;
-  const f = panel.querySelector('#fc'), err = panel.querySelector('#err');
-  f.addEventListener('submit', async (e) => {
-    e.preventDefault(); errorEn(err, '');
-    await conBoton(f.querySelector('button'), async () => {
-      const r = await llamar('estadoCierre', { anio: f.anio.value, trimestre: f.trimestre.value, empresa: f.empresa.value, estado: 'ACREDITADO' });
-      if (!r.ok) return errorEn(err, r.message);
-      toast(`${f.anio.value} T${f.trimestre.value} ${f.empresa.value} acreditado.`);
-    });
-  });
-}
 
 iniciarInstalacion();
 arrancar();

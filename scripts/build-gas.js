@@ -8,7 +8,7 @@ const RAIZ = path.join(__dirname, '..');
 // Apps Script). No se usa `globalThis`/`this`, que en Apps Script no garantizan registrar el módulo donde se busca.
 const MODULOS = [
   ['core/calculo.js', 'Calculo'], ['core/empleados.js', 'Empleados'], ['core/prestaciones.js', 'Prestaciones'],
-  ['core/exportes.js', 'Exportes'], ['core/constancia.js', 'Constancia'], ['core/vacaciones.js', 'Vacaciones'], ['core/servicio.js', 'Servicio'],
+  ['core/exportes.js', 'Exportes'], ['core/constancia.js', 'Constancia'], ['core/vacaciones.js', 'Vacaciones'], ['core/aportes.js', 'Aportes'], ['core/servicio.js', 'Servicio'],
 ];
 const CODE = 'src/api.gs';
 

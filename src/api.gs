@@ -6,9 +6,9 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.10';
+var VERSION = '2026-10-31.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -16,6 +16,7 @@ function modulosCargados_() {
     Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
     Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
     Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
+    Aportes: typeof Aportes !== 'undefined' && !!Aportes,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -24,7 +25,9 @@ var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
   EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina'],
-  APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo'],
+  APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo',
+    'nombre', 'salarioDiario', 'alicUtilidades', 'alicVacaciones', 'diasVacaciones', 'diasAntiguedad'],
+  CANCELACIONES: ['id', 'clave', 'nombre', 'empresa', 'fechaIngreso', 'fechaEgreso', 'monto', 'estado', 'creada', 'por', 'actualizada'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo', 'ventana', 'acepto'],
   CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
@@ -86,6 +89,15 @@ var RUTAS_RRHH = {
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
   listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
+  estadoAporte: function (repo, ctx, d) { return Servicio.estadoAporte(repo, ctx, d.token, d); },
+  prepararAporte: function (repo, ctx, d) { return Servicio.prepararAporte(repo, ctx, d.token, d); },
+  cerrarAporte: function (repo, ctx, d) { return Servicio.cerrarAporte(repo, ctx, d.token, d); },
+  archivoAporte: function (repo, ctx, d) { return Servicio.archivoAporte(repo, ctx, d.token, d); },
+  candidatosCancelacion: function (repo, ctx, d) { return Servicio.candidatosCancelacion(repo, ctx, d.token); },
+  listarCancelaciones: function (repo, ctx, d) { return Servicio.listarCancelaciones(repo, ctx, d.token); },
+  registrarCancelacion: function (repo, ctx, d) { return Servicio.registrarCancelacion(repo, ctx, d.token, d); },
+  archivoCancelaciones: function (repo, ctx, d) { return Servicio.archivoCancelaciones(repo, ctx, d.token, d.empresa); },
+  marcarCancelaciones: function (repo, ctx, d) { return Servicio.marcarCancelaciones(repo, ctx, d.token, d.ids || [], d.estado); },
   listarAperturas: function (repo, ctx, d) { return Servicio.listarAperturas(repo, ctx, d.token); },
   guardarApertura: function (repo, ctx, d) { return Servicio.guardarApertura(repo, ctx, d.token, d); },
   eliminarApertura: function (repo, ctx, d) { return Servicio.eliminarApertura(repo, ctx, d.token, d.id); },
@@ -117,7 +129,8 @@ var RUTAS_RRHH = {
  * Las que escriben se hacen de una en una para no pisarse.
  */
 var LECTURAS = {
-  login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
+  login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
+  estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
 };
 
@@ -307,6 +320,16 @@ function fechaIso_(v) {
   return t.slice(0, 10);
 }
 
+function aporte_(f) {
+  return {
+    clave: texto_(f.clave), nombre: texto_(f.nombre), anio: Number(f.anio), trimestre: Number(f.trimestre), empresa: texto_(f.empresa), total: Number(f.total) || 0,
+    monto: Number(f.monto) || 0, meses: Number(f.meses) || 0, diasAdicionales: Number(f.diasAdicionales) || 0,
+    adicionalesForzados: f.adicionalesForzados === true || f.adicionalesForzados === 'TRUE' || f.adicionalesForzados === 'true',
+    nuevo: f.nuevo === true || f.nuevo === 'TRUE' || f.nuevo === 'true', salarioDiario: Number(f.salarioDiario) || 0, alicUtilidades: Number(f.alicUtilidades) || 0,
+    alicVacaciones: Number(f.alicVacaciones) || 0, diasVacaciones: Number(f.diasVacaciones) || 0, diasAntiguedad: Number(f.diasAntiguedad) || 0,
+  };
+}
+
 function vacSolicitud_(f) {
   var imp = [], pend = null;
   try { imp = f.imputacion ? JSON.parse(f.imputacion) : []; } catch (e) { /* vacía */ }
@@ -419,6 +442,32 @@ function crearRepo_() {
     anticiposDe: function (clave) { return anticiposTodos().filter(function (a) { return a.clave === clave; }); },
     anticipoPorId: function (id) { return anticiposTodos().filter(function (a) { return a.id === id; })[0] || null; },
     todosAnticipos: function () { return anticiposTodos(); },
+    todosAportes: function () { return leer_('APORTES').map(aporte_); },
+    aportesPeriodo: function (anio, trimestre, empresa) {
+      return leer_('APORTES').map(aporte_).filter(function (a) { return a.anio === anio && a.trimestre === trimestre && a.empresa === empresa; });
+    },
+    /** Reemplaza las líneas de un período (no duplica): reescribe la hoja sin las del período y agrega las nuevas. */
+    reemplazarAportes: function (anio, trimestre, empresa, filas) {
+      var h = hoja_('APORTES'), cab = HOJAS.APORTES;
+      var resto = leer_('APORTES').filter(function (a) { return !(Number(a.anio) === anio && Number(a.trimestre) === trimestre && a.empresa === empresa); });
+      var todas = resto.map(function (a) { return cab.map(function (c) { return a[c] == null ? '' : a[c]; }); })
+        .concat(filas.map(function (f) { return cab.map(function (c) { return f[c] == null ? '' : f[c]; }); }));
+      var ultima = h.getLastRow();
+      if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+      if (todas.length) { h.getRange(2, 1, todas.length, 1).setNumberFormat('@'); h.getRange(2, 1, todas.length, cab.length).setValues(todas); }
+      invalidar_('APORTES');
+    },
+    cancelaciones: function () {
+      return leer_('CANCELACIONES').map(function (f) {
+        return { _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), nombre: texto_(f.nombre), empresa: texto_(f.empresa), fechaIngreso: texto_(f.fechaIngreso),
+          fechaEgreso: texto_(f.fechaEgreso), monto: f.monto === '' ? '' : Number(f.monto), estado: texto_(f.estado), creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+      }).filter(function (c) { return c.id; });
+    },
+    guardarCancelacion: function (c) {
+      if (!c._fila) { var h = hoja_('CANCELACIONES'); h.getRange(h.getLastRow() + 1, 1, 1, 6).setNumberFormat('@'); }
+      escribirFila_('CANCELACIONES', c);
+    },
+    nuevoIdCancelacion: function () { return 'CAN-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     aperturasAnticipo: function () {
       return leer_('APERTURAS_ANTICIPO').map(function (f) {
         return { _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), inicio: fechaIso_(f.inicio), fin: fechaIso_(f.fin), por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };

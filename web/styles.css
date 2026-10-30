@@ -233,3 +233,18 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 .advertencia { background: var(--espera-velo); color: var(--espera); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); font-size: 14px; }
 .acepto { display: grid; grid-template-columns: auto 1fr; gap: var(--s3); align-items: start; font-weight: 400; font-size: 14px; color: var(--tinta); cursor: pointer; }
 .acepto input { width: 22px; height: 22px; min-height: 0; margin: 1px 0 0; padding: 0; }
+
+/* ---- Fideicomiso: submódulos y tabla del aporte ---- */
+.submodulos { display: inline-flex; gap: 2px; background: var(--marca-velo); border-radius: 12px; padding: 3px; margin-bottom: var(--s4); max-width: 100%; overflow-x: auto; }
+.submodulo { min-height: 38px; padding: 0 var(--s4); border: 0; border-radius: 9px; background: transparent; color: var(--tinta-2); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.submodulo[aria-selected="true"] { background: #fff; color: var(--carbon); box-shadow: 0 1px 3px rgb(20 22 24 / .12); }
+#sub { display: grid; gap: var(--s4); }
+.tabla-aporte { min-width: 720px; }
+.tabla-aporte td:first-child { white-space: normal; min-width: 180px; }
+.tabla-aporte .chip { margin-left: 4px; }
+.adic { width: 64px; min-height: 34px; padding: 4px 6px; text-align: right; font-size: 14px; }
+
+.grupo-alerta { border-top: 1px solid var(--linea-suave); padding: var(--s2) 0; font-size: 14px; }
+.grupo-alerta:first-of-type { border-top: 0; }
+.grupo-alerta summary { cursor: pointer; color: var(--carbon); }
+.grupo-alerta .lista-simple { color: var(--tinta-2); max-height: 320px; overflow: auto; }

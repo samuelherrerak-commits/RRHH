@@ -667,3 +667,78 @@ test('aperturas: no se cambia el trimestre si ya tiene solicitudes; se puede cer
   assert.equal(S.eliminarApertura(repo, ctx, rrhh, vacia.id).ok, true);
 });
 
+
+/* ---------- Fideicomiso: aportes y cancelaciones ---------- */
+
+function conAportes() {
+  const repo = crearRepo([
+    { cedula: 'V111111119', nombre: 'Esther Lilia Rodríguez Hernández', organizacion: 'PROSEIN CENTRAL', fechaInicio: '05/03/2025' },
+    { cedula: 'V333333339', nombre: 'Alirio Alfonso Ávila', organizacion: 'PROSEIN CENTRAL', fechaInicio: '25/07/2011' },
+  ]);
+  const ctx = crearCtx(Date.UTC(2026, 9, 30, 15));
+  repo.st.parametros = { ...repo.st.parametros, anioBase: 2025, diasMinimosMes: 1, diasUtilidades: 120 };
+  repo.st.usuarios['99999999'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'RRHH' };
+  return { repo, ctx, rrhh: S.iniciarSesionAdmin(repo, ctx, '99999999', 'k').data.token };
+}
+const PER = { anio: 2026, trimestre: 3, empresa: 'PCA' };
+const FILAS = [{ nombre: 'Esther Lilia Rodriguez Hernandez', monto: 12583.168 }, { nombre: 'ALIRIO ALFONSO AVILA', monto: 192290.08 }];
+
+test('aportes: vista previa, cierre sin duplicados, reapertura explícita y acreditado intocable', () => {
+  const { repo, ctx, rrhh } = conAportes();
+  const pre = S.prepararAporte(repo, ctx, rrhh, { ...PER, filas: FILAS }).data;
+  assert.equal(pre.totales.total, 2883.64 + 129896.7);
+  assert.equal(pre.primeraCarga, true);
+  assert.equal(repo.st.aportes.length, 0);                                        // la vista previa no guarda
+  assert.equal(S.cerrarAporte(repo, ctx, rrhh, { ...PER, filas: FILAS }).data.estado, 'CERRADO');
+  assert.equal(S.estadoAporte(repo, ctx, rrhh, PER).data.lineas.length, 2);
+  assert.equal(S.cerrarAporte(repo, ctx, rrhh, { ...PER, filas: FILAS }).code, 'YA_CERRADO');
+  assert.equal(S.cerrarAporte(repo, ctx, rrhh, { ...PER, filas: FILAS.slice(0, 1), reemplazar: true }).data.estado, 'CERRADO');
+  assert.equal(S.estadoAporte(repo, ctx, rrhh, PER).data.lineas.length, 1);       // reemplazó, no duplicó
+  S.cambiarEstadoCierre(repo, ctx, rrhh, 2026, 3, 'PCA', 'ACREDITADO');
+  assert.equal(S.cerrarAporte(repo, ctx, rrhh, { ...PER, filas: FILAS, reemplazar: true }).code, 'ACREDITADO');
+  // el trabajador ve lo acreditado
+  const t = S.iniciarSesion(repo, ctx, '11111111').data.token;
+  assert.equal(S.miEstadoDeCuenta(repo, ctx, t).data.resumen.totalAportado, 2883.64);
+});
+
+test('aportes: archivo NOMINA APORTES (TIPO T 1) y de nuevos ingresos', () => {
+  const { repo, ctx, rrhh } = conAportes();
+  assert.equal(S.archivoAporte(repo, ctx, rrhh, { ...PER, tipo: 'NOMINA' }).code, 'VALIDACION');   // sin cerrar
+  S.cerrarAporte(repo, ctx, rrhh, { ...PER, filas: FILAS });
+  const n = S.archivoAporte(repo, ctx, rrhh, { ...PER, tipo: 'NOMINA' }).data;
+  assert.equal(n.cantidad, 2);
+  assert.match(n.csv, /5847;V;11111111;1;A;2883\.64;Esther Lilia Rodríguez Hernández/);
+  assert.equal(S.archivoAporte(repo, ctx, rrhh, { ...PER, tipo: 'NUEVOS' }).code, 'VACIO');      // primer aporte: nadie ingresó en el trimestre
+});
+
+test('aportes: el trimestre siguiente detecta retirados y nuevos frente al anterior', () => {
+  const { repo, ctx, rrhh } = conAportes();
+  S.cerrarAporte(repo, ctx, rrhh, { ...PER, filas: FILAS });
+  // Esther se retira; entra alguien nuevo
+  S.cargarEmpleados(repo, ctx, rrhh, [
+    { cedula: 'V333333339', nombre: 'Alirio Alfonso Ávila', organizacion: 'PROSEIN CENTRAL', fechaInicio: '25/07/2011' },
+    { cedula: 'V444444449', nombre: 'Nuevo Octubre', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/10/2026' },
+  ]);
+  const pre = S.prepararAporte(repo, ctx, rrhh, { anio: 2026, trimestre: 4, empresa: 'PCA', filas: [{ nombre: 'Alirio Alfonso Avila', monto: 1000 }, { nombre: 'Nuevo Octubre', monto: 500 }] }).data;
+  assert.equal(pre.primeraCarga, false);
+  assert.deepEqual(pre.retirados.map((x) => x.clave), ['V11111111']);
+  assert.deepEqual(pre.lineas.filter((l) => l.nuevo).map((l) => l.nombre), ['Nuevo Octubre']);
+});
+
+test('cancelaciones: retirados con aportes, registro, archivo y procesadas', () => {
+  const { repo, ctx, rrhh } = conAportes();
+  S.cerrarAporte(repo, ctx, rrhh, { ...PER, filas: FILAS });
+  S.cargarEmpleados(repo, ctx, rrhh, [{ cedula: 'V333333339', nombre: 'Alirio Alfonso Ávila', organizacion: 'PROSEIN CENTRAL', fechaInicio: '25/07/2011' }]);  // Esther pasa a inactiva
+  const cand = S.candidatosCancelacion(repo, ctx, rrhh).data;
+  assert.deepEqual(cand.map((c) => [c.clave, c.totalAportado]), [['V11111111', 2883.64]]);
+  assert.equal(S.registrarCancelacion(repo, ctx, rrhh, { clave: 'V33333333', fechaEgreso: '2026-10-15' }).code, 'VALIDACION');   // activo
+  assert.equal(S.registrarCancelacion(repo, ctx, rrhh, { clave: 'V11111111' }).code, 'VALIDACION');                               // sin fecha
+  const c = S.registrarCancelacion(repo, ctx, rrhh, { clave: 'V11111111', fechaEgreso: '2026-10-15', monto: 2883.64 }).data;
+  assert.equal(c.fechaEgreso, '15/10/2026');
+  assert.equal(S.candidatosCancelacion(repo, ctx, rrhh).data.length, 0);
+  assert.match(S.registrarCancelacion(repo, ctx, rrhh, { clave: 'V11111111', fechaEgreso: '2026-10-15' }).message, /ya tiene/);
+  const a = S.archivoCancelaciones(repo, ctx, rrhh, 'PCA').data;
+  assert.match(a.csv, /V;11111111;Esther Lilia Rodríguez Hernández;05\/03\/2025;15\/10\/2026;2883\.64/);
+  assert.equal(S.archivoCancelaciones(repo, ctx, rrhh, 'PCA').code, 'VACIO');
+  assert.equal(S.marcarCancelaciones(repo, ctx, rrhh, [c.id], 'PROCESADA').data.cambiados, 1);
+});

@@ -231,3 +231,25 @@ test('rendimiento: cada hoja se lee una vez por petición y las que cambian poco
   vm.runInContext('onEdit', e.ctx)({ range: { getSheet: () => ({ getName: () => 'EMPLEADOS' }) } });
   assert.equal(e.llamar({ action: 'datosVacaciones', token: t }).data.jefe.nombre, 'SAMUEL HERRERA');
 });
+
+test('fideicomiso sobre las hojas: cerrar aporte sin duplicar, archivo y cancelación de un retirado', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const t = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: t, filas: [
+    { cedula: 'V111111119', nombre: 'ESTHER LILIA RODRIGUEZ HERNANDEZ', organizacion: 'PROSEIN CENTRAL', fechaInicio: '05/03/2025' },
+    { cedula: 'V333333339', nombre: 'ALIRIO ALFONSO AVILA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '25/07/2011' }] });
+  const per = { anio: 2026, trimestre: 3, empresa: 'PCA' }, filas = [{ nombre: 'Esther Lilia Rodriguez Hernandez', monto: 12583.168 }, { nombre: 'Alirio Alfonso Avila', monto: 192290.08 }];
+  assert.equal(e.llamar({ action: 'prepararAporte', token: t, ...per, filas }).data.totales.total, 132780.34);
+  assert.equal(e.llamar({ action: 'cerrarAporte', token: t, ...per, filas }).data.estado, 'CERRADO');
+  assert.equal(e.llamar({ action: 'cerrarAporte', token: t, ...per, filas, reemplazar: true }).ok, true);
+  assert.equal(e.hojas.APORTES.filas.filter((f) => f && f[0]).length - 1, 2);                         // reemplazó, no duplicó
+  assert.match(e.llamar({ action: 'archivoAporte', token: t, ...per, tipo: 'NOMINA' }).data.csv, /;V;33333333;1;A;129896\.70;ALIRIO ALFONSO AVILA/);
+  // Esther se retira
+  e.llamar({ action: 'cargarEmpleados', token: t, filas: [{ cedula: 'V333333339', nombre: 'ALIRIO ALFONSO AVILA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '25/07/2011' }] });
+  assert.deepEqual(e.llamar({ action: 'candidatosCancelacion', token: t }).data.map((c) => c.clave), ['V11111111']);
+  const c = e.llamar({ action: 'registrarCancelacion', token: t, clave: 'V11111111', fechaEgreso: '2026-10-15', monto: '' });
+  assert.equal(c.ok, true, JSON.stringify(c));
+  assert.match(e.llamar({ action: 'archivoCancelaciones', token: t, empresa: 'PCA' }).data.csv, /V;11111111;ESTHER LILIA RODRIGUEZ HERNANDEZ;05\/03\/2025;15\/10\/2026;/);
+  assert.equal(e.llamar({ action: 'listarCancelaciones', token: t }).data[0].estado, 'EN_ARCHIVO');
+});

@@ -13,7 +13,7 @@ var ERRORES_CARGA = [];
 var Calculo = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Cálculo del aporte trimestral al fideicomiso.
        Funciones puras: sin hojas, sin DOM, sin fecha del sistema.
@@ -165,7 +165,7 @@ var Calculo = (function () {
 var Empleados = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Base de empleados y cruce del aporte. Funciones puras.
        ========================================================== */
@@ -572,7 +572,7 @@ var Empleados = (function () {
 var Prestaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Módulo 1 · Prestaciones sociales: lo que ve el trabajador y
        las reglas del anticipo. Funciones puras.
@@ -727,7 +727,7 @@ var Prestaciones = (function () {
 var Exportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Archivos para el banco. Funciones puras.
        Diseño NOMINA APORTES: FIDEICOMISO | Cedula (letra) | (número)
@@ -774,7 +774,7 @@ var Exportes = (function () {
 var Constancia = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Constancia de trabajo: textos, monto en letras y vigencia (30 días).
        Funciones puras; las usan el servidor, el navegador (PDF) y las pruebas.
@@ -902,7 +902,7 @@ var Constancia = (function () {
 var Vacaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Vacaciones: días hábiles, períodos, saldo y reglas de la solicitud.
        Funciones puras. Fechas como texto 'AAAA-MM-DD' (sin horas ni zonas).
@@ -1153,11 +1153,119 @@ var Vacaciones = (function () {
   } catch (e) { ERRORES_CARGA.push('Vacaciones: ' + (e && e.message)); return undefined; }
 })();
 
+// ===== core/aportes.js =====
+var Aportes = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Aporte trimestral al fideicomiso: arma la vista previa a partir del Excel (nombre + monto).
+       Función pura: recibe empleados, filas, días adicionales forzados y el aporte anterior.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      function dependencia(r, n) { return new Proxy({}, { get: function (_, k) { return r[n][k]; } }); }
+      var isNode = typeof require === 'function' && typeof module !== 'undefined';
+      var Calculo = isNode ? require('./calculo.js') : dependencia(raiz, 'Calculo');
+      var Empleados = isNode ? require('./empleados.js') : dependencia(raiz, 'Empleados');
+    
+      function trimestreAnterior(anio, trimestre) { return trimestre === 1 ? { anio: anio - 1, trimestre: 4 } : { anio: anio, trimestre: trimestre - 1 }; }
+      function fechaTexto(f) { return f ? ('0' + f.d).slice(-2) + '/' + ('0' + f.m).slice(-2) + '/' + f.y : ''; }
+    
+      /**
+       * e: { anio, trimestre, empresa, filas:[{ nombre, monto, clave? }], forzados:{ clave: dias }, empleados (todos),
+       *      anterior: [claves del aporte del trimestre anterior] o null si no hay (primer aporte en el sistema), parametros }
+       * Devuelve { lineas, sugeridas, sinEmpleado, alertas, retirados, totales, primeraCarga, listo }.
+       */
+      function prepararAporte(e) {
+        var empresaDe = function (x) { return Empleados.empresaFideicomiso(x); };
+        var deLaEmpresa = (e.empleados || []).filter(function (x) { return x.cedulaNumero && empresaDe(x) === e.empresa; });
+        var porClave = {};
+        (e.empleados || []).forEach(function (x) { porClave[Empleados.claveCedula(x)] = x; });
+    
+        // 1) Filas ya resueltas a mano (traen clave) y el resto por nombre
+        var asignadas = [], porNombre = [], alertas = [];
+        (e.filas || []).forEach(function (f, i) {
+          var monto = Number(f.monto);
+          if (f.clave && porClave[f.clave]) asignadas.push({ fila: i, monto: monto, empleado: porClave[f.clave] });
+          else porNombre.push(Object.assign({}, f, { _i: i, monto: monto }));
+        });
+        var cruce = Empleados.cruzarPorNombre(porNombre, deLaEmpresa);
+        var orig = function (j) { return porNombre[j]._i; };
+        cruce.exactas.forEach(function (x) { asignadas.push({ fila: orig(x.fila), monto: x.monto, empleado: x.empleado }); });
+        var sugeridas = cruce.sugeridas.map(function (x) {
+          return { fila: orig(x.fila), nombre: x.nombre, monto: x.monto, candidatos: x.candidatos.map(function (c) { return { clave: Empleados.claveCedula(c.empleado), nombre: c.empleado.nombre, puntaje: Math.round(c.puntaje * 100) }; }) };
+        });
+        var sinEmpleado = cruce.sinEmpleado.map(function (x) { return { fila: orig(x.fila), nombre: x.nombre, monto: x.monto }; });
+        cruce.duplicadas.forEach(function (x) { alertas.push({ tipo: 'DUPLICADA', texto: '«' + x.nombre + '» aparece más de una vez en el Excel: se toma solo la primera fila.' }); });
+    
+        // 2) Una línea por empleado (si una misma persona quedó dos veces, se toma la primera)
+        var vistos = {}, montos = {};
+        asignadas.sort(function (a, b) { return a.fila - b.fila; });
+        asignadas = asignadas.filter(function (a) {
+          var k = Empleados.claveCedula(a.empleado);
+          if (vistos[k]) { alertas.push({ tipo: 'DUPLICADA', texto: a.empleado.nombre + ' tiene más de una fila en el Excel: se toma solo la primera.' }); return false; }
+          vistos[k] = true; montos[k] = a.monto; return true;
+        });
+    
+        // 3) Nuevos ingresos y retirados
+        var primeraCarga = !e.anterior;
+        var activos = deLaEmpresa.filter(function (x) { return x.estado !== 'Inactivo'; });
+        var nyr = Empleados.detectarNuevosYRetirados(activos, e.anterior || [], e.anio, e.trimestre, e.empleados);
+        var nuevos = {};
+        nyr.nuevos.forEach(function (x) {
+          var f = x.fechaIngreso, dentro = f && f.y === e.anio && Calculo.mesesDelTrimestre(e.trimestre).indexOf(f.m) !== -1;
+          if (!primeraCarga || dentro) nuevos[Empleados.claveCedula(x)] = true;    // en la primera carga solo cuentan los que ingresaron en el trimestre
+        });
+        var retirados = primeraCarga ? [] : nyr.retirados.map(function (r) {
+          return { clave: r.clave, nombre: r.empleado ? r.empleado.nombre : '', fechaIngreso: r.empleado ? fechaTexto(r.empleado.fechaIngreso) : '' };
+        });
+    
+        // 4) Cálculo por persona
+        var lineas = asignadas.map(function (a) {
+          var x = a.empleado, k = Empleados.claveCedula(x), forz = e.forzados && e.forzados[k];
+          var c = Calculo.calcularAporte({ monto: a.monto, ingreso: x.fechaIngreso, anio: e.anio, trimestre: e.trimestre, diasAdicionalesForzados: forz }, e.parametros);
+          if (c.meses === 0 && x.fechaIngreso) alertas.push({ tipo: 'SIN_MESES', texto: x.nombre + ': ingresó después del trimestre, su aporte da 0.' });
+          return {
+            clave: k, nombre: x.nombre, fechaIngreso: fechaTexto(x.fechaIngreso), estado: x.estado, nuevo: !!nuevos[k],
+            monto: c.monto, meses: c.meses, salarioDiario: Calculo.redondear2(c.salarioDiario), alicUtilidades: Calculo.redondear2(c.alicUtilidades),
+            diasVacaciones: c.diasVacaciones, alicVacaciones: Calculo.redondear2(c.alicVacaciones), diasAntiguedad: c.diasAntiguedad,
+            diasAdicionales: c.diasAdicionales, adicionalesForzados: c.adicionalesForzados, total: c.total,
+          };
+        }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+    
+        // 5) Alertas del paso 3
+        Empleados.generarAlertas({ sinEmpleado: [] }, activos, montos, montos).forEach(function (a) {
+          var nom = a.nombre || (porClave[a.cedula] ? porClave[a.cedula].nombre : a.cedula);
+          if (a.tipo === 'SIN_MONTO') alertas.push({ tipo: a.tipo, texto: nom + ' está activo en ' + e.empresa + ' y no tiene monto en el Excel.' });
+          else if (a.tipo === 'SIN_FECHA_INGRESO') alertas.push({ tipo: a.tipo, texto: nom + ' no tiene fecha de ingreso: su aporte da 0.' });
+          else if (a.tipo === 'MONTO_NO_POSITIVO') alertas.push({ tipo: a.tipo, texto: nom + ': el monto es cero o negativo.' });
+        });
+        sinEmpleado.forEach(function (x) { alertas.push({ tipo: 'EXCEL_SIN_EMPLEADO', texto: '«' + x.nombre + '» del Excel no corresponde a ningún empleado de ' + e.empresa + ': no se incluye.' }); });
+    
+        var suma = function (ls) { return Calculo.redondear2(ls.reduce(function (t, l) { return t + l.total; }, 0)); };
+        var lNuevos = lineas.filter(function (l) { return l.nuevo; });
+        return {
+          lineas: lineas, sugeridas: sugeridas, sinEmpleado: sinEmpleado, alertas: alertas, retirados: retirados, primeraCarga: primeraCarga,
+          totales: { personas: lineas.length, total: suma(lineas), nuevos: lNuevos.length, totalNuevos: suma(lNuevos), retirados: retirados.length },
+          listo: sugeridas.length === 0 && lineas.length > 0,
+        };
+      }
+    
+      var api = { trimestreAnterior: trimestreAnterior, prepararAporte: prepararAporte };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Aportes = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Aportes: ' + (e && e.message)); return undefined; }
+})();
+
 // ===== core/servicio.js =====
 var Servicio = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Casos de uso del módulo de prestaciones. No sabe de Sheets:
        recibe un `repo` (hojas en producción, memoria en pruebas) y
@@ -1177,6 +1285,7 @@ var Servicio = (function () {
       var Exportes = isNode ? require('./exportes.js') : dependencia(raiz, 'Exportes');
       var Constancia = isNode ? require('./constancia.js') : dependencia(raiz, 'Constancia');
       var Vacaciones = isNode ? require('./vacaciones.js') : dependencia(raiz, 'Vacaciones');
+      var Aportes = isNode ? require('./aportes.js') : dependencia(raiz, 'Aportes');
     
       var HORAS_SESION = 8;
       var MAX_FALLOS_CEDULA = 5;
@@ -1426,6 +1535,169 @@ var Servicio = (function () {
         repo.guardarCierre(c);
         repo.log('CIERRE_' + nuevo, s.clave, anio + ' T' + trimestre + ' ' + empresa);
         return ok(c);
+      }
+    
+      /* ---------- Fideicomiso · Aportes trimestrales ---------- */
+    
+      function periodoValido(d) {
+        var anio = Number(d && d.anio), trimestre = Number(d && d.trimestre), empresa = d && d.empresa;
+        if (!(anio >= 2000 && anio <= 2100) || [1, 2, 3, 4].indexOf(trimestre) === -1 || ['PCA', 'AIV'].indexOf(empresa) === -1) return null;
+        return { anio: anio, trimestre: trimestre, empresa: empresa };
+      }
+    
+      function parametrosCalculo(p) {
+        var r = {};
+        if (Number(p.anioBase) > 0) r.anioBase = Number(p.anioBase);
+        if (Number(p.diasMinimosMes) > 0) r.diasMinimosMes = Number(p.diasMinimosMes);
+        if (Number(p.diasUtilidades) > 0) r.diasUtilidades = Number(p.diasUtilidades);
+        return r;
+      }
+    
+      /** Claves del aporte cerrado del trimestre anterior (o null si no hay: primer aporte en el sistema). */
+      function anteriorDe(repo, per) {
+        var ant = Aportes.trimestreAnterior(per.anio, per.trimestre);
+        var c = repo.cierre(ant.anio, ant.trimestre, per.empresa);
+        if (!c || ['CERRADO', 'ACREDITADO'].indexOf(c.estado) === -1) return null;
+        return repo.aportesPeriodo(ant.anio, ant.trimestre, per.empresa).map(function (a) { return a.clave; });
+      }
+    
+      function calcularVistaAporte(repo, per, datos) {
+        var filas = (datos.filas || []).map(function (f) { return { nombre: String(f.nombre || '').trim(), monto: Number(f.monto), clave: f.clave || '' }; })
+          .filter(function (f) { return f.nombre || f.clave; });
+        return Aportes.prepararAporte({
+          anio: per.anio, trimestre: per.trimestre, empresa: per.empresa, filas: filas, forzados: datos.forzados || {},
+          empleados: repo.todosEmpleados(), anterior: anteriorDe(repo, per), parametros: parametrosCalculo(repo.parametros()),
+        });
+      }
+    
+      /** Estado del aporte de un período: cerrado o no, y sus líneas guardadas. */
+      function estadoAporte(repo, ctx, token, datos) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var per = periodoValido(datos);
+        if (!per) return err('VALIDACION', 'Elige año, trimestre y empresa.');
+        var c = repo.cierre(per.anio, per.trimestre, per.empresa), lineas = repo.aportesPeriodo(per.anio, per.trimestre, per.empresa);
+        var total = Calculo.redondear2(lineas.reduce(function (t, l) { return t + Number(l.total); }, 0));
+        return ok({ estado: c ? c.estado : '', actualizado: c ? c.actualizado || 0 : 0, lineas: lineas, totales: { personas: lineas.length, total: total,
+          nuevos: lineas.filter(function (l) { return l.nuevo; }).length }, primeraCarga: !anteriorDe(repo, per) });
+      }
+    
+      /** Vista previa con el Excel (no guarda nada). */
+      function prepararAporte(repo, ctx, token, datos) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var per = periodoValido(datos);
+        if (!per) return err('VALIDACION', 'Elige año, trimestre y empresa.');
+        if (!Array.isArray(datos.filas) || !datos.filas.length) return err('VALIDACION', 'El Excel no trae filas con nombre y monto.');
+        return ok(calcularVistaAporte(repo, per, datos));
+      }
+    
+      /**
+       * Guarda el aporte y lo marca CERRADO. Se recalcula aquí (no se confía en el navegador).
+       * No duplica: si el período ya está CERRADO solo se reemplaza con `reemplazar: true` (reapertura explícita);
+       * si está ACREDITADO (el banco ya lo procesó) no se toca.
+       */
+      function cerrarAporte(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var per = periodoValido(datos);
+        if (!per) return err('VALIDACION', 'Elige año, trimestre y empresa.');
+        var c = repo.cierre(per.anio, per.trimestre, per.empresa);
+        if (c && c.estado === 'ACREDITADO') return err('ACREDITADO', 'Este aporte ya fue acreditado por el banco: no se puede cambiar.');
+        if (c && c.estado === 'CERRADO' && datos.reemplazar !== true) return err('YA_CERRADO', 'Este aporte ya está cerrado. Para cambiarlo, reábrelo.');
+        var v = calcularVistaAporte(repo, per, datos);
+        if (!v.listo) return err('VALIDACION', v.sugeridas.length ? 'Resuelve primero los nombres por confirmar.' : 'No hay líneas para guardar.');
+        repo.reemplazarAportes(per.anio, per.trimestre, per.empresa, v.lineas.map(function (l) {
+          return { clave: l.clave, nombre: l.nombre, anio: per.anio, trimestre: per.trimestre, empresa: per.empresa, total: l.total, monto: l.monto, meses: l.meses,
+            diasAdicionales: l.diasAdicionales, adicionalesForzados: l.adicionalesForzados, nuevo: l.nuevo, salarioDiario: l.salarioDiario,
+            alicUtilidades: l.alicUtilidades, alicVacaciones: l.alicVacaciones, diasVacaciones: l.diasVacaciones, diasAntiguedad: l.diasAntiguedad };
+        }));
+        var cierre = Object.assign(c || {}, { anio: per.anio, trimestre: per.trimestre, empresa: per.empresa, estado: 'CERRADO', por: s.clave, actualizado: ctx.ahora() });
+        repo.guardarCierre(cierre);
+        repo.log(c ? 'APORTE_REEMPLAZADO' : 'APORTE_CERRADO', s.clave, per.anio + ' T' + per.trimestre + ' ' + per.empresa + ' · ' + v.totales.personas + ' personas · ' + v.totales.total);
+        return ok({ estado: 'CERRADO', totales: v.totales, retirados: v.retirados });
+      }
+    
+      /** Archivos para el banco de un aporte cerrado: NOMINA APORTES (todos) o NUEVOS (solo nuevos ingresos). TIPO T = 1. */
+      function archivoAporte(repo, ctx, token, datos) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var per = periodoValido(datos);
+        if (!per) return err('VALIDACION', 'Elige año, trimestre y empresa.');
+        var c = repo.cierre(per.anio, per.trimestre, per.empresa);
+        if (!c || ['CERRADO', 'ACREDITADO'].indexOf(c.estado) === -1) return err('VALIDACION', 'Primero cierra el aporte.');
+        var cfg = repo.empresaConfig(per.empresa);
+        var lineas = repo.aportesPeriodo(per.anio, per.trimestre, per.empresa).filter(function (l) { return datos.tipo !== 'NUEVOS' || l.nuevo; });
+        if (!lineas.length) return err('VACIO', datos.tipo === 'NUEVOS' ? 'Este aporte no tiene nuevos ingresos.' : 'El aporte está vacío.');
+        var items = lineas.map(function (l) {
+          var e = repo.empleadoPorClave(l.clave) || { cedulaLetra: l.clave.charAt(0), cedulaNumero: l.clave.slice(1), nombre: l.nombre };
+          return { cedulaLetra: e.cedulaLetra, cedulaNumero: e.cedulaNumero, nombre: e.nombre || l.nombre, monto: Number(l.total) };
+        });
+        var filas = Exportes.filasNomina(items, { fideicomiso: cfg.fideicomiso, tipoT: cfg.tipoTAporte, forma: cfg.forma });
+        return ok({ filas: filas, csv: Exportes.aCsv(filas, { decimales: { 5: 2 } }), cantidad: items.length });
+      }
+    
+      /* ---------- Fideicomiso · Cancelaciones (empleados retirados) ---------- */
+    
+      function fechaTxt(f) { return f ? ('0' + f.d).slice(-2) + '/' + ('0' + f.m).slice(-2) + '/' + f.y : ''; }
+    
+      /** Retirados con aportes en el sistema que aún no tienen cancelación registrada. */
+      function candidatosCancelacion(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var conCancelacion = {}, aportado = {};
+        repo.cancelaciones().forEach(function (c) { if (c.estado !== 'ANULADA') conCancelacion[c.clave] = true; });
+        repo.todosAportes().forEach(function (a) { aportado[a.clave] = Calculo.redondear2((aportado[a.clave] || 0) + Number(a.total)); });
+        return ok(repo.todosEmpleados().filter(function (e) { var k = Empleados.claveCedula(e); return e.estado === 'Inactivo' && aportado[k] != null && !conCancelacion[k]; })
+          .map(function (e) { var k = Empleados.claveCedula(e); return { clave: k, nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e), fechaIngreso: fechaTxt(e.fechaIngreso), totalAportado: aportado[k] }; }));
+      }
+    
+      function listarCancelaciones(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        return ok(repo.cancelaciones().sort(function (a, b) { return b.creada - a.creada; }));
+      }
+    
+      /** RRHH registra la cancelación de un retirado: fecha de egreso y, si lo define, el monto a cancelar. */
+      function registrarCancelacion(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var e = repo.empleadoPorClave(datos && datos.clave);
+        if (!e) return err('NO_ENCONTRADO', 'No encontramos ese empleado.');
+        if (e.estado !== 'Inactivo') return err('VALIDACION', 'Solo se cancela el fideicomiso de empleados retirados (inactivos).');
+        if (!Vacaciones.esFecha(datos.fechaEgreso)) return err('VALIDACION', 'Indica la fecha de egreso.');
+        var monto = datos.monto === '' || datos.monto == null ? '' : Number(datos.monto);
+        if (monto !== '' && !(monto >= 0)) return err('VALIDACION', 'El monto a cancelar no es válido.');
+        var k = Empleados.claveCedula(e);
+        if (repo.cancelaciones().some(function (c) { return c.clave === k && c.estado !== 'ANULADA'; })) return err('VALIDACION', 'Ese empleado ya tiene una cancelación registrada.');
+        var c = { id: repo.nuevoIdCancelacion(), clave: k, nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e), fechaIngreso: fechaTxt(e.fechaIngreso),
+          fechaEgreso: Vacaciones.corta(datos.fechaEgreso), monto: monto === '' ? '' : Calculo.redondear2(monto), estado: 'PENDIENTE', creada: ctx.ahora(), por: s.clave, actualizada: ctx.ahora() };
+        repo.guardarCancelacion(c);
+        repo.log('CANCELACION_REGISTRADA', s.clave, k + ' · egreso ' + c.fechaEgreso);
+        return ok(c);
+      }
+    
+      /** Archivo de cancelaciones de una empresa con las PENDIENTES; pasan a EN_ARCHIVO. */
+      function archivoCancelaciones(repo, ctx, token, empresa) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lista = repo.cancelaciones().filter(function (c) { return c.empresa === empresa && c.estado === 'PENDIENTE'; });
+        if (!lista.length) return err('VACIO', 'No hay cancelaciones pendientes de ' + empresa + '.');
+        var filas = [['Cédula (letra)', 'Cédula (número)', 'Nombre', 'Fecha de ingreso', 'Fecha de egreso', 'Monto a cancelar']].concat(lista.map(function (c) {
+          return [c.clave.charAt(0), c.clave.slice(1), c.nombre, c.fechaIngreso, c.fechaEgreso, c.monto === '' ? '' : Number(c.monto)];
+        }));
+        lista.forEach(function (c) { c.estado = 'EN_ARCHIVO'; c.actualizada = ctx.ahora(); repo.guardarCancelacion(c); });
+        repo.log('ARCHIVO_CANCELACIONES', s.clave, empresa + ' · ' + lista.length);
+        return ok({ filas: filas, csv: Exportes.aCsv(filas, { decimales: { 5: 2 } }), cantidad: lista.length });
+      }
+    
+      /** Cambia el estado de cancelaciones: PROCESADA (el banco la ejecutó) o ANULADA (si se registró por error). */
+      function marcarCancelaciones(repo, ctx, token, ids, estado) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var validas = { PROCESADA: ['EN_ARCHIVO'], ANULADA: ['PENDIENTE'] };
+        if (!validas[estado]) return err('VALIDACION', 'Estado no válido.');
+        var n = 0;
+        repo.cancelaciones().forEach(function (c) {
+          if ((ids || []).indexOf(c.id) !== -1 && validas[estado].indexOf(c.estado) !== -1) { c.estado = estado; c.actualizada = ctx.ahora(); repo.guardarCancelacion(c); n++; }
+        });
+        repo.log('CANCELACION_' + estado, s.clave, n + '');
+        return ok({ cambiados: n });
       }
     
       /* ---------- Constancia de trabajo ---------- */
@@ -1950,6 +2222,9 @@ var Servicio = (function () {
       var api = {
         iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
         miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
+        estadoAporte: estadoAporte, prepararAporte: prepararAporte, cerrarAporte: cerrarAporte, archivoAporte: archivoAporte,
+        candidatosCancelacion: candidatosCancelacion, listarCancelaciones: listarCancelaciones, registrarCancelacion: registrarCancelacion,
+        archivoCancelaciones: archivoCancelaciones, marcarCancelaciones: marcarCancelaciones,
         datosAnticipo: datosAnticipo, rechazarAnticipoBanco: rechazarAnticipoBanco,
         listarAperturas: listarAperturas, guardarApertura: guardarApertura, eliminarApertura: eliminarApertura,
         bandejaAnticipos: bandejaAnticipos, decidirAnticipo: decidirAnticipo,
@@ -1980,9 +2255,9 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.10';
+var VERSION = '2026-10-31.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -1990,6 +2265,7 @@ function modulosCargados_() {
     Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
     Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
     Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
+    Aportes: typeof Aportes !== 'undefined' && !!Aportes,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -1998,7 +2274,9 @@ var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
   EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina'],
-  APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo'],
+  APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo',
+    'nombre', 'salarioDiario', 'alicUtilidades', 'alicVacaciones', 'diasVacaciones', 'diasAntiguedad'],
+  CANCELACIONES: ['id', 'clave', 'nombre', 'empresa', 'fechaIngreso', 'fechaEgreso', 'monto', 'estado', 'creada', 'por', 'actualizada'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo', 'ventana', 'acepto'],
   CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
@@ -2060,6 +2338,15 @@ var RUTAS_RRHH = {
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
   listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
+  estadoAporte: function (repo, ctx, d) { return Servicio.estadoAporte(repo, ctx, d.token, d); },
+  prepararAporte: function (repo, ctx, d) { return Servicio.prepararAporte(repo, ctx, d.token, d); },
+  cerrarAporte: function (repo, ctx, d) { return Servicio.cerrarAporte(repo, ctx, d.token, d); },
+  archivoAporte: function (repo, ctx, d) { return Servicio.archivoAporte(repo, ctx, d.token, d); },
+  candidatosCancelacion: function (repo, ctx, d) { return Servicio.candidatosCancelacion(repo, ctx, d.token); },
+  listarCancelaciones: function (repo, ctx, d) { return Servicio.listarCancelaciones(repo, ctx, d.token); },
+  registrarCancelacion: function (repo, ctx, d) { return Servicio.registrarCancelacion(repo, ctx, d.token, d); },
+  archivoCancelaciones: function (repo, ctx, d) { return Servicio.archivoCancelaciones(repo, ctx, d.token, d.empresa); },
+  marcarCancelaciones: function (repo, ctx, d) { return Servicio.marcarCancelaciones(repo, ctx, d.token, d.ids || [], d.estado); },
   listarAperturas: function (repo, ctx, d) { return Servicio.listarAperturas(repo, ctx, d.token); },
   guardarApertura: function (repo, ctx, d) { return Servicio.guardarApertura(repo, ctx, d.token, d); },
   eliminarApertura: function (repo, ctx, d) { return Servicio.eliminarApertura(repo, ctx, d.token, d.id); },
@@ -2091,7 +2378,8 @@ var RUTAS_RRHH = {
  * Las que escriben se hacen de una en una para no pisarse.
  */
 var LECTURAS = {
-  login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
+  login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
+  estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
 };
 
@@ -2281,6 +2569,16 @@ function fechaIso_(v) {
   return t.slice(0, 10);
 }
 
+function aporte_(f) {
+  return {
+    clave: texto_(f.clave), nombre: texto_(f.nombre), anio: Number(f.anio), trimestre: Number(f.trimestre), empresa: texto_(f.empresa), total: Number(f.total) || 0,
+    monto: Number(f.monto) || 0, meses: Number(f.meses) || 0, diasAdicionales: Number(f.diasAdicionales) || 0,
+    adicionalesForzados: f.adicionalesForzados === true || f.adicionalesForzados === 'TRUE' || f.adicionalesForzados === 'true',
+    nuevo: f.nuevo === true || f.nuevo === 'TRUE' || f.nuevo === 'true', salarioDiario: Number(f.salarioDiario) || 0, alicUtilidades: Number(f.alicUtilidades) || 0,
+    alicVacaciones: Number(f.alicVacaciones) || 0, diasVacaciones: Number(f.diasVacaciones) || 0, diasAntiguedad: Number(f.diasAntiguedad) || 0,
+  };
+}
+
 function vacSolicitud_(f) {
   var imp = [], pend = null;
   try { imp = f.imputacion ? JSON.parse(f.imputacion) : []; } catch (e) { /* vacía */ }
@@ -2393,6 +2691,32 @@ function crearRepo_() {
     anticiposDe: function (clave) { return anticiposTodos().filter(function (a) { return a.clave === clave; }); },
     anticipoPorId: function (id) { return anticiposTodos().filter(function (a) { return a.id === id; })[0] || null; },
     todosAnticipos: function () { return anticiposTodos(); },
+    todosAportes: function () { return leer_('APORTES').map(aporte_); },
+    aportesPeriodo: function (anio, trimestre, empresa) {
+      return leer_('APORTES').map(aporte_).filter(function (a) { return a.anio === anio && a.trimestre === trimestre && a.empresa === empresa; });
+    },
+    /** Reemplaza las líneas de un período (no duplica): reescribe la hoja sin las del período y agrega las nuevas. */
+    reemplazarAportes: function (anio, trimestre, empresa, filas) {
+      var h = hoja_('APORTES'), cab = HOJAS.APORTES;
+      var resto = leer_('APORTES').filter(function (a) { return !(Number(a.anio) === anio && Number(a.trimestre) === trimestre && a.empresa === empresa); });
+      var todas = resto.map(function (a) { return cab.map(function (c) { return a[c] == null ? '' : a[c]; }); })
+        .concat(filas.map(function (f) { return cab.map(function (c) { return f[c] == null ? '' : f[c]; }); }));
+      var ultima = h.getLastRow();
+      if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+      if (todas.length) { h.getRange(2, 1, todas.length, 1).setNumberFormat('@'); h.getRange(2, 1, todas.length, cab.length).setValues(todas); }
+      invalidar_('APORTES');
+    },
+    cancelaciones: function () {
+      return leer_('CANCELACIONES').map(function (f) {
+        return { _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), nombre: texto_(f.nombre), empresa: texto_(f.empresa), fechaIngreso: texto_(f.fechaIngreso),
+          fechaEgreso: texto_(f.fechaEgreso), monto: f.monto === '' ? '' : Number(f.monto), estado: texto_(f.estado), creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+      }).filter(function (c) { return c.id; });
+    },
+    guardarCancelacion: function (c) {
+      if (!c._fila) { var h = hoja_('CANCELACIONES'); h.getRange(h.getLastRow() + 1, 1, 1, 6).setNumberFormat('@'); }
+      escribirFila_('CANCELACIONES', c);
+    },
+    nuevoIdCancelacion: function () { return 'CAN-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     aperturasAnticipo: function () {
       return leer_('APERTURAS_ANTICIPO').map(function (f) {
         return { _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), inicio: fechaIso_(f.inicio), fin: fechaIso_(f.fin), por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };

@@ -4,7 +4,7 @@ const E = require('../core/empleados.js');
 
 function crearRepo(empleadosFilas) {
   let empleados = E.fusionarDetalle([], empleadosFilas).empleados;
-  const st = { aportes: [], anticipos: {}, aperturas: {}, constancias: {}, vacPeriodos: [], vacSolicitudes: {}, cierres: {},
+  const st = { aportes: [], anticipos: {}, aperturas: {}, cancelaciones: {}, constancias: {}, vacPeriodos: [], vacSolicitudes: {}, cierres: {},
     feriados: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-04-02', '2026-04-03', '2026-04-19', '2026-05-01', '2026-06-24', '2026-07-05', '2026-07-24', '2026-10-12', '2026-12-24', '2026-12-25', '2026-12-31', '2027-01-01'], usuarios: {}, fallos: {}, logs: [], seq: 0,
     parametros: { porcentajeAnticipoMax: 0.75 },
     empresas: { PCA: { fideicomiso: 5847, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' }, AIV: { fideicomiso: 6000, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' } } };
@@ -37,6 +37,12 @@ function crearRepo(empleadosFilas) {
     anticiposDe: (c) => Object.values(st.anticipos).filter((a) => a.clave === c),
     anticipoPorId: (id) => st.anticipos[id] || null,
     todosAnticipos: () => Object.values(st.anticipos),
+    aportesPeriodo: (y, t, e) => st.aportes.filter((a) => a.anio === y && a.trimestre === t && a.empresa === e).map((a) => ({ ...a })),
+    reemplazarAportes: (y, t, e, filas) => { st.aportes = st.aportes.filter((a) => !(a.anio === y && a.trimestre === t && a.empresa === e)).concat(filas.map((f) => ({ ...f }))); },
+    todosAportes: () => st.aportes.map((a) => ({ ...a })),
+    cancelaciones: () => Object.values(st.cancelaciones).map((c) => ({ ...c })),
+    guardarCancelacion: (c) => { st.cancelaciones[c.id] = { ...c }; },
+    nuevoIdCancelacion: () => 'CAN' + (++st.seq),
     aperturasAnticipo: () => Object.values(st.aperturas).map((c) => ({ ...c })),
     guardarAperturaAnticipo: (c) => { st.aperturas[c.id] = { ...c }; },
     eliminarAperturaAnticipo: (id) => { delete st.aperturas[id]; },
