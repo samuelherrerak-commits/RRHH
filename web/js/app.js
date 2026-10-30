@@ -30,6 +30,8 @@ async function arrancar() {
   if (verificar) return vistaVerificar(verificar[1]);
   const s = sesion.leer();
   btnSalir.hidden = !s;
+  document.body.classList.toggle('en-entrada', !s);
+  document.getElementById('usuario').textContent = s && s.nombre ? primerNombre(s.nombre) + (s.rol !== 'TRABAJADOR' ? ' · Gestión Humana' : '') : '';
   if (s && s.rol !== 'TRABAJADOR') return vistaRRHH();
   if (s) { precargarTrabajador(); return vistaCuenta(app, '', seccionDesdeHash()); }
   return vistaLogin();
@@ -41,14 +43,28 @@ window.addEventListener('hashchange', () => arrancar());
 
 function vistaLogin() {
   app.innerHTML = `
+    <div class="entrada">
+      <section class="entrada-marca">
+        <div>
+          <div class="sigla">SADS</div>
+          <p class="nombre">Sistema de Atención de Solicitudes</p>
+        </div>
+        <div class="acrostico" role="img" aria-label="SADS: Sistema de Atención de Solicitudes">
+          <p><b>S</b>istema<span class="de">de</span></p><p><b>A</b>tención</p><p><b>D</b>e</p><p><b>S</b>olicitudes</p>
+        </div>
+        <p class="empresas">Prosein · Austral · Mil Cerámicas — Gestión Humana</p>
+      </section>
+      <div class="entrada-form">
     <form class="tarjeta login" id="f" novalidate>
-      <div><h2>Bienvenido</h2><p class="suave">Escribe tu cédula para ver tu estado de cuenta de prestaciones y hacer solicitudes.</p></div>
+      <div><h2>Bienvenido</h2><p class="suave">Escribe tu cédula para hacer tus solicitudes: constancia de trabajo, vacaciones y más.</p></div>
       <label>Cédula <input name="cedula" inputmode="numeric" autocomplete="username" placeholder="Solo números" maxlength="14" required></label>
       <label id="lbl-clave" hidden>Clave <input name="clave" type="password" autocomplete="current-password"></label>
       <div class="error-msg" id="err" hidden></div>
       <button class="btn" type="submit">Entrar</button>
       <button class="btn btn-sec" type="button" id="otra" hidden>Usar otra cédula</button>
-    </form>`;
+    </form>
+      </div>
+    </div>`;
   const f = app.querySelector('#f'), err = app.querySelector('#err'), lblClave = app.querySelector('#lbl-clave'), otra = app.querySelector('#otra');
   let pideClave = false;
   f.cedula.focus();
@@ -110,23 +126,54 @@ const ICONOS = {
   vacaciones: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>',
   fideicomiso: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
   equipo: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  inicio: '<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/>',
   volver: '<path d="m15 18-6-6 6-6"/>',
   ir: '<path d="m9 18 6-6-6-6"/>',
 };
 const icono = (n, clase = 'icono') => `<svg class="${clase}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[n]}</svg>`;
 const volver = () => `<button class="volver" type="button" data-ir="inicio">${icono('volver')} Volver al inicio</button>`;
 
+const MENU_TRABAJADOR = [['inicio', 'Inicio', 'inicio'], ['constancia', 'Constancia de trabajo', 'constancia'], ['vacaciones', 'Vacaciones', 'vacaciones'], ['fideicomiso', 'Fideicomiso', 'fideicomiso']];
+
+/** Sitio del trabajador: en computadora, menú lateral fijo; en el celular, el inicio con tarjetas y «Volver». */
+function marcoTrabajador() {
+  let destino = app.querySelector('#contenido');
+  if (!destino) {
+    app.innerHTML = `<div class="layout"><nav class="lateral" aria-label="Secciones">
+        <p class="lateral-titulo">Mis solicitudes</p>
+        ${MENU_TRABAJADOR.map(([id, t, ic]) => `<button type="button" data-ir="${id}">${icono(ic)} ${t}</button>`).join('')}
+      </nav><div class="contenido" id="contenido"></div></div>`;
+    app.querySelectorAll('.lateral [data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+    destino = app.querySelector('#contenido');
+    obtener('equipoVacaciones').then((r) => {      // los jefes ven además «Mi equipo»
+      const nav = app.querySelector('.lateral');
+      if (!r.ok || !r.data.esJefe || !nav || nav.querySelector('[data-ir=equipo]')) return;
+      const n = r.data.pendientes.length;
+      nav.insertAdjacentHTML('beforeend', `<button type="button" data-ir="equipo">${icono('equipo')} Mi equipo${n ? ` <span class="chip chip-espera">${n}</span>` : ''}</button>`);
+      nav.querySelector('[data-ir=equipo]').addEventListener('click', () => navegar('equipo'));
+      marcarMenu(cuenta.seccion);
+    });
+  }
+  return destino;
+}
+
+function marcarMenu(seccion) {
+  app.querySelectorAll('.lateral [data-ir]').forEach((b) => (b.dataset.ir === seccion ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
+}
+
 async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   cuenta = { cont, token, seccion };
   btnSalir.hidden = false;
   window.scrollTo(0, 0);
-  if (seccion === 'constancia') await seccionConstancia(cont);
-  else if (seccion === 'vacaciones') await seccionVacaciones(cont);
-  else if (seccion === 'equipo') await seccionEquipo(cont);
-  else if (seccion === 'fideicomiso') await seccionFideicomiso(cont);
-  else seccionInicio(cont);
-  if (cont !== app && !token) cont.querySelectorAll('.volver').forEach((b) => b.remove());   // «Mi equipo» del panel de RRHH
-  cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+  const destino = cont === app ? marcoTrabajador() : cont;
+  if (cont === app) marcarMenu(seccion);
+  if (seccion === 'constancia') await seccionConstancia(destino);
+  else if (seccion === 'vacaciones') await seccionVacaciones(destino);
+  else if (seccion === 'equipo') await seccionEquipo(destino);
+  else if (seccion === 'fideicomiso') await seccionFideicomiso(destino);
+  else seccionInicio(destino);
+  if (cont !== app && !token) destino.querySelectorAll('.volver').forEach((b) => b.remove());   // «Mi equipo» del panel de RRHH
+  destino.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
 }
 
 /** Mientras la persona ve su inicio, se piden en segundo plano los datos de cada tarjeta. */
@@ -178,7 +225,7 @@ async function seccionConstancia(cont) {
   if (!rc.ok && rc.code === 'SESION') { toast(rc.message); return arrancar(); }
   const constancias = rc.ok ? rc.data : [];
   const vigente = constancias.find((c) => c.estado === 'VIGENTE');
-  cont.innerHTML = `${volver()}
+  cont.innerHTML = `${volver()}<div class="dos-col"><div class="col">
     <section class="tarjeta">
       <h2>Constancia de trabajo</h2>
       <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 30 días.</p>
@@ -187,9 +234,10 @@ async function seccionConstancia(cont) {
         : '<div><button class="btn" id="btn-constancia">Generar constancia de trabajo</button></div>'}
       <div class="error-msg" id="err-const" hidden></div>
     </section>
+    </div><div class="col">
     ${constancias.length ? `<section class="tarjeta"><h2>Mis constancias</h2><div class="lista">${constancias.map((c) => `
       <div class="item"><div class="item-cab"><div><b>Emitida el ${fechaCaracas(c.emision)}</b><p class="suave">Vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
-      </div>`).join('')}</div></section>` : ''}`;
+      </div>`).join('')}</div></section>` : ''}</div></div>`;
 
   const errConst = cont.querySelector('#err-const');
   const bajarPdf = async (c) => { try { await descargarConstanciaPdf(c, URL_BASE); } catch (e) { errorEn(errConst, e.message || 'No se pudo generar el PDF.'); } };
@@ -222,7 +270,7 @@ async function seccionVacaciones(cont) {
   const d = r.data, s = d.saldo;
   const desde = V().sumarDiasTxt(d.hoy, d.reglas.anticipacionMin), hasta = V().sumarDiasTxt(d.hoy, d.reglas.anticipacionMax);
 
-  cont.innerHTML = `${volver()}
+  cont.innerHTML = `${volver()}<div class="dos-col"><div class="col">
     <section class="tarjeta heroe">
       <h2>Días de vacaciones pendientes</h2>
       <div class="gran">${s.total} día${s.total === 1 ? '' : 's'}</div>
@@ -243,6 +291,7 @@ async function seccionVacaciones(cont) {
         <div><button class="btn" type="submit">Enviar a mi jefe: ${esc(primerNombre(d.jefe.nombre))}</button></div>
       </form>`}
     </section>
+    </div><div class="col">
     <section class="tarjeta">
       <h2>Mis días por período</h2>
       ${s.porPeriodo.length ? `<div class="tabla-caja tabla-compacta"><table>
@@ -261,7 +310,7 @@ async function seccionVacaciones(cont) {
           ${x.estado === 'PENDIENTE_JEFE' ? `<div><button class="btn btn-sec btn-chico" data-cancelar-vac="${esc(x.id)}">Cancelar solicitud</button></div>` : ''}
           ${x.estado === 'REGISTRADA' && x.numeroConstancia ? `<div><button class="btn btn-azul btn-chico" data-pdf-vac="${esc(x.id)}">Descargar constancia de aprobación</button></div>` : ''}
         </div>`).join('')}</div>` : '<p class="vacio">Todavía no has hecho solicitudes en el sistema.</p>'}
-    </section>`;
+    </section></div></div>`;
 
   const f = cont.querySelector('#fv');
   if (f) {
@@ -320,13 +369,14 @@ async function seccionEquipo(cont) {
   const item = (x, acciones = '') => `<div class="item">
       <div class="item-cab"><div><b>${esc(x.nombre)}</b><p class="suave">${esc(resumenFechas(x))}</p></div>${chipVac(x.estado, ESTADOS_VAC_JEFE)}</div>
       ${x.estado === 'RECHAZADA' && x.motivoRechazo ? `<p class="suave">Motivo: ${esc(x.motivoRechazo)}</p>` : ''}${acciones}</div>`;
-  cont.innerHTML = `${volver()}
+  cont.innerHTML = `${volver()}<div class="dos-col"><div class="col">
     <section class="tarjeta"><h2>Vacaciones por aprobar (${pendientes.length})</h2>
       <p class="suave">Tu equipo: ${equipo} persona${equipo === 1 ? '' : 's'}. Al aprobar, la solicitud pasa a Gestión Humana para registrarla.</p>
       ${pendientes.length ? `<div class="lista">${pendientes.map((x) => item(x, `<div class="fila"><button class="btn btn-chico" data-ap-vac="${esc(x.id)}">Aprobar</button><button class="btn btn-sec btn-chico" data-re-vac="${esc(x.id)}">Rechazar</button></div>`)).join('')}</div>`
         : '<p class="vacio">No hay solicitudes pendientes.</p>'}
     </section>
-    ${recientes.length ? `<section class="tarjeta"><h2>Revisadas recientemente</h2><div class="lista">${recientes.map((x) => item(x)).join('')}</div></section>` : ''}`;
+    </div><div class="col">
+    ${recientes.length ? `<section class="tarjeta"><h2>Revisadas recientemente</h2><div class="lista">${recientes.map((x) => item(x)).join('')}</div></section>` : ''}</div></div>`;
   cont.querySelectorAll('[data-ap-vac]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
     const x = await llamar('decidirVacacionesJefe', { id: b.dataset.apVac, aprobar: true, ...conToken() });
     toast(x.ok ? 'Aprobada. Pasa a Gestión Humana.' : x.message); vistaCuenta(cuenta.cont, cuenta.token, 'equipo');
@@ -375,7 +425,7 @@ async function seccionFideicomiso(cont) {
   const { resumen: u, anticipos } = r.data;
   const pct = Math.round(u.porcentajeMax * 100);
 
-  cont.innerHTML = `${volver()}
+  cont.innerHTML = `${volver()}<div class="dos-col"><div class="col">
     <section class="tarjeta heroe">
       <h2>Disponible para anticipo</h2>
       <div class="gran">${bs(u.disponible)}</div>
@@ -395,6 +445,7 @@ async function seccionFideicomiso(cont) {
         <tbody>${u.detalle.slice().reverse().map((d) => `<tr><td>${d.anio} · T${d.trimestre}</td><td>${esc(d.empresa)}</td><td class="num">${bs(d.aporte)}</td><td class="num">${bs(d.acumulado)}</td></tr>`).join('')}</tbody>
       </table></div>` : '<p class="vacio">Aún no tienes aportes acreditados.</p>'}
     </section>
+    </div><div class="col">
     <section class="tarjeta">
       <h2>Mis solicitudes de anticipo</h2>
       ${anticipos.length ? `<div class="lista">${anticipos.slice().sort((a, b) => b.creada - a.creada).map((a) => `
@@ -404,7 +455,7 @@ async function seccionFideicomiso(cont) {
           ${a.estado === 'RECHAZADA' && a.motivoRechazo ? `<p class="error-msg">Motivo: ${esc(a.motivoRechazo)}</p>` : ''}
           ${a.estado === 'PENDIENTE' ? `<div><button class="btn btn-sec btn-chico" data-cancelar="${esc(a.id)}">Cancelar solicitud</button></div>` : ''}
         </div>`).join('')}</div>` : '<p class="vacio">Todavía no has hecho solicitudes.</p>'}
-    </section>`;
+    </section></div></div>`;
 
   cont.querySelector('#btn-pedir')?.addEventListener('click', () => formularioAnticipo(u));
   cont.querySelectorAll('[data-cancelar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
@@ -454,12 +505,12 @@ async function vistaRRHH() {
   const miCuenta = !!(sesion.leer() || {}).tokenTrabajador;
   const miEquipo = !!(sesion.leer() || {}).esJefe && !miCuenta;   // si es empleado, su equipo está en «Mi cuenta»
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
-  app.innerHTML = `
-    <div class="pestanas" role="tablist">
+  app.innerHTML = `<div class="layout">
+    <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
       ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['solicitudes', 'Anticipos'], ['banco', 'Archivo al banco'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
-    <div id="panel"></div>`;
+    <div id="panel" class="contenido"></div></div>`;
   app.querySelectorAll('.pestana').forEach((b) => b.addEventListener('click', () => { pestana = b.dataset.p; vistaRRHH(); }));
   const panel = app.querySelector('#panel');
   if (pestana === 'solicitudes') return panelSolicitudes(panel);
@@ -557,7 +608,7 @@ async function panelVacaciones(panel) {
   const r = await obtener('bandejaVacaciones', { estado: estadoVacRRHH });
   if (!r.ok) { toast(r.message); return arrancar(); }
   const { solicitudes, sinJefe, conCierre } = r.data;
-  panel.innerHTML = `
+  panel.innerHTML = `<div class="dos-col der-angosta"><div class="col">
     ${sinJefe ? `<section class="tarjeta"><p class="error-msg"><b>${sinJefe} empleado${sinJefe === 1 ? '' : 's'} activo${sinJefe === 1 ? '' : 's'} sin jefe directo.</b> No pueden solicitar vacaciones hasta que se lo asignes.</p>
       <div><button class="btn btn-sec btn-chico" id="ver-sin-jefe">Asignar jefes</button></div></section>` : ''}
     <section class="tarjeta">
@@ -576,13 +627,14 @@ async function panelVacaciones(panel) {
             <div class="fila"><button class="btn btn-chico" data-registrar="${esc(x.id)}">Registrar</button><button class="btn btn-sec btn-chico" data-rechazar-vac="${esc(x.id)}">Rechazar</button></div>` : ''}
         </div>`; }).join('')}</div>` : '<p class="vacio">No hay solicitudes en este estado.</p>'}
     </section>
+    </div><div class="col">
     <section class="tarjeta">
       <h2>Importar el cierre de vacaciones</h2>
       <p class="suave">Sube tu Excel «Solicitud Digital de Disfrute de Vacaciones» (hoja CIERRE DE VACACIONES). Reemplaza los saldos por período de cada persona; los ingresos nuevos sin cierre usan la regla de la ley (15 + 1 por año, hasta 30). ${conCierre ? `Hoy hay saldos de <b>${conCierre}</b> personas.` : '<b>Todavía no se ha importado.</b>'}</p>
       <label>Archivo <input type="file" id="arch-vac" accept=".xlsx,.xls"></label>
       <div class="error-msg" id="err-vac" hidden></div>
       <div id="previa-cierre"></div>
-    </section>`;
+    </section></div></div>`;
 
   panel.querySelector('#estado-vac').addEventListener('change', (e) => { estadoVacRRHH = e.target.value; panelVacaciones(panel); });
   activarPdfVac(panel, solicitudes);
@@ -630,7 +682,7 @@ async function panelConstancias(panel) {
   if (!r.ok) { toast(r.message); return arrancar(); }
   panel.innerHTML = `<section class="tarjeta"><h2>Constancias emitidas (${r.data.length})</h2>
     <p class="suave">Si anulas una, al escanear su código aparecerá como anulada.</p>
-    ${r.data.length ? `<div class="lista">${r.data.map((c) => `<div class="item">
+    ${r.data.length ? `<div class="lista lista-grid">${r.data.map((c) => `<div class="item">
       <div class="item-cab"><div><b>${esc(c.nombre)}</b><p class="suave">${esc(c.cedula)} · ${esc(c.empresa)} · ${bs(c.salario)}</p></div>${chipConstancia(c.estado)}</div>
       <p class="suave">Emitida el ${fechaCaracas(c.emision)} · vence el ${fechaCaracas(c.vence)} · código ${esc(c.id)}</p>
       ${c.estado !== 'ANULADA' ? `<div><button class="btn btn-sec btn-chico" data-anular="${esc(c.id)}">Anular</button></div>` : ''}</div>`).join('')}</div>` : '<p class="vacio">Todavía no se han emitido constancias.</p>'}</section>`;
@@ -704,7 +756,7 @@ async function leerArchivoExcel(archivo) {
 const COL_NOMBRES = { cedula: 'Cédula', nombre: 'Nombre', organizacion: 'Organización', departamento: 'Departamento', puesto: 'Puesto', estado: 'Estado', fechaInicio: 'Fecha Inicio', jefeNombre: 'Jefe directo', genero: 'Género', salarioMensual: 'Salario M.' };
 
 async function panelEmpleados(panel) {
-  panel.innerHTML = `
+  panel.innerHTML = `<div class="dos-col izq-angosta"><div class="col">
     <section class="tarjeta">
       <h2>Cargar «Detalle de Empleado»</h2>
       <p class="suave">Sube el Excel (.xlsx o .csv) con las columnas Organización, Departamento, Puesto, Cédula, Nombre, Estado y Fecha Inicio. Actualiza a los que ya existen, agrega los nuevos y respeta tus correcciones manuales.</p>
@@ -723,13 +775,14 @@ async function panelEmpleados(panel) {
       <label>Departamento <select id="dep"><option value="">Elige un departamento</option></select></label>
       <div><button class="btn btn-sec" id="dep-jefe" disabled>Elegir jefe del departamento</button></div>
     </section>
+    </div><div class="col">
     <section class="tarjeta">
       <h2>Empleados</h2>
       <label>Buscar por nombre o cédula <input id="q" placeholder="Escribe para buscar" autocomplete="off"></label>
       <div class="fila"><label class="grow">Departamento <select id="f-dep"><option value="">Todos</option></select></label>
         <label style="grid-auto-flow:column;align-items:center;gap:8px"><input type="checkbox" id="f-sinjefe" style="width:20px;min-height:20px" ${abrirSinJefe ? 'checked' : ''}> Solo sin jefe</label></div>
       <div id="lista">${esqueleto(1)}</div>
-    </section>`;
+    </section></div></div>`;
   const err = panel.querySelector('#err'), previa = panel.querySelector('#previa');
 
   panel.querySelector('#arch').addEventListener('change', async (e) => {
