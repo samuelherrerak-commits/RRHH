@@ -1,6 +1,7 @@
 import { llamar, sesion, obtener, precargar, olvidar } from './api.js';
 import { bs, esc, chip, fechaHora, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
+import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
 
 const URL_BASE = location.origin + location.pathname;
 
@@ -32,6 +33,7 @@ async function arrancar() {
   btnSalir.hidden = !s;
   document.body.classList.toggle('en-entrada', !s);
   document.getElementById('usuario').textContent = s && s.nombre ? primerNombre(s.nombre) + (s.rol !== 'TRABAJADOR' ? ' · Gestión Humana' : '') : '';
+  if (s) setTimeout(sugerirInstalacion, 1200);   // después de entrar, sin tapar lo primero que se ve
   if (s && s.rol !== 'TRABAJADOR') return vistaRRHH();
   if (s) { precargarTrabajador(); return vistaCuenta(app, '', seccionDesdeHash()); }
   return vistaLogin();
@@ -962,4 +964,5 @@ function panelCierres(panel) {
   });
 }
 
+iniciarInstalacion();
 arrancar();

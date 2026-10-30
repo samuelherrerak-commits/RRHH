@@ -1,12 +1,17 @@
 {
+  "id": "./",
   "name": "SADS · Sistema de Atención de Solicitudes",
   "short_name": "SADS",
+  "description": "Gestión Humana · Prosein, Austral y Mil Cerámicas: constancias de trabajo, vacaciones y más.",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#F7F7F7",
   "theme_color": "#141618",
+  "lang": "es-VE",
   "icons": [
     { "src": "assets/icono-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "assets/icono-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "assets/icono-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
   ]
 }

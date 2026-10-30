@@ -214,3 +214,16 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 /* ---- Logo del sistema (SA/DS) ---- */
 .marca { display: flex; align-items: center; gap: var(--s3); }
 .marca-logo { width: 36px; height: 36px; border-radius: 9px; flex: none; }
+
+/* ---- Sugerencia «Instalar SADS» ---- */
+.sugerir-instalar { position: fixed; z-index: 20; left: var(--s3); right: var(--s3); bottom: calc(var(--s3) + env(safe-area-inset-bottom));
+  display: grid; grid-template-columns: auto 1fr; gap: var(--s3); align-items: center; background: #fff; border: 1px solid var(--linea);
+  border-radius: var(--radio); padding: var(--s4); box-shadow: 0 12px 40px rgb(20 22 24 / .18); animation: subir 260ms var(--ease); }
+.sugerir-instalar img { border-radius: 11px; }
+.si-texto { display: grid; gap: 2px; font-size: 14px; color: var(--tinta-2); }
+.si-texto b { color: var(--carbon); }
+.si-texto .icono { display: inline-block; width: 16px; height: 16px; vertical-align: -3px; color: var(--austral); }
+.si-botones { grid-column: 1 / -1; display: flex; gap: var(--s2); justify-content: flex-end; }
+@keyframes subir { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (min-width: 1024px) { .sugerir-instalar { left: auto; right: var(--s5); bottom: var(--s5); width: 380px; } }
+@media (prefers-reduced-motion: reduce) { .sugerir-instalar { animation: none; } }
