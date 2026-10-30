@@ -45,21 +45,14 @@ function vistaLogin() {
   app.innerHTML = `
     <div class="entrada">
       <section class="entrada-marca">
-        <div class="entrada-cabeza">
-          <img class="entrada-logo" src="assets/logo-sads-claro.svg" alt="SADS">
-          <div><div class="sigla">SADS</div><p class="nombre">Sistema de Atención de Solicitudes</p></div>
+        <div>
+          <div class="sigla">SADS</div>
+          <p class="nombre">Sistema de Atención de Solicitudes</p>
         </div>
         <div class="acrostico" role="img" aria-label="SADS: Sistema de Atención de Solicitudes">
           <p><b>S</b>istema<span class="de">de</span></p><p><b>A</b>tención</p><p><b>D</b>e</p><p><b>S</b>olicitudes</p>
         </div>
-        <div class="empresas-logos">
-          <div class="logos">
-            <span class="logo-caja"><img src="assets/logo-prosein.png" alt="Prosein"></span>
-            <span class="logo-caja"><img src="assets/logo-austral.png" alt="Austral Import de Venezuela"></span>
-            <span class="logo-caja logo-mil"><img src="assets/logo-milceramicas.png" alt=""><b>Mil Cerámicas</b></span>
-          </div>
-          <p class="empresas">Gestión Humana</p>
-        </div>
+        <p class="empresas">Prosein · Austral · Mil Cerámicas — Gestión Humana</p>
       </section>
       <div class="entrada-form">
     <form class="tarjeta login" id="f" novalidate>
