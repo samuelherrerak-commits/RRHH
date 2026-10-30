@@ -16,10 +16,10 @@ test('configurarInicial crea las hojas y a Samuel y Luis Paul como usuarios de R
   e.ejecutar('configurarInicial');
   for (const n of ['PARAMETROS', 'EMPRESAS', 'EMPLEADOS', 'APORTES', 'CIERRES', 'ANTICIPOS', 'CONSTANCIAS', 'USUARIOS', 'LOG']) assert.ok(e.hojas[n], 'falta la hoja ' + n);
   const us = e.hojas.USUARIOS.filas.slice(1);
-  assert.deepEqual(us.map((f) => [f[0], f[3], f[4]]), [['30580323', 'ADMIN', 'Samuel Herrera'], ['7952013', 'ADMIN', 'Luis Paul Rojas']]);
+  assert.deepEqual(us.map((f) => [f[0], f[3], f[4]]), [['30580323', 'ADMIN', 'Samuel Herrera'], ['7952013', 'ADMIN', 'Luis Paul Rojas'], ['6291577', 'ADMIN', 'JOHANNA RODRIGUEZ']]);
   assert.ok(us.every((f) => f[2] === ''), 'no deben tener clave todavía');
   e.ejecutar('configurarInicial');                        // repetir no duplica
-  assert.equal(e.hojas.USUARIOS.filas.length, 3);
+  assert.equal(e.hojas.USUARIOS.filas.length, 4);
   assert.equal(e.props.API_TOKEN, 'RRHH2026');
   assert.ok(e.props.SECRETO);
 });
@@ -141,7 +141,7 @@ test('vacaciones sobre las hojas: feriados iniciales, cierre, solicitud, jefe y 
   e.llamar({ action: 'asignarJefe', token: admin, claves: ['V30580323'], jefe: 'V7952013' });
   const imp = e.llamar({ action: 'importarCierreVacaciones', token: admin, personas: [
     { cedula: 'V30580323', periodos: [{ periodo: '2024-2025', correspondientes: 17, disfrutadosPrevios: 10 }, { periodo: '2025-2026', correspondientes: 18, disfrutadosPrevios: 0 }] }] });
-  assert.deepEqual(imp.data, { personas: 1, periodos: 2, noActivos: 0, activosSinCierre: 1 });
+  assert.deepEqual(imp.data, { personas: 1, periodos: 2, noActivos: 0, activosSinCierre: 3 });   // Luis Paul + María Teresa y Danilo (fuera de nómina)
 
   // Samuel (como trabajador) pide: la fecha debe estar entre 15 y 20 días desde hoy
   const tSamuel = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.tokenTrabajador;
@@ -167,4 +167,36 @@ test('vacaciones sobre las hojas: feriados iniciales, cierre, solicitud, jefe y 
   assert.equal(final.saldo.total, 15);
   assert.equal(final.solicitudes[0].inicio, inicio);
   assert.deepEqual(final.solicitudes[0].imputacion.map((i) => [i.periodo, i.dias]), [['2024-2025', 7], ['2025-2026', 3]]);
+});
+
+test('menú: usuaria de RRHH que no es empleada (CEO) con su nombre, y es jefa en el detalle', () => {
+  // Johanna ya existe (la crea «Configurar»); solo se le pone la clave. Y una persona nueva que no es empleada pide su nombre.
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel', '6291577', 'YES', 'clave-de-la-ceo', '13131313', 'YES', 'NO', 'Ana  Externa', 'clave-externa'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH'); e.ejecutar('ponerClaveRRHH'); e.ejecutar('ponerClaveRRHH');
+  const externa = e.hojas.USUARIOS.filas.find((f) => f && f[0] === '13131313');
+  assert.deepEqual([externa[3], externa[4]], ['RRHH', 'ANA EXTERNA']);
+  const fila = e.hojas.USUARIOS.filas.find((f) => f && f[0] === '6291577');
+  assert.deepEqual([fila[3], fila[4]], ['ADMIN', 'JOHANNA RODRIGUEZ']);
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  const r = e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V222222229', nombre: 'GERENTE GENERAL', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2015', jefeNombre: 'JOHANNA RODRIGUEZ' }] });
+  assert.equal(r.data.jefes.asignados, 1);
+  const ceo = e.llamar({ action: 'loginAdmin', cedula: '6291577', clave: 'clave-de-la-ceo' }).data;
+  assert.equal(ceo.esJefe, true);
+  assert.equal(ceo.nombre, 'JOHANNA RODRIGUEZ');
+  // fuera de nómina, sobre las hojas
+  const f = e.llamar({ action: 'guardarEmpleadoFueraNomina', token: admin, cedula: 'V9876543', nombre: 'Danilo Koenig', empresa: 'PCA', fechaIngreso: '09/09/2008' });
+  assert.equal(f.ok, true, JSON.stringify(f));
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [{ cedula: 'V222222229', nombre: 'GERENTE GENERAL', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2015' }] });
+  assert.equal(e.llamar({ action: 'login', cedula: '9876543' }).ok, true);
+});
+
+test('configurar crea a Johanna (usuaria) y a María Teresa y Danilo (fuera de nómina); repetir no duplica', () => {
+  const e = crearEntorno();
+  e.ejecutar('configurarInicial'); e.ejecutar('configurarInicial');
+  assert.ok(e.hojas.USUARIOS.filas.some((f) => f && f[0] === '6291577' && f[4] === 'JOHANNA RODRIGUEZ' && f[3] === 'ADMIN'));
+  const emp = e.hojas.EMPLEADOS.filas.slice(1).filter((f) => f && f[2]);
+  assert.deepEqual(emp.map((f) => [f[0] + f[1], f[2], f[9], f[16]]), [['V8542390', 'MARIA TERESA CENCI', 'AIV', true], ['E81053506', 'DANILO KOENIG', 'PCA', true]]);
+  assert.equal(e.llamar({ action: 'login', cedula: '8542390' }).ok, true);
+  assert.equal(e.llamar({ action: 'login', cedula: 'E-81053506' }).ok, true);
 });

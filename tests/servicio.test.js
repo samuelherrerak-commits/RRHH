@@ -517,3 +517,97 @@ test('cargar el detalle con «JEFE DIRECTO»: asigna los que encuentra y reporta
   S.cargarEmpleados(repo, ctx, a, [fila('V444444449', 'BETO VENDEDOR', 'BETSY RODRIGUEZ'), fila('V222222229', 'SAMUEL HERRERA KEY', 'LUIS PAUL ROJAS LISARDO')]);
   assert.equal(S.listarEmpleados(repo, ctx, a, { buscar: 'beto' }).data.empleados[0].jefeNombre, 'SAMUEL HERRERA KEY');
 });
+
+/* ---------- Fuera de nómina y jefes que son usuarios de RRHH ---------- */
+
+function conDirectivos() {
+  const repo = crearRepo([
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '10/03/2022' },
+    { cedula: 'V222222229', nombre: 'GERENTE GENERAL', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2015' },
+  ]);
+  const ctx = crearCtx(Date.UTC(2026, 9, 29, 15, 0));
+  repo.st.usuarios['30580323'] = { sal: 's', hash: ctx.hash('k', 's'), rol: 'ADMIN', nombre: 'Samuel Herrera' };
+  repo.st.usuarios['12121212'] = { sal: 's', hash: ctx.hash('ceo', 's'), rol: 'ADMIN', nombre: 'JOHANNA RODRIGUEZ' };   // CEO: no es empleada
+  const rrhh = S.iniciarSesionAdmin(repo, ctx, '30580323', 'k').data.token;
+  return { repo, ctx, rrhh };
+}
+
+test('fuera de nómina: RRHH lo agrega, no se desactiva al recargar el detalle y tiene vacaciones del cierre', () => {
+  const { repo, ctx, rrhh } = conDirectivos();
+  const r = S.guardarEmpleadoFueraNomina(repo, ctx, rrhh, { cedula: 'V-12.345.678', nombre: 'María Teresa Cenci', empresa: 'AIV', fechaIngreso: '08/10/1987', genero: 'Femenino', puesto: 'Directora' });
+  assert.equal(r.ok, true, r.message);
+  assert.equal(S.guardarEmpleadoFueraNomina(repo, ctx, rrhh, { cedula: '123', nombre: 'X', empresa: 'AIV', fechaIngreso: '01/01/2020' }).code, 'VALIDACION');
+  assert.match(S.guardarEmpleadoFueraNomina(repo, ctx, rrhh, { cedula: 'V305803231', nombre: 'X', empresa: 'PCA', fechaIngreso: '01/01/2020' }).message, /ya está en la nómina/);
+  // recargar el detalle (sin ella) no la desactiva
+  S.cargarEmpleados(repo, ctx, rrhh, [{ cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '10/03/2022' }]);
+  const ella = S.listarEmpleados(repo, ctx, rrhh, { buscar: 'cenci' }).data.empleados[0];
+  assert.equal(ella.estado, 'Activo');
+  assert.equal(ella.fueraNomina, true);
+  assert.equal(ella.empresa, 'AIV');
+  // entra con su cédula y ve su saldo del cierre
+  S.importarCierreVacaciones(repo, ctx, rrhh, [{ cedula: 'V12345678', periodos: [{ periodo: '2025-2026', correspondientes: 30, disfrutadosPrevios: 0 }] }]);
+  const t = S.iniciarSesion(repo, ctx, '12345678').data.token;
+  assert.equal(S.datosVacaciones(repo, ctx, t).data.saldo.total, 30);
+  // RRHH la desactiva
+  assert.equal(S.desactivarEmpleadoFueraNomina(repo, ctx, rrhh, 'V12345678').ok, true);
+  assert.equal(S.iniciarSesion(repo, ctx, '12345678').code, 'NO_ENCONTRADO');
+  assert.equal(S.desactivarEmpleadoFueraNomina(repo, ctx, rrhh, 'V30580323').code, 'VALIDACION');   // uno de nómina no
+});
+
+test('la CEO (usuaria de RRHH, no empleada) puede ser jefa: se asigna, aprueba desde su sesión de RRHH', () => {
+  const { repo, ctx, rrhh } = conDirectivos();
+  assert.equal(S.asignarJefe(repo, ctx, rrhh, ['V22222222'], 'V12121212').data.cambiados, 1);
+  assert.equal(S.listarEmpleados(repo, ctx, rrhh, { buscar: 'gerente' }).data.empleados[0].jefeNombre, 'JOHANNA RODRIGUEZ');
+  assert.deepEqual(S.listarUsuariosJefes(repo, ctx, rrhh).data, [{ clave: 'V12121212', nombre: 'JOHANNA RODRIGUEZ' }]);
+
+  const t = S.iniciarSesion(repo, ctx, '22222222').data.token;
+  S.importarCierreVacaciones(repo, ctx, rrhh, [{ cedula: 'V22222222', periodos: [{ periodo: '2025-2026', correspondientes: 25, disfrutadosPrevios: 0 }] }]);
+  assert.equal(S.datosVacaciones(repo, ctx, t).data.jefe.nombre, 'JOHANNA RODRIGUEZ');
+  const sol = S.solicitarVacaciones(repo, ctx, t, { inicio: '2026-11-13', dias: 5 });
+  assert.equal(sol.ok, true, sol.message);
+
+  const ceo = S.iniciarSesionAdmin(repo, ctx, '12121212', 'ceo').data;
+  assert.equal(ceo.esJefe, true);
+  assert.equal(ceo.nombre, 'JOHANNA RODRIGUEZ');
+  assert.equal(ceo.tokenTrabajador, undefined);
+  const eq = S.equipoVacaciones(repo, ctx, ceo.token).data;
+  assert.equal(eq.pendientes.length, 1);
+  assert.equal(S.decidirVacacionesJefe(repo, ctx, ceo.token, sol.data.id, true).data.estado, 'APROBADA_JEFE');
+  // otro RRHH que no es su jefe no puede decidir como jefe
+  assert.equal(S.decidirVacacionesJefe(repo, ctx, rrhh, sol.data.id, true).code, 'NO_ENCONTRADO');
+});
+
+test('el detalle con «JEFE DIRECTO» encuentra también a una usuaria de RRHH que no es empleada', () => {
+  const { repo, ctx, rrhh } = conDirectivos();
+  const r = S.cargarEmpleados(repo, ctx, rrhh, [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '10/03/2022', jefeNombre: '' },
+    { cedula: 'V222222229', nombre: 'GERENTE GENERAL', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2015', jefeNombre: 'JOHANNA RODRIGUEZ' },
+  ]).data;
+  assert.equal(r.jefes.asignados, 1);
+  assert.deepEqual(r.jefes.noEncontrados, []);
+});
+
+test('filas sin cédula no se importan (p. ej. la CEO agregada al detalle sin cédula) y no tapan a la usuaria de RRHH', () => {
+  const { repo, ctx, rrhh } = conDirectivos();
+  const r = S.cargarEmpleados(repo, ctx, rrhh, [
+    { cedula: 'V222222229', nombre: 'GERENTE GENERAL', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2015', jefeNombre: 'JOHANNA RODRIGUEZ' },
+    { cedula: '', nombre: 'JOHANNA RODRIGUEZ', organizacion: 'PROSEIN CENTRAL', departamento: 'Gerencia General' },
+  ]).data;
+  assert.deepEqual(r.sinCedula, ['JOHANNA RODRIGUEZ']);
+  assert.equal(r.total, 2);                                 // Samuel y el Gerente General: la fila sin cédula no entra
+  assert.equal(r.jefes.asignados, 1);                       // el jefe es la usuaria de RRHH
+  assert.deepEqual(r.jefes.noEncontrados, []);
+});
+
+test('importar el cierre: la fila sin cédula se asigna por nombre exacto; si no se encuentra, se informa', () => {
+  const { repo, ctx, rrhh } = conDirectivos();
+  S.guardarEmpleadoFueraNomina(repo, ctx, rrhh, { cedula: 'V085423904', nombre: 'Maria Teresa Cenci', empresa: 'AIV', fechaIngreso: '08/10/1987' });
+  const r = S.importarCierreVacaciones(repo, ctx, rrhh, [
+    { cedula: '', nombre: 'MARIA TERESA CENCI', periodos: [{ periodo: '2025-2026', correspondientes: 22, disfrutadosPrevios: 0 }] },
+    { cedula: '', nombre: 'NADIE CONOCIDO', periodos: [{ periodo: '2025-2026', correspondientes: 15, disfrutadosPrevios: 0 }] },
+  ]).data;
+  assert.deepEqual(r.porNombre, ['MARIA TERESA CENCI']);
+  assert.deepEqual(r.sinIdentificar, ['NADIE CONOCIDO']);
+  const t = S.iniciarSesion(repo, ctx, '8542390').data.token;          // entra con su cédula real
+  assert.equal(S.datosVacaciones(repo, ctx, t).data.saldo.total, 22);
+});

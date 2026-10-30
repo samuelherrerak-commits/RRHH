@@ -47,8 +47,9 @@ const MODO_GAS = process.argv.includes('--gas');
 let gas = null;
 if (MODO_GAS) {
   const { crearEntorno } = require('./gas-simulado.js');
-  gas = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-demo-123', '7952013', 'YES', 'clave-demo-123'] });
-  gas.ejecutar('configurarInicial'); gas.ejecutar('ponerClaveRRHH'); gas.ejecutar('ponerClaveRRHH');
+  // Samuel y Luis Paul (ADMIN, empleados) y Johanna, la CEO (ADMIN, no es empleada). Clave de los tres: clave-demo-123
+  gas = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-demo-123', '7952013', 'YES', 'clave-demo-123', '6291577', 'YES', 'clave-demo-123'] });
+  gas.ejecutar('configurarInicial'); gas.ejecutar('ponerClaveRRHH'); gas.ejecutar('ponerClaveRRHH'); gas.ejecutar('ponerClaveRRHH');
 }
 
 http.createServer((req, res) => {

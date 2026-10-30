@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.5';
+var VERSION = '2026-10-30.7';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
@@ -23,7 +23,7 @@ function modulosCargados_() {
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
-  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero'],
+  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
@@ -44,6 +44,16 @@ var HOJAS = {
 var USUARIOS_RRHH_INICIALES = [
   { cedula: '30580323', nombre: 'Samuel Herrera', rol: 'ADMIN' },
   { cedula: '7952013', nombre: 'Luis Paul Rojas', rol: 'ADMIN' },
+  { cedula: '6291577', nombre: 'JOHANNA RODRIGUEZ', rol: 'ADMIN' },   // CEO: no es empleada; es jefa de varios
+];
+
+/**
+ * Empleados activos que no están en la nómina (no vienen en el Detalle de Empleado). Se crean al configurar si no existen;
+ * después se editan en el sitio (Empleados → «Fuera de nómina»). Datos del cierre de vacaciones.
+ */
+var EMPLEADOS_FUERA_NOMINA_INICIALES = [
+  { cedula: 'V085423904', nombre: 'MARIA TERESA CENCI', empresa: 'AIV', fechaIngreso: '08/10/1987' },
+  { cedula: 'E810535060', nombre: 'DANILO KOENIG', empresa: 'PCA', fechaIngreso: '09/09/2008' },
 ];
 
 // Feriados nacionales 2026 (lista de RRHH, corregida: 12 de octubre en vez de 10/12; se agregan 5 y 24 de julio).
@@ -71,6 +81,9 @@ var RUTAS_TRABAJADOR = {
 };
 
 var RUTAS_RRHH = {
+  guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
+  desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
+  listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
   bandejaVacaciones: function (repo, ctx, d) { return Servicio.bandejaVacaciones(repo, ctx, d.token, d.estado); },
   registrarVacaciones: function (repo, ctx, d) { return Servicio.registrarVacaciones(repo, ctx, d.token, d.id, d.nomina); },
   rechazarVacacionesRRHH: function (repo, ctx, d) { return Servicio.rechazarVacacionesRRHH(repo, ctx, d.token, d.id, d.motivo); },
@@ -192,7 +205,8 @@ function empleado_(f) {
     estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso),
     empresaDetalle: texto_(f.empresaDetalle) || 'PCA', empresaFideicomiso: texto_(f.empresaFideicomiso),
     revisarCedula: f.revisarCedula === true || f.revisarCedula === 'TRUE', motivoRevision: texto_(f.motivoRevision),
-    salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), genero: texto_(f.genero), jefe: texto_(f.jefe), editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
+    salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), genero: texto_(f.genero),
+    fueraNomina: f.fueraNomina === true || f.fueraNomina === 'TRUE' || f.fueraNomina === 'true', jefe: texto_(f.jefe), editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
   };
 }
 
@@ -300,7 +314,7 @@ function crearRepo_() {
       if (!lista.length) return;
       var filas = lista.map(function (e) {
         return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
-          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || ''];
+          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || '', !!e.fueraNomina];
       });
       var rango = h.getRange(2, 1, filas.length, cab.length);
       rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte
@@ -338,9 +352,12 @@ function crearRepo_() {
       var f = leer_('EMPRESAS').filter(function (x) { return x.empresa === empresa; })[0];
       return f ? { fideicomiso: f.fideicomiso, tipoTAporte: f.tipoTAporte, tipoTAnticipo: f.tipoTAnticipo, forma: f.forma } : null;
     },
+    todosUsuarios: function () {
+      return leer_('USUARIOS').map(function (u) { return { cedula: texto_(u.cedula), nombre: texto_(u.nombre), rol: texto_(u.rol) }; });
+    },
     usuario: function (cedula) {
       var f = leer_('USUARIOS').filter(function (u) { return texto_(u.cedula) === cedula; })[0];
-      return f ? { sal: texto_(f.sal), hash: texto_(f.hash), rol: texto_(f.rol) } : null;
+      return f ? { sal: texto_(f.sal), hash: texto_(f.hash), rol: texto_(f.rol), nombre: texto_(f.nombre) } : null;
     },
     fallos: function (k) { return Number(cache.get('fallo:' + k)) || 0; },
     registrarFallo: function (k) { cache.put('fallo:' + k, String((Number(cache.get('fallo:' + k)) || 0) + 1), 900); },
@@ -378,6 +395,16 @@ function configurarInicial() {
   if (hf.getLastRow() <= 1) {
     hf.getRange(2, 1, FERIADOS_INICIALES.length, 1).setNumberFormat('@');
     hf.getRange(2, 1, FERIADOS_INICIALES.length, 2).setValues(FERIADOS_INICIALES);
+  }
+  // Empleados fuera de nómina iniciales (si los módulos están cargados)
+  if (typeof Empleados !== 'undefined' && Empleados) {
+    var repo = crearRepo_(), lista = repo.todosEmpleados(), hay = {}, nuevos = 0;
+    lista.forEach(function (e) { hay[Empleados.claveCedula(e)] = true; });
+    EMPLEADOS_FUERA_NOMINA_INICIALES.forEach(function (d) {
+      var r = Empleados.empleadoFueraDeNomina(d);
+      if (r.empleado && !hay[Empleados.claveCedula(r.empleado)]) { lista.push(r.empleado); nuevos++; }
+    });
+    if (nuevos) repo.guardarEmpleados(lista);
   }
   // Usuarios de RRHH iniciales (sin clave todavía; no pueden entrar hasta ponerla)
   var existentes_ = {};
@@ -439,12 +466,17 @@ function ponerClaveRRHH() {
   if (!existente) {
     if (ui.alert('Persona nueva', quien + '\nCédula ' + cedula + '\n\nNo es un usuario de RRHH todavía. ¿Crearla?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
     rol = ui.alert('Rol', '¿Administrador? Sí = ADMIN (todo). No = RRHH.', ui.ButtonSet.YES_NO) === ui.Button.YES ? 'ADMIN' : 'RRHH';
+    if (!emp) {   // no es empleado (p. ej. la CEO): su nombre sirve para mostrarlo y para encontrarlo como jefe en el detalle
+      var nn = ui.prompt('Nombre', 'Nombre y apellido de la persona (como aparece en la columna JEFE DIRECTO):', ui.ButtonSet.OK_CANCEL);
+      if (nn.getSelectedButton() !== ui.Button.OK || !nn.getResponseText().trim()) return;
+      quien = nn.getResponseText().trim().replace(/\s+/g, ' ').toUpperCase();
+    }
   } else if (ui.alert('Confirmar', quien + '\nCédula ' + cedula + ' · ' + rol + '\n\n¿Poner o cambiar su clave?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   var k = ui.prompt('Clave', 'Clave de ' + quien + ' (mínimo 8 caracteres). Se pedirá cada vez que entre:', ui.ButtonSet.OK_CANCEL);
   if (k.getSelectedButton() !== ui.Button.OK) return;
   var clave = k.getResponseText();
   if (clave.length < 8) { ui.alert('La clave debe tener al menos 8 caracteres.'); return; }
-  guardarUsuario_(cedula, clave, rol, (existente && texto_(existente.nombre)) || (emp && emp.nombre) || '');
+  guardarUsuario_(cedula, clave, rol, (existente && texto_(existente.nombre)) || (emp && emp.nombre) || (/^\(/.test(quien) ? '' : quien));
   ui.alert('Listo', 'Clave guardada para ' + quien + '.\nAl escribir su cédula en el sitio, el sistema le pedirá la clave.', ui.ButtonSet.OK);
 }
 

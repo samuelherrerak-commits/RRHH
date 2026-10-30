@@ -127,3 +127,12 @@ test('pendientes tras el disfrute: cuenta esta solicitud y las anteriores, no la
   assert.deepEqual(V.pendientesTras(per, [a, b], a), { porPeriodo: [{ periodo: '2024-2025', pendientes: 0 }, { periodo: '2025-2026', pendientes: 15 }], total: 15 });
   assert.equal(V.pendientesTras(per, [a, b], b).total, 10);
 });
+
+test('cierre: una fila sin cédula se conserva con su nombre (para identificarla al importar)', () => {
+  const r = V.mapearCierre([
+    ['EMPRESA', 'CEDULA', 'NOMBRE', 'CORRESPONDIENTE 25-26', 'DISFRUTADOS 25-26'],
+    ['Austral', '', 'MARIA TERESA  CENCI', 22, 0],
+    ['', '', 'TOTALES', 99, 99],
+  ]);
+  assert.deepEqual(r.personas, [{ cedula: '', nombre: 'MARIA TERESA CENCI', periodos: [{ periodo: '2025-2026', correspondientes: 22, disfrutadosPrevios: 0 }] }]);
+});

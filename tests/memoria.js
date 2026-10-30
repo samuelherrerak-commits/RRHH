@@ -42,6 +42,7 @@ function crearRepo(empleadosFilas) {
     guardarCierre: (c) => { st.cierres[`${c.anio}-${c.trimestre}-${c.empresa}`] = c; },
     empresaConfig: (e) => st.empresas[e] || null,
     usuario: (c) => st.usuarios[c] || null,
+    todosUsuarios: () => Object.entries(st.usuarios).map(([cedula, u]) => ({ cedula, nombre: u.nombre || '', rol: u.rol })),
     fallos: (k) => st.fallos[k] || 0,
     registrarFallo: (k) => { st.fallos[k] = (st.fallos[k] || 0) + 1; },
     nuevoId: () => 'A' + (++st.seq),

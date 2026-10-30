@@ -87,10 +87,17 @@
    * 1) nombre exacto (sin tildes ni espacios dobles); 2) si viene abreviado («CARLOS CAMACARO»), el único empleado
    * cuyo nombre contiene todas esas palabras. Devuelve { clave, nombre, tipo: 'exacto'|'palabras'|'ambiguo'|'no_encontrado' }.
    */
-  function resolverJefe(nombreJefe, empleados) {
+  function resolverJefe(nombreJefe, empleados, usuarios) {
     var buscado = normalizarNombre(nombreJefe);
     if (!buscado) return { clave: '', nombre: '', tipo: 'vacio' };
-    var activos = empleados.filter(function (e) { return e.estado !== 'Inactivo'; });
+    var r = buscarPorNombre(buscado, empleados.filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }));
+    if (r.tipo !== 'no_encontrado' || !usuarios || !usuarios.length) return r;
+    // usuarios de RRHH que no son empleados (p. ej. la CEO): { clave:'V123', nombre }
+    var u = buscarPorNombre(buscado, usuarios.map(function (x) { return { cedulaLetra: x.clave.charAt(0), cedulaNumero: x.clave.slice(1), nombre: x.nombre }; }));
+    return u.clave ? { clave: u.clave, nombre: u.nombre, tipo: 'usuario' } : u;
+  }
+
+  function buscarPorNombre(buscado, activos) {
     var exactos = activos.filter(function (e) { return normalizarNombre(e.nombre) === buscado; });
     if (exactos.length === 1) return { clave: claveCedula(exactos[0]), nombre: exactos[0].nombre, tipo: 'exacto' };
     var palabras = buscado.split(' ');
@@ -100,6 +107,30 @@
     });
     if (candidatos.length === 1) return { clave: claveCedula(candidatos[0]), nombre: candidatos[0].nombre, tipo: 'palabras' };
     return { clave: '', nombre: '', tipo: candidatos.length ? 'ambiguo' : 'no_encontrado' };
+  }
+
+  var ORGANIZACION_POR_EMPRESA = { PCA: 'PROSEIN CENTRAL', AIV: 'AUSTRAL IMPORT DE VENEZUELA C.A' };
+
+  /**
+   * Empleado que no está en la nómina (no viene en el Detalle de Empleado) pero está activo: lo agrega RRHH a mano.
+   * datos: { cedula, nombre, empresa:'PCA'|'AIV', departamento, puesto, fechaIngreso, genero, salarioMensual }
+   * Devuelve { empleado } o { errores[] }.
+   */
+  function empleadoFueraDeNomina(datos) {
+    var e = [], c = parsearCedula(datos.cedula);
+    if (!c.numero || c.numero.length < 5) e.push('Escribe una cédula válida (al menos 5 dígitos).');
+    if (!espacios(datos.nombre)) e.push('Escribe el nombre y apellido.');
+    if (['PCA', 'AIV'].indexOf(datos.empresa) === -1) e.push('Elige la empresa.');
+    var f = Calculo.aFecha(datos.fechaIngreso);
+    if (!f) e.push('Escribe la fecha de ingreso.');
+    if (e.length) return { errores: e };
+    return { empleado: {
+      cedulaLetra: c.letra, cedulaNumero: c.numero, revisarCedula: false, motivoRevision: '',
+      nombre: espacios(datos.nombre).toUpperCase(), nombreNorm: normalizarNombre(datos.nombre),
+      organizacion: ORGANIZACION_POR_EMPRESA[datos.empresa], departamento: espacios(datos.departamento), puesto: espacios(datos.puesto),
+      estado: 'Activo', fechaIngreso: f, empresaDetalle: datos.empresa, empresaFideicomiso: datos.empresa,
+      salarioMensual: numeroDeMonto(datos.salarioMensual), genero: espacios(datos.genero), jefe: '', editados: [], fueraNomina: true,
+    } };
   }
 
   /** ¿Asignar `jefeClave` como jefe de `clave` crearía un ciclo (A jefe de B y B jefe de A, o más largo)? */
@@ -185,6 +216,7 @@
           actual[c] = nuevo[c];
         });
         if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
+        actual.fueraNomina = false;
         resumen.actualizados++;
       } else {
         idx[k] = salida.push(nuevo) - 1;
@@ -193,7 +225,7 @@
     });
 
     salida.forEach(function (e) {
-      if (!vistos[claveCedula(e)] && e.estado !== 'Inactivo') { e.estado = 'Inactivo'; resumen.inactivados++; }
+      if (!vistos[claveCedula(e)] && e.estado !== 'Inactivo' && !e.fueraNomina) { e.estado = 'Inactivo'; resumen.inactivados++; }
     });
     return { empleados: salida, resumen: resumen };
   }
@@ -354,7 +386,7 @@
 
   var api = {
     mapearDetalle: mapearDetalle, fechaDeExcel: fechaDeExcel,
-    resolverJefe: resolverJefe, numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
+    resolverJefe: resolverJefe, empleadoFueraDeNomina: empleadoFueraDeNomina, numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
     normalizarNombre: normalizarNombre, parsearCedula: parsearCedula, verificadorRif: verificadorRif, estadoEnEspanol: estadoEnEspanol,
     empresaDesdeDetalle: empresaDesdeDetalle, empresaFideicomiso: empresaFideicomiso,
     claveCedula: claveCedula, empleadoDesdeDetalle: empleadoDesdeDetalle,

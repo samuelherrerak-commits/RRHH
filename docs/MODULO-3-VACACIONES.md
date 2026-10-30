@@ -24,7 +24,12 @@ Basado en «Solicitud Digital de Disfrute de Vacaciones - PROSEIN / AUSTRAL.xlsx
 | `VAC_SOLICITUDES` | id · clave · inicio · culminación · reintegro · días · condición · imputación por período · estado · jefe · fechas y responsables de cada paso · nómina · motivo de rechazo. |
 
 ## Importación (pestaña Vacaciones de RRHH)
-Sube el Excel; se lee la hoja CIERRE DE VACACIONES (por cada «DISFRUTADOS AA-AA» su «CORRESPONDIENTE AA-AA» o, si no tiene título, la columna anterior). Con el archivo real: 151 personas, 28 egresos (se ignoran) y 34 ingresos sin cierre (usan la regla).
+Sube el Excel; se lee la hoja CIERRE DE VACACIONES (por cada «DISFRUTADOS AA-AA» su «CORRESPONDIENTE AA-AA» o, si no tiene título, la columna anterior). Con el archivo real: 151 personas, 28 egresos (se ignoran) y 34 ingresos sin cierre (usan la regla). Una fila **sin cédula** se identifica por el **nombre exacto** del empleado (caso María Teresa Cenci); si no se encuentra, se informa.
+
+## Jefes que no son empleados y empleados fuera de nómina
+- Un **usuario de RRHH que no es empleado** (la CEO, Johanna Rodríguez) puede ser jefe: se encuentra por su nombre en la columna JEFE DIRECTO y aprueba desde la pestaña «Mi equipo» del panel.
+- **Empleados fuera de nómina** (María Teresa Cenci, Danilo Koenig): activos pero no vienen en el Detalle; RRHH los agrega o edita en Empleados y no se desactivan al recargar el detalle. Los dos se crean al ejecutar «Configurar hojas y usuarios».
+- Las filas del Detalle **sin cédula válida** no se importan y se informan.
 
 ## Constancia de aprobación (PDF)
 Al registrar, RRHH deja fijos el **número de constancia** (formato del Excel: serial de inicio + cédula de 8 dígitos + serial de culminación + serial de reintegro; verificado con el modelo: 46272V079246274628346286) y los **pendientes por período** una vez aplicado ese disfrute. El trabajador y RRHH la descargan en PDF con el modelo «Constancia de Aprobación de Vacaciones» (membrete Prosein nuevo o Austral según la empresa).

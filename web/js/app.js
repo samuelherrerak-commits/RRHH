@@ -59,7 +59,7 @@ function vistaLogin() {
       if (pideClave) {
         const r = await llamar('loginAdmin', { cedula: f.cedula.value, clave: f.clave.value, token: '' });
         if (!r.ok) return errorEn(err, r.message);
-        sesion.guardar({ token: r.data.token, rol: r.data.rol, nombre: r.data.nombre, genero: r.data.genero || '', tokenTrabajador: r.data.tokenTrabajador || '' });
+        sesion.guardar({ token: r.data.token, rol: r.data.rol, nombre: r.data.nombre, genero: r.data.genero || '', tokenTrabajador: r.data.tokenTrabajador || '', esJefe: !!r.data.esJefe });
         return arrancar();
       }
       const r = await llamar('login', { cedula: f.cedula.value, token: '' });
@@ -121,6 +121,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   else if (seccion === 'equipo') await seccionEquipo(cont);
   else if (seccion === 'fideicomiso') await seccionFideicomiso(cont);
   else seccionInicio(cont);
+  if (cont !== app && !token) cont.querySelectorAll('.volver').forEach((b) => b.remove());   // «Mi equipo» del panel de RRHH
   cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
 }
 
@@ -437,10 +438,11 @@ let abrirSinJefe = false;   // al venir desde Vacaciones → Empleados con el fi
 async function vistaRRHH() {
   btnSalir.hidden = false;
   const miCuenta = !!(sesion.leer() || {}).tokenTrabajador;
-  if (pestana === 'micuenta' && !miCuenta) pestana = 'vacaciones';
+  const miEquipo = !!(sesion.leer() || {}).esJefe && !miCuenta;   // si es empleado, su equipo está en «Mi cuenta»
+  if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
   app.innerHTML = `
     <div class="pestanas" role="tablist">
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['solicitudes', 'Anticipos'], ['banco', 'Archivo al banco'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['solicitudes', 'Anticipos'], ['banco', 'Archivo al banco'], ['cierres', 'Cierres'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel"></div>`;
@@ -451,6 +453,7 @@ async function vistaRRHH() {
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'vacaciones') return panelVacaciones(panel);
+  if (pestana === 'miequipo') return vistaCuenta(panel, '', 'equipo');
   if (pestana === 'micuenta') return vistaCuenta(panel, sesion.leer().tokenTrabajador);
   return panelCierres(panel);
 }
@@ -597,7 +600,8 @@ async function panelVacaciones(panel) {
         const x = await llamar('importarCierreVacaciones', { personas: m.personas });
         if (!x.ok) return errorEn(err, x.message);
         const y = x.data;
-        previa.innerHTML = `<div class="aviso">Importadas <b>${y.personas}</b> personas (${y.periodos} períodos). ${y.noActivos} no están activas (egresos: se ignoran). ${y.activosSinCierre} empleados activos sin cierre usarán la regla de la ley.</div>`;
+        previa.innerHTML = `<div class="aviso">Importadas <b>${y.personas}</b> personas (${y.periodos} períodos). ${y.noActivos} no están activas (egresos: se ignoran). ${y.activosSinCierre} empleados activos sin cierre usarán la regla de la ley.${y.porNombre ? ` Sin cédula en el cierre, reconocidas por su nombre: ${y.porNombre.map(esc).join(', ')}.` : ''}</div>
+          ${y.sinIdentificar ? `<div class="error-msg">Filas sin cédula que no se pudieron identificar: ${y.sinIdentificar.map(esc).join(', ')}. Agrégales la cédula en el Excel o crea al empleado (fuera de nómina) con el mismo nombre.</div>` : ''}`;
         toast('Cierre de vacaciones importado.');
       }));
     } catch (x) { errorEn(err, x.message || 'No se pudo leer el archivo.'); }
@@ -695,6 +699,11 @@ async function panelEmpleados(panel) {
       <div id="previa"></div>
     </section>
     <section class="tarjeta">
+      <h2>Empleados fuera de nómina</h2>
+      <p class="suave">Personas activas que no vienen en el Detalle de Empleado (por ejemplo, directivos). No se desactivan al recargar el detalle y pueden solicitar vacaciones con su saldo del cierre.</p>
+      <div><button class="btn btn-sec" id="agregar-fn">Agregar empleado fuera de nómina</button></div>
+    </section>
+    <section class="tarjeta">
       <h2>Jefe directo por departamento</h2>
       <p class="suave">Asigna de una vez el mismo jefe a todo un departamento. Después puedes ajustar casos individuales en la lista.</p>
       <label>Departamento <select id="dep"><option value="">Elige un departamento</option></select></label>
@@ -725,9 +734,10 @@ async function panelEmpleados(panel) {
       previa.querySelector('#subir').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
         const r = await llamar('cargarEmpleados', { filas: m.filas });
         if (!r.ok) return errorEn(err, r.message);
-        const { resumen: x, revisar, sinFecha, total, jefes } = r.data;
+        const { resumen: x, revisar, sinFecha, total, jefes, sinCedula = [] } = r.data;
         const nf = (jefes && jefes.noEncontrados) || [];
         previa.innerHTML = `<div class="aviso"><b>${x.agregados}</b> agregados · <b>${x.actualizados}</b> actualizados · <b>${x.inactivados}</b> pasaron a inactivos · ${total} en total.</div>
+          ${sinCedula.length ? `<div class="error-msg"><b>${sinCedula.length} fila${sinCedula.length === 1 ? '' : 's'} sin cédula válida no se importaron:</b> ${sinCedula.map(esc).join(', ')}. Si es un directivo que no es empleado (como la CEO), no hace falta que esté en el detalle: créale su usuario de RRHH en la hoja.</div>` : ''}
           ${jefes && jefes.traeColumna ? `<div class="aviso">Jefe directo asignado a <b>${jefes.asignados}</b> empleados.${jefes.sinJefeEnArchivo ? ` ${jefes.sinJefeEnArchivo} vienen sin jefe en el archivo.` : ''}</div>` : ''}
           ${nf.length ? `<div class="error-msg"><b>Jefes que no se encontraron entre los empleados</b> (esas personas conservan el jefe que tenían; asígnalo abajo):
             <ul class="lista-simple">${nf.map((j) => `<li>«${esc(j.jefe)}» — ${j.personas} persona${j.personas === 1 ? '' : 's'}${j.tipo === 'ambiguo' ? ' (hay varios empleados con ese nombre)' : j.tipo === 'ciclo' ? ' (sería su propio jefe)' : ' (no está en el detalle)'}</li>`).join('')}</ul></div>` : ''}
@@ -745,6 +755,7 @@ async function panelEmpleados(panel) {
   q.addEventListener('input', () => { clearTimeout(temporizador); temporizador = setTimeout(refrescar, 300); });
   fDep.addEventListener('change', refrescar); fSin.addEventListener('change', refrescar);
   dep.addEventListener('change', () => { depJefe.disabled = !dep.value; });
+  panel.querySelector('#agregar-fn').addEventListener('click', () => formularioFueraNomina(null, refrescar));
   depJefe.addEventListener('click', () => elegirJefe(`Jefe de ${dep.value}`, async (jefe) => {
     const r = await llamar('asignarJefeDepartamento', { departamento: dep.value, jefe });
     if (!r.ok) return r;
@@ -768,8 +779,9 @@ async function panelEmpleados(panel) {
       <div class="lista">${empleados.map((e) => `<div class="item">
         <div class="item-cab"><div><b>${esc(e.nombre)}</b><p class="suave">${esc(e.clave)} · ${esc(e.puesto)} · ingreso ${esc(e.fechaIngreso || 'sin fecha')}</p>
           <p class="suave">Jefe directo: <b>${e.jefeNombre ? esc(e.jefeNombre) : 'sin asignar'}</b></p></div>
-          ${e.estado === 'Inactivo' ? '<span class="chip chip-neutro">Inactivo</span>' : e.revisarCedula ? '<span class="chip chip-espera">Revisar cédula</span>' : ''}</div>
-        <div><button class="btn btn-sec btn-chico" data-jefe="${esc(e.clave)}" data-nombre="${esc(e.nombre)}">${e.jefe ? 'Cambiar jefe' : 'Asignar jefe'}</button></div>
+          ${e.estado === 'Inactivo' ? '<span class="chip chip-neutro">Inactivo</span>' : e.fueraNomina ? '<span class="chip chip-austral">Fuera de nómina</span>' : e.revisarCedula ? '<span class="chip chip-espera">Revisar cédula</span>' : ''}</div>
+        <div class="fila"><button class="btn btn-sec btn-chico" data-jefe="${esc(e.clave)}" data-nombre="${esc(e.nombre)}">${e.jefe ? 'Cambiar jefe' : 'Asignar jefe'}</button>
+          ${e.fueraNomina && e.estado !== 'Inactivo' ? `<button class="btn btn-sec btn-chico" data-editar-fn="${esc(e.clave)}">Editar</button><button class="btn btn-sec btn-chico" data-desactivar-fn="${esc(e.clave)}">Desactivar</button>` : ''}</div>
         <label>Empresa del fideicomiso
           <select data-emp="${esc(e.clave)}"><option value="" ${e.empresaFideicomiso ? '' : 'selected'}>Automática (${esc(e.empresaDetalle)})</option>
             <option value="PCA" ${e.empresaFideicomiso === 'PCA' ? 'selected' : ''}>PCA</option><option value="AIV" ${e.empresaFideicomiso === 'AIV' ? 'selected' : ''}>AIV</option></select></label>
@@ -780,12 +792,51 @@ async function panelEmpleados(panel) {
       if (r.data.omitidos.length) return { ok: false, message: 'Esa persona no puede ser jefe de este empleado (sería su propio jefe).' };
       toast(jefe ? 'Jefe asignado.' : 'Jefe quitado.'); refrescar(); return r;
     })));
+    caja.querySelectorAll('[data-editar-fn]').forEach((b) => b.addEventListener('click', () => formularioFueraNomina(empleados.find((x) => x.clave === b.dataset.editarFn), refrescar)));
+    caja.querySelectorAll('[data-desactivar-fn]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+      if (!confirm('¿Desactivar a esta persona? Ya no podrá entrar al sistema.')) return;
+      const x = await llamar('desactivarEmpleadoFueraNomina', { clave: b.dataset.desactivarFn });
+      toast(x.ok ? 'Desactivado.' : x.message); refrescar();
+    })));
     caja.querySelectorAll('[data-emp]').forEach((sel) => sel.addEventListener('change', async () => {
       const x = await llamar('fijarEmpresa', { clave: sel.dataset.emp, empresa: sel.value });
       toast(x.ok ? `Empresa del fideicomiso: ${x.data.empresa}` : x.message);
     }));
   }
   listar('');
+}
+
+let cacheUsuariosJefes = null;
+async function usuariosJefes() {
+  if (!cacheUsuariosJefes) { const r = await llamar('listarUsuariosJefes'); cacheUsuariosJefes = r.ok ? r.data : []; }
+  return cacheUsuariosJefes;
+}
+
+/** Alta o edición de un empleado fuera de nómina. `e` = empleado de la lista (para editar) o null. */
+function formularioFueraNomina(e, despues) {
+  const fecha = e && e.fechaIngreso ? e.fechaIngreso.split('/').reverse().map((x) => x.padStart(2, '0')).join('-') : '';
+  dlg.innerHTML = `<form id="ffn" novalidate><h2>${e ? 'Editar' : 'Agregar'} empleado fuera de nómina</h2>
+    <label>Cédula <input name="cedula" inputmode="numeric" value="${esc(e ? e.clave : '')}" ${e ? 'readonly' : ''} placeholder="V12345678"></label>
+    <label>Nombre y apellido <input name="nombre" value="${esc(e ? e.nombre : '')}"></label>
+    <div class="fila"><label class="grow">Empresa <select name="empresa"><option value="PCA">Prosein (PCA)</option><option value="AIV" ${e && e.empresa === 'AIV' ? 'selected' : ''}>Austral (AIV)</option></select></label>
+      <label class="grow">Género <select name="genero"><option value="">—</option><option ${e && e.genero === 'Femenino' ? 'selected' : ''}>Femenino</option><option ${e && e.genero === 'Masculino' ? 'selected' : ''}>Masculino</option></select></label></div>
+    <label>Fecha de ingreso <input type="date" name="fechaIngreso" value="${fecha}"></label>
+    <div class="fila"><label class="grow">Departamento <input name="departamento" value="${esc(e ? e.departamento : '')}"></label><label class="grow">Cargo <input name="puesto" value="${esc(e ? e.puesto : '')}"></label></div>
+    <label>Salario mensual (opcional, para la constancia de trabajo) <input name="salarioMensual" inputmode="decimal" value="${e && e.salarioMensual != null ? esc(e.salarioMensual) : ''}"></label>
+    <div class="error-msg" id="err" hidden></div>
+    <div class="fila"><button class="btn grow" type="submit">Guardar</button><button class="btn btn-sec" type="button" id="no">Cerrar</button></div></form>`;
+  const f = dlg.querySelector('#ffn'), err = dlg.querySelector('#err');
+  dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+  f.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    await conBoton(f.querySelector('button[type=submit]'), async () => {
+      const datos = Object.fromEntries(new FormData(f).entries());
+      const x = await llamar('guardarEmpleadoFueraNomina', datos);
+      if (!x.ok) return errorEn(err, x.message);
+      dlg.close(); toast(`${x.data.nombre}: guardado.`); despues();
+    });
+  });
+  dlg.showModal(); f[e ? 'nombre' : 'cedula'].focus();
 }
 
 /** Diálogo para buscar y elegir un jefe. `aplicar(claveJefe | '')` devuelve la respuesta de la API. */
@@ -808,9 +859,11 @@ function elegirJefe(titulo, aplicar) {
     clearTimeout(t); const texto = e.target.value.trim();
     if (texto.length < 2) { res.innerHTML = '<p class="vacio">Escribe al menos 2 letras.</p>'; return; }
     t = setTimeout(async () => {
-      const r = await llamar('listarEmpleados', { buscar: texto });
+      const [r, u] = await Promise.all([llamar('listarEmpleados', { buscar: texto }), usuariosJefes()]);
       if (!r.ok) return errorEn(err, r.message);
-      const activos = r.data.empleados.filter((x) => x.estado !== 'Inactivo').slice(0, 8);
+      const q = window.Empleados.normalizarNombre(texto);
+      const usuarios = u.filter((x) => window.Empleados.normalizarNombre(x.nombre).includes(q)).map((x) => ({ ...x, puesto: 'Usuario de Gestión Humana', departamento: 'no es empleado' }));
+      const activos = usuarios.concat(r.data.empleados.filter((x) => x.estado !== 'Inactivo')).slice(0, 8);
       res.innerHTML = activos.length ? activos.map((x) => `<button type="button" class="item" data-j="${esc(x.clave)}" style="text-align:left;cursor:pointer"><b>${esc(x.nombre)}</b><span class="suave">${esc(x.puesto)} · ${esc(x.departamento)}</span></button>`).join('') : '<p class="vacio">Sin resultados.</p>';
       res.querySelectorAll('[data-j]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => aplicarYCerrar(b.dataset.j))));
     }, 250);

@@ -205,7 +205,7 @@
   function mapearCierre(filas) {
     var norm = function (h) { return String(h == null ? '' : h).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); };
     var cab = (filas[0] || []).map(norm);
-    var iCed = cab.indexOf('CEDULA');
+    var iCed = cab.indexOf('CEDULA'), iNom = cab.indexOf('NOMBRE');
     if (iCed === -1) throw new Error('No encontré la columna CEDULA en la hoja del cierre.');
     var cols = [];
     cab.forEach(function (h, j) {
@@ -220,9 +220,11 @@
     var personas = [];
     filas.slice(1).forEach(function (f) {
       var ced = String(f[iCed] == null ? '' : f[iCed]).trim();
-      if (!/^[VE]?-?\d{5,9}$/i.test(ced.replace(/\./g, ''))) return;
+      var nombre = iNom !== -1 ? String(f[iNom] == null ? '' : f[iNom]).replace(/\s+/g, ' ').trim() : '';
+      var cedOk = /^[VE]?-?\d{5,9}$/i.test(ced.replace(/\./g, ''));
+      if (!cedOk && !(nombre && !/TOTAL/i.test(nombre))) return;      // sin cédula: se identifica por el nombre al importar
       personas.push({
-        cedula: ced,
+        cedula: cedOk ? ced : '', nombre: nombre,
         periodos: cols.map(function (c) { return { periodo: c.periodo, correspondientes: num(f[c.jc]), disfrutadosPrevios: num(f[c.jd]) }; })
           .filter(function (p) { return p.correspondientes > 0 || p.disfrutadosPrevios > 0; }),
       });

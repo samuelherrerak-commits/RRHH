@@ -255,10 +255,17 @@ var Empleados = (function () {
        * 1) nombre exacto (sin tildes ni espacios dobles); 2) si viene abreviado («CARLOS CAMACARO»), el único empleado
        * cuyo nombre contiene todas esas palabras. Devuelve { clave, nombre, tipo: 'exacto'|'palabras'|'ambiguo'|'no_encontrado' }.
        */
-      function resolverJefe(nombreJefe, empleados) {
+      function resolverJefe(nombreJefe, empleados, usuarios) {
         var buscado = normalizarNombre(nombreJefe);
         if (!buscado) return { clave: '', nombre: '', tipo: 'vacio' };
-        var activos = empleados.filter(function (e) { return e.estado !== 'Inactivo'; });
+        var r = buscarPorNombre(buscado, empleados.filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }));
+        if (r.tipo !== 'no_encontrado' || !usuarios || !usuarios.length) return r;
+        // usuarios de RRHH que no son empleados (p. ej. la CEO): { clave:'V123', nombre }
+        var u = buscarPorNombre(buscado, usuarios.map(function (x) { return { cedulaLetra: x.clave.charAt(0), cedulaNumero: x.clave.slice(1), nombre: x.nombre }; }));
+        return u.clave ? { clave: u.clave, nombre: u.nombre, tipo: 'usuario' } : u;
+      }
+    
+      function buscarPorNombre(buscado, activos) {
         var exactos = activos.filter(function (e) { return normalizarNombre(e.nombre) === buscado; });
         if (exactos.length === 1) return { clave: claveCedula(exactos[0]), nombre: exactos[0].nombre, tipo: 'exacto' };
         var palabras = buscado.split(' ');
@@ -268,6 +275,30 @@ var Empleados = (function () {
         });
         if (candidatos.length === 1) return { clave: claveCedula(candidatos[0]), nombre: candidatos[0].nombre, tipo: 'palabras' };
         return { clave: '', nombre: '', tipo: candidatos.length ? 'ambiguo' : 'no_encontrado' };
+      }
+    
+      var ORGANIZACION_POR_EMPRESA = { PCA: 'PROSEIN CENTRAL', AIV: 'AUSTRAL IMPORT DE VENEZUELA C.A' };
+    
+      /**
+       * Empleado que no está en la nómina (no viene en el Detalle de Empleado) pero está activo: lo agrega RRHH a mano.
+       * datos: { cedula, nombre, empresa:'PCA'|'AIV', departamento, puesto, fechaIngreso, genero, salarioMensual }
+       * Devuelve { empleado } o { errores[] }.
+       */
+      function empleadoFueraDeNomina(datos) {
+        var e = [], c = parsearCedula(datos.cedula);
+        if (!c.numero || c.numero.length < 5) e.push('Escribe una cédula válida (al menos 5 dígitos).');
+        if (!espacios(datos.nombre)) e.push('Escribe el nombre y apellido.');
+        if (['PCA', 'AIV'].indexOf(datos.empresa) === -1) e.push('Elige la empresa.');
+        var f = Calculo.aFecha(datos.fechaIngreso);
+        if (!f) e.push('Escribe la fecha de ingreso.');
+        if (e.length) return { errores: e };
+        return { empleado: {
+          cedulaLetra: c.letra, cedulaNumero: c.numero, revisarCedula: false, motivoRevision: '',
+          nombre: espacios(datos.nombre).toUpperCase(), nombreNorm: normalizarNombre(datos.nombre),
+          organizacion: ORGANIZACION_POR_EMPRESA[datos.empresa], departamento: espacios(datos.departamento), puesto: espacios(datos.puesto),
+          estado: 'Activo', fechaIngreso: f, empresaDetalle: datos.empresa, empresaFideicomiso: datos.empresa,
+          salarioMensual: numeroDeMonto(datos.salarioMensual), genero: espacios(datos.genero), jefe: '', editados: [], fueraNomina: true,
+        } };
       }
     
       /** ¿Asignar `jefeClave` como jefe de `clave` crearía un ciclo (A jefe de B y B jefe de A, o más largo)? */
@@ -353,6 +384,7 @@ var Empleados = (function () {
               actual[c] = nuevo[c];
             });
             if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
+            actual.fueraNomina = false;
             resumen.actualizados++;
           } else {
             idx[k] = salida.push(nuevo) - 1;
@@ -361,7 +393,7 @@ var Empleados = (function () {
         });
     
         salida.forEach(function (e) {
-          if (!vistos[claveCedula(e)] && e.estado !== 'Inactivo') { e.estado = 'Inactivo'; resumen.inactivados++; }
+          if (!vistos[claveCedula(e)] && e.estado !== 'Inactivo' && !e.fueraNomina) { e.estado = 'Inactivo'; resumen.inactivados++; }
         });
         return { empleados: salida, resumen: resumen };
       }
@@ -522,7 +554,7 @@ var Empleados = (function () {
     
       var api = {
         mapearDetalle: mapearDetalle, fechaDeExcel: fechaDeExcel,
-        resolverJefe: resolverJefe, numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
+        resolverJefe: resolverJefe, empleadoFueraDeNomina: empleadoFueraDeNomina, numeroDeMonto: numeroDeMonto, numeroDeCedulaTexto: numeroDeCedulaTexto, creaCicloDeJefes: creaCicloDeJefes,
         normalizarNombre: normalizarNombre, parsearCedula: parsearCedula, verificadorRif: verificadorRif, estadoEnEspanol: estadoEnEspanol,
         empresaDesdeDetalle: empresaDesdeDetalle, empresaFideicomiso: empresaFideicomiso,
         claveCedula: claveCedula, empleadoDesdeDetalle: empleadoDesdeDetalle,
@@ -1015,7 +1047,7 @@ var Vacaciones = (function () {
       function mapearCierre(filas) {
         var norm = function (h) { return String(h == null ? '' : h).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); };
         var cab = (filas[0] || []).map(norm);
-        var iCed = cab.indexOf('CEDULA');
+        var iCed = cab.indexOf('CEDULA'), iNom = cab.indexOf('NOMBRE');
         if (iCed === -1) throw new Error('No encontré la columna CEDULA en la hoja del cierre.');
         var cols = [];
         cab.forEach(function (h, j) {
@@ -1030,9 +1062,11 @@ var Vacaciones = (function () {
         var personas = [];
         filas.slice(1).forEach(function (f) {
           var ced = String(f[iCed] == null ? '' : f[iCed]).trim();
-          if (!/^[VE]?-?\d{5,9}$/i.test(ced.replace(/\./g, ''))) return;
+          var nombre = iNom !== -1 ? String(f[iNom] == null ? '' : f[iNom]).replace(/\s+/g, ' ').trim() : '';
+          var cedOk = /^[VE]?-?\d{5,9}$/i.test(ced.replace(/\./g, ''));
+          if (!cedOk && !(nombre && !/TOTAL/i.test(nombre))) return;      // sin cédula: se identifica por el nombre al importar
           personas.push({
-            cedula: ced,
+            cedula: cedOk ? ced : '', nombre: nombre,
             periodos: cols.map(function (c) { return { periodo: c.periodo, correspondientes: num(f[c.jc]), disfrutadosPrevios: num(f[c.jd]) }; })
               .filter(function (p) { return p.correspondientes > 0 || p.disfrutadosPrevios > 0; }),
           });
@@ -1147,6 +1181,9 @@ var Servicio = (function () {
         repo.log('LOGIN_ADMIN', digitos, 'Entrada ' + u.rol);
         var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '' };
         if (emp && emp.estado !== 'Inactivo') data.tokenTrabajador = crearToken(ctx, Empleados.claveCedula(emp), 'TRABAJADOR');
+        if (!emp) data.nombre = u.nombre || '';
+        var mias = ['V' + digitos, 'E' + digitos];
+        data.esJefe = repo.todosEmpleados().some(function (e) { return mias.indexOf(e.jefe) !== -1 && e.estado !== 'Inactivo'; });
         return ok(data);
       }
     
@@ -1358,6 +1395,15 @@ var Servicio = (function () {
     
       var ESTADOS_VAC = { PENDIENTE_JEFE: ['APROBADA_JEFE', 'RECHAZADA', 'CANCELADA'], APROBADA_JEFE: ['REGISTRADA', 'RECHAZADA'], REGISTRADA: [], RECHAZADA: [], CANCELADA: [] };
     
+      /** Jefe activo: empleado activo o usuario de RRHH. → { nombre } o null */
+      function jefeActivo(repo, clave) {
+        if (!clave) return null;
+        var e = repo.empleadoPorClave(clave);
+        if (e && e.estado !== 'Inactivo') return { nombre: e.nombre };
+        var u = usuariosNoEmpleados(repo).filter(function (x) { return x.clave === clave; })[0];
+        return u ? { nombre: u.nombre } : null;
+      }
+    
       function hoyCaracas(ctx) { return Vacaciones.deObjeto(Constancia.fechaCaracas(ctx.ahora())); }
     
       function reglasVac(p) {
@@ -1390,6 +1436,7 @@ var Servicio = (function () {
       function nombresPorClave(repo) {
         var m = {};
         repo.todosEmpleados().forEach(function (e) { m[Empleados.claveCedula(e)] = { nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e) }; });
+        usuariosNoEmpleados(repo).forEach(function (u) { if (!m[u.clave]) m[u.clave] = { nombre: u.nombre, empresa: '' }; });
         return m;
       }
     
@@ -1408,10 +1455,10 @@ var Servicio = (function () {
         var emp = repo.empleadoPorClave(s.clave);
         if (!emp) return err('NO_ENCONTRADO', 'No encontramos tus datos.');
         var c = contextoVac(repo, ctx, emp), nombres = nombresPorClave(repo);
-        var jefe = emp.jefe ? repo.empleadoPorClave(emp.jefe) : null;
+        var jefe = jefeActivo(repo, emp.jefe);
         return ok({
           hoy: c.hoy, reglas: reglasVac(repo.parametros()), feriados: repo.feriados(), saldo: c.saldo,
-          jefe: jefe && jefe.estado !== 'Inactivo' ? { clave: emp.jefe, nombre: jefe.nombre } : null,
+          jefe: jefe ? { clave: emp.jefe, nombre: jefe.nombre } : null,
           sinFechaIngreso: !emp.fechaIngreso,
           solicitudes: c.solicitudes.sort(function (a, b) { return b.creada - a.creada; }).map(function (x) { return vistaVac(x, nombres); }),
         });
@@ -1422,11 +1469,11 @@ var Servicio = (function () {
         if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
         var emp = repo.empleadoPorClave(s.clave);
         if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
-        var jefe = emp.jefe ? repo.empleadoPorClave(emp.jefe) : null;
+        var jefe = jefeActivo(repo, emp.jefe);
         var c = contextoVac(repo, ctx, emp), feriados = repo.feriados();
         var v = Vacaciones.validarSolicitud({ inicio: datos && datos.inicio, dias: Number(datos && datos.dias) }, {
           hoy: c.hoy, feriados: feriados, saldo: c.saldo, solicitudes: c.solicitudes,
-          tieneJefe: !!(jefe && jefe.estado !== 'Inactivo'), reglas: reglasVac(repo.parametros()),
+          tieneJefe: !!jefe, reglas: reglasVac(repo.parametros()),
         });
         if (!v.ok) return err('VALIDACION', v.errores.join(' '));
         var sol = {
@@ -1450,11 +1497,12 @@ var Servicio = (function () {
     
       /** Bandeja del jefe directo: solicitudes de su equipo. */
       function equipoVacaciones(repo, ctx, token) {
-        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
         if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
-        var equipo = repo.todosEmpleados().filter(function (e) { return e.jefe === s.clave && e.estado !== 'Inactivo'; });
+        var mias = clavesDeJefe(s);
+        var equipo = repo.todosEmpleados().filter(function (e) { return mias.indexOf(e.jefe) !== -1 && e.estado !== 'Inactivo'; });
         var nombres = nombresPorClave(repo);
-        var sols = repo.vacSolicitudesPorJefe(s.clave).sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; });
+        var sols = [].concat.apply([], mias.map(function (c) { return repo.vacSolicitudesPorJefe(c); })).sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; });
         return ok({
           esJefe: equipo.length > 0, equipo: equipo.length,
           pendientes: sols.filter(function (x) { return x.estado === 'PENDIENTE_JEFE'; }).map(function (x) { return vistaVac(x, nombres); }),
@@ -1464,10 +1512,10 @@ var Servicio = (function () {
       }
     
       function decidirVacacionesJefe(repo, ctx, token, id, aprobar, motivo) {
-        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
         if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
         var sol = repo.vacSolicitudPorId(id);
-        if (!sol || sol.jefe !== s.clave) return err('NO_ENCONTRADO', 'Esa solicitud no es de tu equipo.');
+        if (!sol || clavesDeJefe(s).indexOf(sol.jefe) === -1) return err('NO_ENCONTRADO', 'Esa solicitud no es de tu equipo.');
         if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
         return cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave,
           { decididaJefePor: s.clave, decisionJefe: ctx.ahora(), motivoRechazo: aprobar ? '' : String(motivo).trim() });
@@ -1522,11 +1570,16 @@ var Servicio = (function () {
         var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
         if (!s) return err('SESION', 'No autorizado.');
         if (!Array.isArray(personas) || !personas.length) return err('VALIDACION', 'El archivo no trae personas.');
-        var filas = [], claves = {};
+        var filas = [], claves = {}, porNombre = [], sinIdentificar = [];
+        var empleados = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; });
         personas.forEach(function (p) {
-          var c = Empleados.parsearCedula(p.cedula);
-          if (!c.numero) return;
-          var clave = c.letra + c.numero;
+          var c = Empleados.parsearCedula(p.cedula), clave = c.numero ? c.letra + c.numero : '';
+          if (!clave) {     // fila del cierre sin cédula: se busca al empleado por su nombre exacto
+            var n = Empleados.normalizarNombre(p.nombre);
+            var hit = empleados.filter(function (e) { return Empleados.normalizarNombre(e.nombre) === n; });
+            if (hit.length !== 1) { if (p.nombre) sinIdentificar.push(p.nombre); return; }
+            clave = Empleados.claveCedula(hit[0]); porNombre.push(p.nombre);
+          }
           claves[clave] = true;
           (p.periodos || []).forEach(function (x) {
             if (!/^\d{4}-\d{4}$/.test(x.periodo)) return;
@@ -1542,6 +1595,8 @@ var Servicio = (function () {
           noActivos: Object.keys(claves).filter(function (k) { return !activosPorClave[k]; }).length,
           activosSinCierre: activos.filter(function (e) { return !claves[Empleados.claveCedula(e)]; }).length,
         };
+        if (porNombre.length) resumen.porNombre = porNombre;
+        if (sinIdentificar.length) resumen.sinIdentificar = sinIdentificar;
         repo.log('VACACIONES_CIERRE_IMPORTADO', s.clave, JSON.stringify(resumen));
         return ok(resumen);
       }
@@ -1566,14 +1621,22 @@ var Servicio = (function () {
         if (!s) return err('SESION', 'No autorizado.');
         if (!Array.isArray(filas) || !filas.length) return err('VALIDACION', 'El archivo no trae empleados.');
         if (filas.length > 5000) return err('VALIDACION', 'El archivo trae demasiadas filas.');
+        // Filas sin cédula válida no se importan (no podrían entrar ni ser jefes): se informan.
+        var sinCedula = [];
+        filas = filas.filter(function (f) {
+          var c = Empleados.parsearCedula(f.cedula), valida = c.numero && c.numero.length >= 5;
+          if (!valida) sinCedula.push(String(f.nombre || '').trim() || '(sin nombre)');
+          return valida;
+        });
+        if (!filas.length) return err('VALIDACION', 'Ninguna fila trae una cédula válida.');
         var r = Empleados.fusionarDetalle(repo.todosEmpleados(), filas);
-        var jefes = asignarJefesDelDetalle(r.empleados, filas);
+        var jefes = asignarJefesDelDetalle(r.empleados, filas, usuariosNoEmpleados(repo, r.empleados));
         repo.guardarEmpleados(r.empleados);
         var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
           .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
         var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
         repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
-        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes });
+        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula });
       }
     
       /** opciones: { buscar, departamento, sinJefe } */
@@ -1582,7 +1645,7 @@ var Servicio = (function () {
        * Si el archivo no trae la columna, o el jefe de una persona no se encuentra, se conserva el jefe que ya tenía.
        * Devuelve { traeColumna, asignados, sinJefeEnArchivo, noEncontrados: [{ jefe, personas, tipo }] }.
        */
-      function asignarJefesDelDetalle(empleados, filas) {
+      function asignarJefesDelDetalle(empleados, filas, usuarios) {
         var traeColumna = filas.some(function (f) { return f.jefeNombre; });
         var res = { traeColumna: traeColumna, asignados: 0, sinJefeEnArchivo: 0, noEncontrados: [] };
         if (!traeColumna) return res;
@@ -1592,7 +1655,7 @@ var Servicio = (function () {
           var c = Empleados.parsearCedula(f.cedula), e = porClave[c.letra + c.numero];
           if (!e) return;
           if (!f.jefeNombre) { res.sinJefeEnArchivo++; return; }
-          var j = cache[f.jefeNombre] || (cache[f.jefeNombre] = Empleados.resolverJefe(f.jefeNombre, empleados));
+          var j = cache[f.jefeNombre] || (cache[f.jefeNombre] = Empleados.resolverJefe(f.jefeNombre, empleados, usuarios));
           var clave = Empleados.claveCedula(e);
           if (!j.clave || j.clave === clave || Empleados.creaCicloDeJefes(empleados, clave, j.clave)) {
             var k = Empleados.normalizarNombre(f.jefeNombre);
@@ -1605,6 +1668,49 @@ var Servicio = (function () {
         return res;
       }
     
+      /** Usuarios de RRHH que no son empleados (p. ej. la CEO): pueden ser jefes. → [{ clave:'V123', nombre }] */
+      function usuariosNoEmpleados(repo, empleados) {
+        var claves = {};
+        (empleados || repo.todosEmpleados()).forEach(function (e) { if (e.estado !== 'Inactivo') claves[e.cedulaNumero] = true; });
+        return repo.todosUsuarios().filter(function (u) { return !claves[u.cedula] && u.nombre; })
+          .map(function (u) { return { clave: 'V' + u.cedula, nombre: u.nombre }; });
+      }
+    
+      /** Claves con las que una sesión puede figurar como jefe (las de RRHH guardan solo los dígitos). */
+      function clavesDeJefe(s) { return s.rol === 'TRABAJADOR' ? [s.clave] : ['V' + s.clave, 'E' + s.clave]; }
+    
+      /** RRHH agrega o corrige un empleado que no está en la nómina. */
+      function guardarEmpleadoFueraNomina(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var r = Empleados.empleadoFueraDeNomina(datos || {});
+        if (r.errores) return err('VALIDACION', r.errores.join(' '));
+        var lista = repo.todosEmpleados(), clave = Empleados.claveCedula(r.empleado);
+        var actual = lista.filter(function (e) { return Empleados.claveCedula(e) === clave; })[0];
+        if (actual && !actual.fueraNomina && actual.estado !== 'Inactivo') return err('VALIDACION', 'Esa cédula ya está en la nómina (Detalle de Empleado).');
+        if (actual) { r.empleado.jefe = actual.jefe || ''; Object.assign(actual, r.empleado); } else lista.push(r.empleado);
+        repo.guardarEmpleados(lista);
+        repo.log('EMPLEADO_FUERA_NOMINA', s.clave, clave + ' · ' + r.empleado.nombre);
+        return ok({ clave: clave, nombre: r.empleado.nombre });
+      }
+    
+      function desactivarEmpleadoFueraNomina(repo, ctx, token, clave) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lista = repo.todosEmpleados(), e = lista.filter(function (x) { return Empleados.claveCedula(x) === clave; })[0];
+        if (!e || !e.fueraNomina) return err('VALIDACION', 'Solo se pueden desactivar aquí los empleados fuera de nómina.');
+        e.estado = 'Inactivo';
+        repo.guardarEmpleados(lista);
+        repo.log('EMPLEADO_FUERA_NOMINA_INACTIVO', s.clave, clave);
+        return ok({ clave: clave });
+      }
+    
+      /** Para elegir jefe: usuarios de RRHH que no son empleados. */
+      function listarUsuariosJefes(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        return ok(usuariosNoEmpleados(repo));
+      }
+    
       function listarEmpleados(repo, ctx, token, opciones) {
         if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
         if (typeof opciones === 'string') opciones = { buscar: opciones };
@@ -1612,6 +1718,7 @@ var Servicio = (function () {
         var q = Empleados.normalizarNombre(opciones.buscar || '');
         var todos = repo.todosEmpleados(), porClave = {};
         todos.forEach(function (e) { porClave[Empleados.claveCedula(e)] = e; });
+        usuariosNoEmpleados(repo, todos).forEach(function (u) { if (!porClave[u.clave]) porClave[u.clave] = { nombre: u.nombre }; });
         var departamentos = {};
         todos.forEach(function (e) { if (e.estado !== 'Inactivo' && e.departamento) departamentos[e.departamento] = true; });
         var lista = todos.filter(function (e) {
@@ -1628,7 +1735,8 @@ var Servicio = (function () {
               clave: Empleados.claveCedula(e), nombre: e.nombre, puesto: e.puesto, departamento: e.departamento, estado: e.estado,
               empresaDetalle: e.empresaDetalle, empresaFideicomiso: e.empresaFideicomiso, empresa: Empleados.empresaFideicomiso(e),
               revisarCedula: !!e.revisarCedula, fechaIngreso: e.fechaIngreso ? e.fechaIngreso.d + '/' + e.fechaIngreso.m + '/' + e.fechaIngreso.y : '',
-              jefe: e.jefe || '', jefeNombre: j ? j.nombre : '',
+              jefe: e.jefe || '', jefeNombre: j ? j.nombre : '', fueraNomina: !!e.fueraNomina, genero: e.genero || '',
+              salarioMensual: e.fueraNomina ? e.salarioMensual : undefined,   // solo para editar a los de fuera de nómina
             };
           }),
         });
@@ -1644,7 +1752,8 @@ var Servicio = (function () {
         lista.forEach(function (e) { por[Empleados.claveCedula(e)] = e; });
         if (jefeClave) {
           var j = por[jefeClave];
-          if (!j || j.estado === 'Inactivo') return err('VALIDACION', 'El jefe debe ser un empleado activo.');
+          var esUsuario = usuariosNoEmpleados(repo, lista).some(function (u) { return u.clave === jefeClave; });
+          if (!esUsuario && (!j || j.estado === 'Inactivo')) return err('VALIDACION', 'El jefe debe ser un empleado activo o un usuario de RRHH.');
         }
         var cambiados = 0, omitidos = [];
         claves.forEach(function (c) {
@@ -1714,7 +1823,8 @@ var Servicio = (function () {
         importarCierreVacaciones: importarCierreVacaciones, saldoVacacionesEmpleado: saldoVacacionesEmpleado,
         emitirConstancia: emitirConstancia, misConstancias: misConstancias, verificarConstancia: verificarConstancia,
         listarConstancias: listarConstancias, anularConstancia: anularConstancia,
-        cargarEmpleados: cargarEmpleados, listarEmpleados: listarEmpleados, asignarJefe: asignarJefe, asignarJefeDepartamento: asignarJefeDepartamento, fijarEmpresaFideicomiso: fijarEmpresaFideicomiso,
+        cargarEmpleados: cargarEmpleados, listarEmpleados: listarEmpleados, guardarEmpleadoFueraNomina: guardarEmpleadoFueraNomina,
+        desactivarEmpleadoFueraNomina: desactivarEmpleadoFueraNomina, listarUsuariosJefes: listarUsuariosJefes, asignarJefe: asignarJefe, asignarJefeDepartamento: asignarJefeDepartamento, fijarEmpresaFideicomiso: fijarEmpresaFideicomiso,
       };
       if (typeof module !== 'undefined' && module.exports) module.exports = api;
       else raiz.Servicio = api;
@@ -1732,7 +1842,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-10-30.5';
+var VERSION = '2026-10-30.7';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Servicio'];
 
@@ -1749,7 +1859,7 @@ function modulosCargados_() {
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
-  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero'],
+  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo'],
@@ -1770,6 +1880,16 @@ var HOJAS = {
 var USUARIOS_RRHH_INICIALES = [
   { cedula: '30580323', nombre: 'Samuel Herrera', rol: 'ADMIN' },
   { cedula: '7952013', nombre: 'Luis Paul Rojas', rol: 'ADMIN' },
+  { cedula: '6291577', nombre: 'JOHANNA RODRIGUEZ', rol: 'ADMIN' },   // CEO: no es empleada; es jefa de varios
+];
+
+/**
+ * Empleados activos que no están en la nómina (no vienen en el Detalle de Empleado). Se crean al configurar si no existen;
+ * después se editan en el sitio (Empleados → «Fuera de nómina»). Datos del cierre de vacaciones.
+ */
+var EMPLEADOS_FUERA_NOMINA_INICIALES = [
+  { cedula: 'V085423904', nombre: 'MARIA TERESA CENCI', empresa: 'AIV', fechaIngreso: '08/10/1987' },
+  { cedula: 'E810535060', nombre: 'DANILO KOENIG', empresa: 'PCA', fechaIngreso: '09/09/2008' },
 ];
 
 // Feriados nacionales 2026 (lista de RRHH, corregida: 12 de octubre en vez de 10/12; se agregan 5 y 24 de julio).
@@ -1797,6 +1917,9 @@ var RUTAS_TRABAJADOR = {
 };
 
 var RUTAS_RRHH = {
+  guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
+  desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
+  listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
   bandejaVacaciones: function (repo, ctx, d) { return Servicio.bandejaVacaciones(repo, ctx, d.token, d.estado); },
   registrarVacaciones: function (repo, ctx, d) { return Servicio.registrarVacaciones(repo, ctx, d.token, d.id, d.nomina); },
   rechazarVacacionesRRHH: function (repo, ctx, d) { return Servicio.rechazarVacacionesRRHH(repo, ctx, d.token, d.id, d.motivo); },
@@ -1918,7 +2041,8 @@ function empleado_(f) {
     estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso),
     empresaDetalle: texto_(f.empresaDetalle) || 'PCA', empresaFideicomiso: texto_(f.empresaFideicomiso),
     revisarCedula: f.revisarCedula === true || f.revisarCedula === 'TRUE', motivoRevision: texto_(f.motivoRevision),
-    salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), genero: texto_(f.genero), jefe: texto_(f.jefe), editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
+    salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), genero: texto_(f.genero),
+    fueraNomina: f.fueraNomina === true || f.fueraNomina === 'TRUE' || f.fueraNomina === 'true', jefe: texto_(f.jefe), editados: editados, nombreNorm: Empleados.normalizarNombre(f.nombre),
   };
 }
 
@@ -2026,7 +2150,7 @@ function crearRepo_() {
       if (!lista.length) return;
       var filas = lista.map(function (e) {
         return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
-          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || ''];
+          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || '', !!e.fueraNomina];
       });
       var rango = h.getRange(2, 1, filas.length, cab.length);
       rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte
@@ -2064,9 +2188,12 @@ function crearRepo_() {
       var f = leer_('EMPRESAS').filter(function (x) { return x.empresa === empresa; })[0];
       return f ? { fideicomiso: f.fideicomiso, tipoTAporte: f.tipoTAporte, tipoTAnticipo: f.tipoTAnticipo, forma: f.forma } : null;
     },
+    todosUsuarios: function () {
+      return leer_('USUARIOS').map(function (u) { return { cedula: texto_(u.cedula), nombre: texto_(u.nombre), rol: texto_(u.rol) }; });
+    },
     usuario: function (cedula) {
       var f = leer_('USUARIOS').filter(function (u) { return texto_(u.cedula) === cedula; })[0];
-      return f ? { sal: texto_(f.sal), hash: texto_(f.hash), rol: texto_(f.rol) } : null;
+      return f ? { sal: texto_(f.sal), hash: texto_(f.hash), rol: texto_(f.rol), nombre: texto_(f.nombre) } : null;
     },
     fallos: function (k) { return Number(cache.get('fallo:' + k)) || 0; },
     registrarFallo: function (k) { cache.put('fallo:' + k, String((Number(cache.get('fallo:' + k)) || 0) + 1), 900); },
@@ -2104,6 +2231,16 @@ function configurarInicial() {
   if (hf.getLastRow() <= 1) {
     hf.getRange(2, 1, FERIADOS_INICIALES.length, 1).setNumberFormat('@');
     hf.getRange(2, 1, FERIADOS_INICIALES.length, 2).setValues(FERIADOS_INICIALES);
+  }
+  // Empleados fuera de nómina iniciales (si los módulos están cargados)
+  if (typeof Empleados !== 'undefined' && Empleados) {
+    var repo = crearRepo_(), lista = repo.todosEmpleados(), hay = {}, nuevos = 0;
+    lista.forEach(function (e) { hay[Empleados.claveCedula(e)] = true; });
+    EMPLEADOS_FUERA_NOMINA_INICIALES.forEach(function (d) {
+      var r = Empleados.empleadoFueraDeNomina(d);
+      if (r.empleado && !hay[Empleados.claveCedula(r.empleado)]) { lista.push(r.empleado); nuevos++; }
+    });
+    if (nuevos) repo.guardarEmpleados(lista);
   }
   // Usuarios de RRHH iniciales (sin clave todavía; no pueden entrar hasta ponerla)
   var existentes_ = {};
@@ -2165,12 +2302,17 @@ function ponerClaveRRHH() {
   if (!existente) {
     if (ui.alert('Persona nueva', quien + '\nCédula ' + cedula + '\n\nNo es un usuario de RRHH todavía. ¿Crearla?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
     rol = ui.alert('Rol', '¿Administrador? Sí = ADMIN (todo). No = RRHH.', ui.ButtonSet.YES_NO) === ui.Button.YES ? 'ADMIN' : 'RRHH';
+    if (!emp) {   // no es empleado (p. ej. la CEO): su nombre sirve para mostrarlo y para encontrarlo como jefe en el detalle
+      var nn = ui.prompt('Nombre', 'Nombre y apellido de la persona (como aparece en la columna JEFE DIRECTO):', ui.ButtonSet.OK_CANCEL);
+      if (nn.getSelectedButton() !== ui.Button.OK || !nn.getResponseText().trim()) return;
+      quien = nn.getResponseText().trim().replace(/\s+/g, ' ').toUpperCase();
+    }
   } else if (ui.alert('Confirmar', quien + '\nCédula ' + cedula + ' · ' + rol + '\n\n¿Poner o cambiar su clave?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   var k = ui.prompt('Clave', 'Clave de ' + quien + ' (mínimo 8 caracteres). Se pedirá cada vez que entre:', ui.ButtonSet.OK_CANCEL);
   if (k.getSelectedButton() !== ui.Button.OK) return;
   var clave = k.getResponseText();
   if (clave.length < 8) { ui.alert('La clave debe tener al menos 8 caracteres.'); return; }
-  guardarUsuario_(cedula, clave, rol, (existente && texto_(existente.nombre)) || (emp && emp.nombre) || '');
+  guardarUsuario_(cedula, clave, rol, (existente && texto_(existente.nombre)) || (emp && emp.nombre) || (/^\(/.test(quien) ? '' : quien));
   ui.alert('Listo', 'Clave guardada para ' + quien + '.\nAl escribir su cédula en el sitio, el sistema le pedirá la clave.', ui.ButtonSet.OK);
 }
 
