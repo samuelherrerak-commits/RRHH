@@ -441,7 +441,10 @@ test('vacaciones: flujo completo trabajador → jefe → RRHH, con pago del per�
   assert.equal(eq.pendientes.length, 1);
   assert.equal(eq.pendientes[0].nombre, 'Samuel Herrera');
   assert.equal(S.decidirVacacionesJefe(repo, ctx, yo, r.data.id, true).code, 'NO_ENCONTRADO');
-  assert.equal(S.decidirVacacionesJefe(repo, ctx, jefa, r.data.id, true).data.estado, 'APROBADA_JEFE');
+  const apr = S.decidirVacacionesJefe(repo, ctx, jefa, r.data.id, true).data;
+  assert.equal(apr.estado, 'APROBADA_JEFE');
+  assert.equal(apr.numeroConstancia, '46339V305803234635246353');   // la constancia sale al aprobar el jefe
+  assert.equal(S.datosVacaciones(repo, ctx, yo).data.solicitudes[0].numeroConstancia, apr.numeroConstancia);
   assert.equal(S.cancelarVacaciones(repo, ctx, yo, r.data.id).code, 'TRANSICION');   // ya no se puede cancelar
 
   // llega a RRHH, que la registra con la nómina

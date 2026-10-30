@@ -656,8 +656,20 @@
     var sol = repo.vacSolicitudPorId(id);
     if (!sol || clavesDeJefe(s).indexOf(sol.jefe) === -1) return err('NO_ENCONTRADO', 'Esa solicitud no es de tu equipo.');
     if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
-    return cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave,
-      { decididaJefePor: s.clave, decisionJefe: ctx.ahora(), motivoRechazo: aprobar ? '' : String(motivo).trim() });
+    var extra = { decididaJefePor: s.clave, decisionJefe: ctx.ahora(), motivoRechazo: aprobar ? '' : String(motivo).trim() };
+    if (aprobar) Object.assign(extra, datosConstanciaVac(repo, ctx, sol));   // la constancia de aprobación sale con el visto bueno del jefe
+    return cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave, extra);
+  }
+
+  /** Número de la constancia de aprobación (formato del Excel) y días que quedan por período una vez aplicado este disfrute. */
+  function datosConstanciaVac(repo, ctx, sol) {
+    var emp = repo.empleadoPorClave(sol.clave);
+    if (!emp) return {};
+    var c = contextoVac(repo, ctx, emp);
+    return {
+      numeroConstancia: Vacaciones.numeroConstancia(sol, emp.cedulaLetra, emp.cedulaNumero),
+      pendientesDespues: Vacaciones.pendientesTras(c.periodos, c.solicitudes, sol),
+    };
   }
 
   /** RRHH: solicitudes por estado (por defecto, las aprobadas por el jefe que faltan por registrar). */
@@ -673,22 +685,14 @@
     });
   }
 
-  /**
-   * RRHH registra: queda la constancia de aprobación con su número (formato del Excel) y los días que
-   * quedan pendientes por período una vez aplicado este disfrute.
-   */
+  /** RRHH registra con el código de nómina. La constancia ya salió al aprobar el jefe (se completa aquí si faltara). */
   function registrarVacaciones(repo, ctx, token, id, nomina) {
     var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
     if (!s) return err('SESION', 'No autorizado.');
     var sol = repo.vacSolicitudPorId(id);
     if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
-    var emp = repo.empleadoPorClave(sol.clave);
     var extra = { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() };
-    if (emp) {
-      var c = contextoVac(repo, ctx, emp);
-      extra.numeroConstancia = Vacaciones.numeroConstancia(sol, emp.cedulaLetra, emp.cedulaNumero);
-      extra.pendientesDespues = Vacaciones.pendientesTras(c.periodos, c.solicitudes, sol);
-    }
+    if (!sol.numeroConstancia) Object.assign(extra, datosConstanciaVac(repo, ctx, sol));
     return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
   }
 

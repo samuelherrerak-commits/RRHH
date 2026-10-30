@@ -311,7 +311,7 @@ async function seccionVacaciones(cont) {
           <p class="suave">${esc(x.condicion)}${x.estado === 'PENDIENTE_JEFE' && x.jefeNombre ? ` · esperando a ${esc(primerNombre(x.jefeNombre))}` : ''}</p>
           ${x.estado === 'RECHAZADA' && x.motivoRechazo ? `<p class="error-msg">Motivo: ${esc(x.motivoRechazo)}</p>` : ''}
           ${x.estado === 'PENDIENTE_JEFE' ? `<div><button class="btn btn-sec btn-chico" data-cancelar-vac="${esc(x.id)}">Cancelar solicitud</button></div>` : ''}
-          ${x.estado === 'REGISTRADA' && x.numeroConstancia ? `<div><button class="btn btn-azul btn-chico" data-pdf-vac="${esc(x.id)}">Descargar constancia de aprobación</button></div>` : ''}
+          ${['APROBADA_JEFE', 'REGISTRADA'].includes(x.estado) && x.numeroConstancia ? `<div><button class="btn btn-azul btn-chico" data-pdf-vac="${esc(x.id)}">Descargar constancia de aprobación</button></div>` : ''}
         </div>`).join('')}</div>` : '<p class="vacio">Todavía no has hecho solicitudes en el sistema.</p>'}
     </section></div></div>`;
 
@@ -874,7 +874,7 @@ async function panelVacaciones(panel) {
           <p>${esc(resumenFechas(x))}</p>
           <p class="suave"><b>${esc(x.condicion)}</b>${pago ? ` — ${esc(pago)}` : ''} · ${x.imputacion.map((i) => `${i.dias} del ${i.periodo}`).join(', ')}</p>
           ${x.nomina ? `<p class="suave">Nómina: ${esc(x.nomina)}</p>` : ''}${x.motivoRechazo ? `<p class="suave">Motivo: ${esc(x.motivoRechazo)}</p>` : ''}
-          ${x.estado === 'REGISTRADA' && x.numeroConstancia ? `<div><button class="btn btn-azul btn-chico" data-pdf-vac="${esc(x.id)}">Constancia de aprobación</button></div>` : ''}
+          ${['APROBADA_JEFE', 'REGISTRADA'].includes(x.estado) && x.numeroConstancia ? `<div><button class="btn btn-azul btn-chico" data-pdf-vac="${esc(x.id)}">Constancia de aprobación</button></div>` : ''}
           ${x.estado === 'APROBADA_JEFE' ? `
             ${pago ? `<label>Código de nómina del pago <input placeholder="Ej. NV-80" data-nomina="${esc(x.id)}" autocomplete="off"></label>` : ''}
             <div class="fila"><button class="btn btn-chico" data-registrar="${esc(x.id)}">Registrar</button><button class="btn btn-sec btn-chico" data-rechazar-vac="${esc(x.id)}">Rechazar</button></div>` : ''}

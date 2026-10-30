@@ -12,7 +12,7 @@ Basado en «Solicitud Digital de Disfrute de Vacaciones - PROSEIN / AUSTRAL.xlsx
 
 ## Flujo
 1. El trabajador elige fecha de inicio y días hábiles; ve al instante último día, reintegro y si lleva pago. Los días quedan reservados.
-2. Su jefe directo la ve en «Mi equipo» (al entrar con su cédula, o en «Mi cuenta» si es de RRHH) y aprueba o rechaza con motivo.
+2. Su jefe directo la ve en «Mi equipo» (al entrar con su cédula, o en «Mi cuenta» si es de RRHH) y aprueba o rechaza con motivo. Al aprobar sale la **constancia de aprobación** en PDF.
 3. Aprobada, llega a RRHH (pestaña Vacaciones, «Por registrar»), que la registra con el código de nómina o la rechaza.
 4. Estados: PENDIENTE_JEFE → APROBADA_JEFE → REGISTRADA · RECHAZADA · CANCELADA (el trabajador cancela mientras está con el jefe). Rechazadas y canceladas devuelven los días.
 
@@ -32,4 +32,4 @@ Sube el Excel; se lee la hoja CIERRE DE VACACIONES (por cada «DISFRUTADOS AA-AA
 - Las filas del Detalle **sin cédula válida** no se importan y se informan.
 
 ## Constancia de aprobación (PDF)
-Al registrar, RRHH deja fijos el **número de constancia** (formato del Excel: serial de inicio + cédula de 8 dígitos + serial de culminación + serial de reintegro; verificado con el modelo: 46272V079246274628346286) y los **pendientes por período** una vez aplicado ese disfrute. El trabajador y RRHH la descargan en PDF con el modelo «Constancia de Aprobación de Vacaciones» (membrete Prosein nuevo o Austral según la empresa).
+Cuando el **jefe directo aprueba** quedan fijos el **número de constancia** (formato del Excel: serial de inicio + cédula de 8 dígitos + serial de culminación + serial de reintegro; verificado con el modelo: 46272V079246274628346286) y los **pendientes por período** una vez aplicado ese disfrute. Desde ese momento el trabajador y RRHH la descargan en PDF con el modelo «Constancia de Aprobación de Vacaciones» (membrete Prosein nuevo o Austral según la empresa).
