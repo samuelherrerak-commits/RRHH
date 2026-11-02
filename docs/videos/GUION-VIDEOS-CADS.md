@@ -24,13 +24,15 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [cálido] Hola. Te damos la bienvenida a Cads, el Centro de Atención de Solicitudes de Gestión Humana de Prosein, Austral y Mil Cerámicas.
 
-[tranquilo] A partir de ahora, muchas de las cosas que antes pedías por correo, por mensaje o en papel, las haces tú, desde tu celular o tu computadora, a la hora que te quede mejor.
+[tranquilo] A partir de ahora, muchas de las cosas que antes pedías por correo, por mensaje o en papel, las haces tú, a la hora que te quede mejor.
 
 [serio] ¿Qué puedes hacer en Cads? [pausa corta] Tres cosas.
 
 [con energía] Uno: descargar tu constancia de trabajo al instante. [pausa corta] Dos: solicitar tus vacaciones y seguir su aprobación paso a paso. [pausa corta] Tres: solicitar un anticipo de tu fideicomiso cuando la solicitud esté abierta.
 
-[tranquilo] Entrar es muy sencillo. Abre el enlace de Cads que te compartió Gestión Humana. Escribe tu número de cédula, solo los números, sin puntos y sin letras, y toca Entrar.
+[tranquilo] Entrar es muy sencillo. Te recomendamos hacerlo desde una computadora: la pantalla es más amplia y ves todo con más comodidad. Abre el enlace de Cads que te compartió Gestión Humana. Escribe tu número de cédula, solo los números, sin puntos y sin letras, y toca Entrar.
+
+[cálido] ¿No tienes una computadora a mano? No hay problema. Abre el mismo enlace en tu celular. Funciona igual.
 
 [cálido] No necesitas contraseña. Nada que recordar, nada que recuperar.
 
@@ -38,7 +40,7 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [cálido] Al entrar verás un saludo con tu nombre y tres tarjetas: Constancia de trabajo, Vacaciones y Fideicomiso. Toca la que necesites y el sistema te guía.
 
-[tranquilo] Si lo abres desde el celular, Cads te va a sugerir instalarlo en tu pantalla de inicio. Acepta. Así lo tienes a un toque, como cualquier otra aplicación.
+[tranquilo] Cads te va a sugerir instalarlo. En la computadora, para abrirlo desde tu escritorio. En el celular, en tu pantalla de inicio. Acepta. Así lo tienes a un toque, como cualquier otra aplicación.
 
 [animado] ¿Tienes personas a tu cargo? Entonces verás también la sección Mi equipo, donde apruebas las vacaciones de tu gente.
 
@@ -52,14 +54,15 @@ Cuatro videos de motion graphics para los colaboradores:
 | # | Frase de inicio | En pantalla |
 |---|---|---|
 | 1 | «Hola. Te damos la bienvenida…» | Fondo negro y aparece CADS en acróstico: **C**entro · **A**tención · **D**e · **S**olicitudes. Debajo: Prosein · Austral · Mil Cerámicas. |
-| 2 | «A partir de ahora…» | Íconos de correo, chat y papel que se transforman en un celular y una laptop. |
+| 2 | «A partir de ahora…» | Íconos de correo, chat y papel que se transforman en la pantalla de CADS. |
 | 3 | «¿Qué puedes hacer…?» | Número 3 grande. |
 | 4 | «Uno: descargar…» | Entran las 3 tarjetas una por una: Constancia, Vacaciones, Fideicomiso. |
-| 5 | «Entrar es muy sencillo…» | Pantalla de entrada: campo «Cédula», se escribe 12345678 y se toca **Entrar**. |
+| 5 | «Entrar es muy sencillo…» | Laptop con la pantalla de entrada (acróstico a la izquierda): se escribe 12345678 y se toca **Entrar**. |
+| 5b | «¿No tienes una computadora a mano?» | La misma pantalla pasa a un celular. |
 | 6 | «No necesitas contraseña…» | Candado tachado y un check. |
 | 7 | «Tu cédula es tu llave…» | Llave con forma de cédula y el texto «Cada entrada queda registrada». |
 | 8 | «Al entrar verás…» | Inicio: «Bienvenido, [nombre]…» con las 3 tarjetas. |
-| 9 | «Si lo abres desde el celular…» | Celular con el aviso «Instalar CADS» y el ícono CA/DS en la pantalla de inicio. |
+| 9 | «Cads te va a sugerir instalarlo…» | Laptop con el ícono CA/DS en el escritorio y celular con el ícono en la pantalla de inicio. |
 | 10 | «¿Tienes personas a tu cargo?» | Menú lateral y aparece «Mi equipo» con un contador. |
 | 11 | «Cuando termines…» | Botón **Salir** resaltado. |
 | 12 | «Y si algo no cuadra…» | Texto «Gestión Humana» con ícono de ayuda. |
@@ -73,7 +76,7 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [cálido] ¿Necesitas una constancia de trabajo? En Cads la tienes en menos de un minuto. Te mostramos cómo.
 
-[claro y pausado] Paso uno. Entra a Cads con tu cédula.
+[claro y pausado] Paso uno. Abre Cads en tu computadora, o en tu celular si no la tienes a mano, y entra con tu cédula.
 
 [claro y pausado] Paso dos. En el inicio, toca la tarjeta Constancia de trabajo.
 
@@ -119,7 +122,7 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [cálido] Planificar tus vacaciones ahora es más fácil. En este video te mostramos cómo solicitarlas en Cads, y cómo las aprueba tu jefe directo.
 
-[claro y pausado] Paso uno. Entra a Cads con tu cédula y toca la tarjeta Vacaciones.
+[claro y pausado] Paso uno. Abre Cads, de preferencia en tu computadora, porque ahí ves tus fechas y tus días con más comodidad. Si no la tienes a mano, usa tu celular. Entra con tu cédula y toca la tarjeta Vacaciones.
 
 [tranquilo] Lo primero que vas a ver son tus días de vacaciones pendientes. Son los días hábiles que tienes por disfrutar. Más abajo, en Mis días por período, ves el detalle de cada año: cuántos días te corresponden, cuántos disfrutaste y cuántos te quedan.
 
@@ -197,7 +200,7 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [serio] Este paso es clave. Cads no muestra tu saldo. El monto que pidas lo envías bajo tu responsabilidad, y si es mayor a tu disponible, el banco rechazará la solicitud.
 
-[claro y pausado] Paso dos. Entra a Cads con tu cédula y toca la tarjeta Fideicomiso.
+[claro y pausado] Paso dos. Abre Cads en tu computadora, o en tu celular si no la tienes a mano. Entra con tu cédula y toca la tarjeta Fideicomiso.
 
 [claro y pausado] Paso tres. Escribe el monto que quieres solicitar, en bolívares.
 
@@ -217,7 +220,7 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [cálido] En la sección Mis solicitudes tienes siempre el historial de tus anticipos, con su monto, su motivo y su estado.
 
-[con una sonrisa] Revisa en tu banco, solicita en Cads y sigue tu anticipo desde tu celular. Así de simple.
+[con una sonrisa] Revisa en tu banco, solicita en Cads y sigue tu anticipo desde tu computadora o tu celular. Así de simple.
 
 ### Mapa de escenas
 | # | Frase de inicio | En pantalla |
