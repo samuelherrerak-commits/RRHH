@@ -1,6 +1,6 @@
-// Service worker de CADS: permite instalar el sitio como app. Siempre pide la versión nueva a la red
+// Service worker de CAC: permite instalar el sitio como app. Siempre pide la versión nueva a la red
 // (así nunca se queda una versión vieja) y solo usa la copia guardada si no hay conexión.
-const CACHE = 'cads-v1';
+const CACHE = 'cac-v1';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
 self.addEventListener('fetch', (e) => {

@@ -1,4 +1,4 @@
-# CADS · Centro de Atención de Solicitudes (Gestión Humana · Prosein, Austral y Mil Cerámicas)
+# CAC · Centro de Atención al Colaborador (Gestión Humana · Prosein, Austral y Mil Cerámicas)
 
 Sistema de recursos humanos: aporte trimestral al fideicomiso y portal del trabajador.
 

@@ -1,8 +1,8 @@
-# Guion · Videos explicativos de CADS
+# Guion · Videos explicativos de CAC
 
 Cuatro videos de motion graphics para los colaboradores:
 
-1. **CADS en general** (unos 2 minutos)
+1. **El CAC en general** (unos 2 minutos)
 2. **Constancia de trabajo** (unos 2 minutos)
 3. **Vacaciones** (unos 3 minutos; incluye la parte del jefe directo)
 4. **Fideicomiso: anticipos** (unos 2½ minutos)
@@ -11,26 +11,26 @@ Cuatro videos de motion graphics para los colaboradores:
 - Copia **solo el bloque «Texto para la voz»** de cada video. Las etiquetas entre corchetes son la emoción con la que debe sonar la frase que sigue: `[tranquilo]`, `[cálido]`, `[serio]`, `[con energía]`, `[animado]`, `[claro y pausado]`, `[con una sonrisa]` y `[pausa corta]`.
 - Genera **un audio por video**. Así es más fácil cortarlo por escenas.
 - **Pronunciación:**
-  - Escribí «Cads» en vez de «CADS» para que no lo deletree ni lo lea en inglés. Si aun así suena raro, prueba con «Cáds».
+  - En la voz no se usa la sigla «CAC»: leída como palabra suena mal. Se dice «Centro de Atención al Colaborador» y, para abreviar, «el Centro».
   - Los números van en letras para que los lea bien.
 - **Tono:** corporativo, cercano y sin exagerar. Voz recomendada: adulta y clara, de ritmo medio.
 - Debajo de cada texto está el **mapa de escenas**, con lo que se ve en pantalla. Es la guía para cortar el audio y armar las animaciones.
 
 ---
 
-## Video 1 · CADS en general
+## Video 1 · El CAC en general
 
 ### Texto para la voz
 
-[cálido] Hola. Te damos la bienvenida a Cads, el Centro de Atención de Solicitudes de Gestión Humana de Prosein, Austral y Mil Cerámicas.
+[cálido] Hola. Te damos la bienvenida al Centro de Atención al Colaborador de Gestión Humana de Prosein, Austral y Mil Cerámicas.
 
 [tranquilo] A partir de ahora, muchas de las cosas que antes pedías por correo, por mensaje o en papel, las haces tú, a la hora que te quede mejor.
 
-[serio] ¿Qué puedes hacer en Cads? [pausa corta] Tres cosas.
+[serio] ¿Qué puedes hacer en el Centro? [pausa corta] Tres cosas.
 
 [con energía] Uno: descargar tu constancia de trabajo al instante. [pausa corta] Dos: solicitar tus vacaciones y seguir su aprobación paso a paso. [pausa corta] Tres: solicitar un anticipo de tu fideicomiso cuando la solicitud esté abierta.
 
-[tranquilo] Entrar es muy sencillo. Te recomendamos hacerlo desde una computadora: la pantalla es más amplia y ves todo con más comodidad. Abre el enlace de Cads que te compartió Gestión Humana. Escribe tu número de cédula, solo los números, sin puntos y sin letras, y toca Entrar.
+[tranquilo] Entrar es muy sencillo. Te recomendamos hacerlo desde una computadora: la pantalla es más amplia y ves todo con más comodidad. Abre el enlace del Centro de Atención al Colaborador que te compartió Gestión Humana. Escribe tu número de cédula, solo los números, sin puntos y sin letras, y toca Entrar.
 
 [cálido] ¿No tienes una computadora a mano? No hay problema. Abre el mismo enlace en tu celular. Funciona igual.
 
@@ -40,7 +40,7 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [cálido] Al entrar verás un saludo con tu nombre y tres tarjetas: Constancia de trabajo, Vacaciones y Fideicomiso. Toca la que necesites y el sistema te guía.
 
-[tranquilo] Cads te va a sugerir instalarlo. En la computadora, para abrirlo desde tu escritorio. En el celular, en tu pantalla de inicio. Acepta. Así lo tienes a un toque, como cualquier otra aplicación.
+[tranquilo] El Centro te va a sugerir instalarlo. En la computadora, para abrirlo desde tu escritorio. En el celular, en tu pantalla de inicio. Acepta. Así lo tienes a un toque, como cualquier otra aplicación.
 
 [animado] ¿Tienes personas a tu cargo? Entonces verás también la sección Mi equipo, donde apruebas las vacaciones de tu gente.
 
@@ -48,13 +48,13 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [serio] Y si algo no cuadra, por ejemplo, el sistema no encuentra tu cédula o tus días de vacaciones no coinciden, comunícate con Gestión Humana. [cálido] Estamos para ayudarte.
 
-[con una sonrisa] Cads: menos papeles, menos esperas y tus solicitudes siempre a la vista. [tranquilo] En los próximos videos te mostramos cada módulo, paso a paso.
+[con una sonrisa] Centro de Atención al Colaborador: menos papeles, menos esperas y tus solicitudes siempre a la vista. [tranquilo] En los próximos videos te mostramos cada módulo, paso a paso.
 
 ### Mapa de escenas
 | # | Frase de inicio | En pantalla |
 |---|---|---|
-| 1 | «Hola. Te damos la bienvenida…» | Fondo negro y aparece CADS en acróstico: **C**entro · **A**tención · **D**e · **S**olicitudes. Debajo: Prosein · Austral · Mil Cerámicas. |
-| 2 | «A partir de ahora…» | Íconos de correo, chat y papel que se transforman en la pantalla de CADS. |
+| 1 | «Hola. Te damos la bienvenida…» | Fondo negro y aparece CAC en acróstico: **C**entro de · **A**tención al · **C**olaborador. Debajo: Prosein · Austral · Mil Cerámicas. |
+| 2 | «A partir de ahora…» | Íconos de correo, chat y papel que se transforman en la pantalla del CAC. |
 | 3 | «¿Qué puedes hacer…?» | Número 3 grande. |
 | 4 | «Uno: descargar…» | Entran las 3 tarjetas una por una: Constancia, Vacaciones, Fideicomiso. |
 | 5 | «Entrar es muy sencillo…» | Laptop con la pantalla de entrada (acróstico a la izquierda): se escribe 12345678 y se toca **Entrar**. |
@@ -62,11 +62,11 @@ Cuatro videos de motion graphics para los colaboradores:
 | 6 | «No necesitas contraseña…» | Candado tachado y un check. |
 | 7 | «Tu cédula es tu llave…» | Llave con forma de cédula y el texto «Cada entrada queda registrada». |
 | 8 | «Al entrar verás…» | Inicio: «Bienvenido, [nombre]…» con las 3 tarjetas. |
-| 9 | «Cads te va a sugerir instalarlo…» | Laptop con el ícono CA/DS en el escritorio y celular con el ícono en la pantalla de inicio. |
+| 9 | «El Centro te va a sugerir instalarlo…» | Laptop con el ícono CAC en el escritorio y celular con el ícono en la pantalla de inicio. |
 | 10 | «¿Tienes personas a tu cargo?» | Menú lateral y aparece «Mi equipo» con un contador. |
 | 11 | «Cuando termines…» | Botón **Salir** resaltado. |
 | 12 | «Y si algo no cuadra…» | Texto «Gestión Humana» con ícono de ayuda. |
-| 13 | «Cads: menos papeles…» | Logo CA/DS y el texto «Próximos videos: Constancia · Vacaciones · Fideicomiso». |
+| 13 | «Centro de Atención al Colaborador: menos papeles…» | Logo CAC y el texto «Próximos videos: Constancia · Vacaciones · Fideicomiso». |
 
 ---
 
@@ -74,9 +74,9 @@ Cuatro videos de motion graphics para los colaboradores:
 
 ### Texto para la voz
 
-[cálido] ¿Necesitas una constancia de trabajo? En Cads la tienes en menos de un minuto. Te mostramos cómo.
+[cálido] ¿Necesitas una constancia de trabajo? En el Centro de Atención al Colaborador la tienes en menos de un minuto. Te mostramos cómo.
 
-[claro y pausado] Paso uno. Abre Cads en tu computadora, o en tu celular si no la tienes a mano, y entra con tu cédula.
+[claro y pausado] Paso uno. Abre el Centro en tu computadora, o en tu celular si no la tienes a mano, y entra con tu cédula.
 
 [claro y pausado] Paso dos. En el inicio, toca la tarjeta Constancia de trabajo.
 
@@ -112,7 +112,7 @@ Cuatro videos de motion graphics para los colaboradores:
 | 9 | «¿La perdiste…?» | Botón **Descargar mi constancia vigente**. |
 | 10 | «En la sección Mis constancias…» | Lista con emisión y vencimiento. |
 | 11 | «Si necesitas una antes…» | Constancia que pasa a «Anulada» y luego una nueva. |
-| 12 | «Así de fácil…» | Cierre con el logo CA/DS. |
+| 12 | «Así de fácil…» | Cierre con el logo CAC. |
 
 ---
 
@@ -120,9 +120,9 @@ Cuatro videos de motion graphics para los colaboradores:
 
 ### Texto para la voz
 
-[cálido] Planificar tus vacaciones ahora es más fácil. En este video te mostramos cómo solicitarlas en Cads, y cómo las aprueba tu jefe directo.
+[cálido] Planificar tus vacaciones ahora es más fácil. En este video te mostramos cómo solicitarlas en el Centro de Atención al Colaborador, y cómo las aprueba tu jefe directo.
 
-[claro y pausado] Paso uno. Abre Cads, de preferencia en tu computadora, porque ahí ves tus fechas y tus días con más comodidad. Si no la tienes a mano, usa tu celular. Entra con tu cédula y toca la tarjeta Vacaciones.
+[claro y pausado] Paso uno. Abre el Centro, de preferencia en tu computadora, porque ahí ves tus fechas y tus días con más comodidad. Si no la tienes a mano, usa tu celular. Entra con tu cédula y toca la tarjeta Vacaciones.
 
 [tranquilo] Lo primero que vas a ver son tus días de vacaciones pendientes. Son los días hábiles que tienes por disfrutar. Más abajo, en Mis días por período, ves el detalle de cada año: cuántos días te corresponden, cuántos disfrutaste y cuántos te quedan.
 
@@ -134,7 +134,7 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [claro y pausado] Paso tres. Escribe cuántos días hábiles quieres disfrutar.
 
-[tranquilo] Solo se cuentan los días hábiles, es decir, sin fines de semana y sin feriados. Al instante, Cads te muestra tu último día de vacaciones y el día en que te reintegras al trabajo.
+[tranquilo] Solo se cuentan los días hábiles, es decir, sin fines de semana y sin feriados. Al instante, el Centro te muestra tu último día de vacaciones y el día en que te reintegras al trabajo.
 
 [serio] Recuerda que no puedes pedir más días de los que tienes pendientes. No se adelantan días.
 
@@ -182,7 +182,7 @@ Cuatro videos de motion graphics para los colaboradores:
 | 17 | «Luego, Gestión Humana registra…» | Etiqueta «Registrada». |
 | 18 | «Si una solicitud es rechazada…» | Etiqueta «Rechazada» y los días que regresan. |
 | 19 | «Un detalle importante…» | Aviso: «No tienes jefe directo asignado…». |
-| 20 | «Tus días, tus fechas…» | Cierre con el logo CA/DS. |
+| 20 | «Tus días, tus fechas…» | Cierre con el logo CAC. |
 
 ---
 
@@ -190,17 +190,17 @@ Cuatro videos de motion graphics para los colaboradores:
 
 ### Texto para la voz
 
-[cálido] Tu fideicomiso de prestaciones sociales es un respaldo para momentos importantes: tu vivienda, tu salud o tu educación. En este video te explicamos cómo solicitar un anticipo en Cads.
+[cálido] Tu fideicomiso de prestaciones sociales es un respaldo para momentos importantes: tu vivienda, tu salud o tu educación. En este video te explicamos cómo solicitar un anticipo en el Centro de Atención al Colaborador.
 
 [serio] Primero, lo más importante: la solicitud de anticipos no está abierta todo el tiempo. [tranquilo] Gestión Humana la abre una vez por trimestre, con una fecha de inicio y una fecha final. Solo en esas fechas puedes enviar tu solicitud.
 
-[tranquilo] Si entras cuando la solicitud está cerrada, Cads te avisa y te muestra cuándo es la próxima apertura.
+[tranquilo] Si entras cuando la solicitud está cerrada, el Centro te avisa y te muestra cuándo es la próxima apertura.
 
-[claro y pausado] Paso uno. Antes de entrar a Cads, ingresa a la página de tu banco y revisa el monto disponible de tu fideicomiso.
+[claro y pausado] Paso uno. Antes de entrar al Centro, ingresa a la página de tu banco y revisa el monto disponible de tu fideicomiso.
 
-[serio] Este paso es clave. Cads no muestra tu saldo. El monto que pidas lo envías bajo tu responsabilidad, y si es mayor a tu disponible, el banco rechazará la solicitud.
+[serio] Este paso es clave. El Centro no muestra tu saldo. El monto que pidas lo envías bajo tu responsabilidad, y si es mayor a tu disponible, el banco rechazará la solicitud.
 
-[claro y pausado] Paso dos. Abre Cads en tu computadora, o en tu celular si no la tienes a mano. Entra con tu cédula y toca la tarjeta Fideicomiso.
+[claro y pausado] Paso dos. Abre el Centro en tu computadora, o en tu celular si no la tienes a mano. Entra con tu cédula y toca la tarjeta Fideicomiso.
 
 [claro y pausado] Paso tres. Escribe el monto que quieres solicitar, en bolívares.
 
@@ -220,7 +220,7 @@ Cuatro videos de motion graphics para los colaboradores:
 
 [cálido] En la sección Mis solicitudes tienes siempre el historial de tus anticipos, con su monto, su motivo y su estado.
 
-[con una sonrisa] Revisa en tu banco, solicita en Cads y sigue tu anticipo desde tu computadora o tu celular. Así de simple.
+[con una sonrisa] Revisa en tu banco, solicita en el Centro y sigue tu anticipo desde tu computadora o tu celular. Así de simple.
 
 ### Mapa de escenas
 | # | Frase de inicio | En pantalla |
@@ -240,4 +240,4 @@ Cuatro videos de motion graphics para los colaboradores:
 | 13 | «Cuando el banco la procesa…» | Etiqueta verde «Pagada». |
 | 14 | «Si el banco la rechaza…» | Etiqueta «Rechazada» con «Motivo: …» y un calendario hacia la próxima apertura. |
 | 15 | «En la sección Mis solicitudes…» | Lista del historial. |
-| 16 | «Revisa en tu banco…» | Tres íconos en línea (banco → CADS → check) y el logo CA/DS. |
+| 16 | «Revisa en tu banco…» | Tres íconos en línea (banco → CAC → check) y el logo CAC. |

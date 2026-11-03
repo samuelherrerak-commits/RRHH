@@ -48,11 +48,11 @@ function vistaLogin() {
     <div class="entrada">
       <section class="entrada-marca">
         <div>
-          <div class="sigla">CADS</div>
-          <p class="nombre">Centro de Atención de Solicitudes</p>
+          <div class="sigla">CAC</div>
+          <p class="nombre">Centro de Atención al Colaborador</p>
         </div>
-        <div class="acrostico" role="img" aria-label="CADS: Centro de Atención de Solicitudes">
-          <p><b>C</b>entro<span class="de">de</span></p><p><b>A</b>tención</p><p><b>D</b>e</p><p><b>S</b>olicitudes</p>
+        <div class="acrostico" role="img" aria-label="CAC: Centro de Atención al Colaborador">
+          <p><b>C</b>entro<span class="de">de</span></p><p><b>A</b>tención<span class="de">al</span></p><p><b>C</b>olaborador</p>
         </div>
         <p class="empresas">Prosein · Austral · Mil Cerámicas — Gestión Humana</p>
       </section>

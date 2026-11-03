@@ -1,6 +1,6 @@
-// Sugerencia «Instalar CADS»: Chrome/Edge (Android y computadora) muestran su instalador; en iPhone/iPad
+// Sugerencia «Instalar CAC»: Chrome/Edge (Android y computadora) muestran su instalador; en iPhone/iPad
 // se explican los pasos de Safari (Apple no permite el botón). Si la persona dice «Ahora no», vuelve en 30 días.
-const CLAVE = 'cads:instalar-pospuesto';
+const CLAVE = 'cac:instalar-pospuesto';
 const DIAS = 30;
 let evento = null;            // beforeinstallprompt guardado para usarlo cuando la persona toque «Instalar»
 let alAparecer = null;
@@ -28,7 +28,7 @@ export function sugerirInstalacion() {
   const pintar = (html, alInstalar) => {
     quitar();
     const caja = document.createElement('aside');
-    caja.id = 'sugerir-instalar'; caja.className = 'sugerir-instalar'; caja.setAttribute('role', 'dialog'); caja.setAttribute('aria-label', 'Instalar CADS');
+    caja.id = 'sugerir-instalar'; caja.className = 'sugerir-instalar'; caja.setAttribute('role', 'dialog'); caja.setAttribute('aria-label', 'Instalar CAC');
     caja.innerHTML = `${LOGO}<div class="si-texto">${html}</div>
       <div class="si-botones">${alInstalar ? '<button class="btn btn-chico" id="si-instalar">Instalar</button>' : ''}<button class="btn btn-sec btn-chico" id="si-no">${alInstalar ? 'Ahora no' : 'Entendido'}</button></div>`;
     document.body.appendChild(caja);
@@ -37,7 +37,7 @@ export function sugerirInstalacion() {
   };
   if (evento) {
     const movil = matchMedia('(pointer: coarse)').matches;
-    pintar(`<b>Instala CADS</b><span>${movil ? 'Tenlo en tu pantalla de inicio y ábrelo con un toque, como una app.' : 'Ábrelo desde tu escritorio o barra de tareas, como un programa.'}</span>`, async () => {
+    pintar(`<b>Instala CAC</b><span>${movil ? 'Tenlo en tu pantalla de inicio y ábrelo con un toque, como una app.' : 'Ábrelo desde tu escritorio o barra de tareas, como un programa.'}</span>`, async () => {
       const e = evento; evento = null;
       e.prompt();
       const r = await e.userChoice.catch(() => ({ outcome: 'dismissed' }));
@@ -45,7 +45,7 @@ export function sugerirInstalacion() {
       quitar();
     });
   } else if (esIOS() && esSafari()) {
-    pintar(`<b>Agrega CADS a tu pantalla de inicio</b><span>Toca ${COMPARTIR} <b>Compartir</b> abajo y luego <b>«Agregar a pantalla de inicio»</b>.</span>`, null);
+    pintar(`<b>Agrega CAC a tu pantalla de inicio</b><span>Toca ${COMPARTIR} <b>Compartir</b> abajo y luego <b>«Agregar a pantalla de inicio»</b>.</span>`, null);
   } else {
     alAparecer = () => { alAparecer = null; sugerirInstalacion(); };   // Chrome avisa un poco después de cargar
   }
