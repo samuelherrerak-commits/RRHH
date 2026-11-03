@@ -1,8 +1,10 @@
 # Sitio estático en Render: sin build, publica la carpeta web/.
+# Dos sitios: «cac» (lo que ven los colaboradores, rama main) y «cac-pruebas» (rama desarrollo).
 services:
   - type: web
     name: cac
     runtime: static
+    branch: main
     staticPublishPath: ./web
     headers:
       - path: /*
@@ -15,5 +17,29 @@ services:
         name: Cache-Control
         value: no-cache
       - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+      - path: /config.js
+        name: Cache-Control
+        value: no-cache
+  - type: web
+    name: cac-pruebas
+    runtime: static
+    branch: desarrollo
+    staticPublishPath: ./web
+    headers:
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /js/*
+        name: Cache-Control
+        value: no-cache
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+      - path: /config.js
         name: Cache-Control
         value: no-cache

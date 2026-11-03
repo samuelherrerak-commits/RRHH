@@ -1,4 +1,5 @@
 import { llamar, sesion, obtener, precargar, olvidar } from './api.js';
+import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
@@ -1195,5 +1196,7 @@ function elegirJefe(titulo, aplicar) {
 }
 
 
+// En el sitio de pruebas, una franja fija recuerda que no son los datos reales.
+if (CONFIG.PRUEBAS) document.body.insertAdjacentHTML('afterbegin', `<div class="franja-pruebas">Sitio de PRUEBAS${CONFIG.API_URL ? '' : ' · falta la URL del Apps Script de pruebas en config.js'}</div>`);
 iniciarInstalacion();
 arrancar();
