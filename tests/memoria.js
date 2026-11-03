@@ -6,6 +6,7 @@ function crearRepo(empleadosFilas) {
   let empleados = E.fusionarDetalle([], empleadosFilas).empleados;
   const st = { aportes: [], anticipos: {}, aperturas: {}, cancelaciones: {}, constancias: {}, vacPeriodos: [], vacSolicitudes: {}, cierres: {},
     feriados: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-04-02', '2026-04-03', '2026-04-19', '2026-05-01', '2026-06-24', '2026-07-05', '2026-07-24', '2026-10-12', '2026-12-24', '2026-12-25', '2026-12-31', '2027-01-01'], usuarios: {}, fallos: {}, logs: [], seq: 0,
+    notificaciones: [], lecturas: {}, pushes: [], lotes: {}, recibos: {}, archivos: {},
     parametros: { porcentajeAnticipoMax: 0.75 },
     empresas: { PCA: { fideicomiso: 5847, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' }, AIV: { fideicomiso: 6000, tipoTAporte: 1, tipoTAnticipo: 5, forma: 'A' } } };
   const clave = (c) => c;
@@ -58,6 +59,26 @@ function crearRepo(empleadosFilas) {
     registrarFallo: (k) => { st.fallos[k] = (st.fallos[k] || 0) + 1; },
     nuevoId: () => 'A' + (++st.seq),
     log: (accion, actor, detalle) => st.logs.push({ accion, actor, detalle }),
+    agregarNotificaciones: (lista) => { st.notificaciones.push(...lista.map((n) => ({ ...n }))); },
+    nuevoIdNotificacion: () => 'N' + (++st.seq),
+    notificacionesRecientes: () => st.notificaciones.map((n) => ({ ...n })),
+    notificacionesLeidasHasta: (d) => st.lecturas[d] || 0,
+    marcarNotificacionesLeidas: (d, t) => { st.lecturas[d] = t; },
+    enviarPush: (destinos, titulo, texto, ruta) => { st.pushes.push({ destinos, titulo, texto, ruta }); },
+    nuevoIdLote: () => 'LOT' + (++st.seq),
+    nuevoIdRecibo: () => 'REC' + (++st.seq),
+    guardarLote: (l) => { st.lotes[l.id] = { ...l }; },
+    lotePorId: (id) => (st.lotes[id] ? { ...st.lotes[id] } : null),
+    lotes: () => Object.values(st.lotes).map((l) => ({ ...l })),
+    recibosDeLote: (id) => Object.values(st.recibos).filter((r) => r.lote === id).map((r) => ({ ...r })),
+    recibosDe: (c) => Object.values(st.recibos).filter((r) => r.clave === c).map((r) => ({ ...r })),
+    todosRecibos: () => Object.values(st.recibos).map((r) => ({ ...r })),
+    reciboPorId: (id) => (st.recibos[id] ? { ...st.recibos[id] } : null),
+    agregarRecibos: (lista) => { lista.forEach((r) => { st.recibos[r.id] = { ...r }; }); },
+    guardarRecibo: (r) => { st.recibos[r.id] = { ...r }; },
+    guardarArchivoRecibo: (nombre, b64) => { const id = 'F' + (++st.seq); st.archivos[id] = { nombre, b64 }; return id; },
+    leerArchivoRecibo: (id) => (st.archivos[id] ? st.archivos[id].b64 : ''),
+    eliminarLote: (lote, recibos) => { recibos.forEach((r) => { delete st.archivos[r.archivo]; delete st.recibos[r.id]; }); delete st.lotes[lote.id]; },
   };
 }
 

@@ -1,8 +1,9 @@
 import { llamar, sesion, obtener, precargar, olvidar } from './api.js';
 import { CONFIG } from '../config.js';
-import { bs, esc, chip, fechaHora, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
+import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
+import { vincular, desvincular, estadoPush, activarPush } from './push.js';
 
 const URL_BASE = location.origin + location.pathname;
 
@@ -29,9 +30,11 @@ function errorEn(caja, msg) { caja.textContent = msg; caja.hidden = !msg; }
 
 async function arrancar() {
   const verificar = /^#v=([A-Za-z0-9]+)/.exec(location.hash);   // enlace del QR: página pública, sin entrar
-  if (verificar) return vistaVerificar(verificar[1]);
+  if (verificar) { campana.hidden = true; return vistaVerificar(verificar[1]); }
   const s = sesion.leer();
   btnSalir.hidden = !s;
+  campana.hidden = !s;
+  if (s) { setTimeout(actualizarCampana, primeraVez ? 5000 : 0); primeraVez = false; if (!vinculado) { vinculado = true; vincular(s.pushId); } }
   document.body.classList.toggle('en-entrada', !s);
   document.getElementById('usuario').textContent = s && s.nombre ? primerNombre(s.nombre) + (s.rol !== 'TRABAJADOR' ? ' · Gestión Humana' : '') : '';
   if (s) setTimeout(sugerirInstalacion, 1200);   // después de entrar, sin tapar lo primero que se ve
@@ -39,7 +42,9 @@ async function arrancar() {
   if (s) { precargarTrabajador(); return vistaCuenta(app, '', seccionDesdeHash()); }
   return vistaLogin();
 }
-btnSalir.addEventListener('click', () => { sesion.borrar(); olvidar(); history.replaceState(null, '', location.pathname); arrancar(); });
+btnSalir.addEventListener('click', () => { desvincular(); vinculado = false; cerrarAvisos(); sesion.borrar(); olvidar(); history.replaceState(null, '', location.pathname); arrancar(); });
+let vinculado = false;
+let primeraVez = true;   // al entrar, la campanita espera a que termine la precarga (menos peticiones a la vez)   // este dispositivo ya quedó asociado a la persona para los avisos al celular
 window.addEventListener('hashchange', () => arrancar());
 
 /* ---------- Trabajador: entrada ---------- */
@@ -78,7 +83,7 @@ function vistaLogin() {
       if (pideClave) {
         const r = await llamar('loginAdmin', { cedula: f.cedula.value, clave: f.clave.value, token: '' });
         if (!r.ok) return errorEn(err, r.message);
-        sesion.guardar({ token: r.data.token, rol: r.data.rol, nombre: r.data.nombre, genero: r.data.genero || '', tokenTrabajador: r.data.tokenTrabajador || '', esJefe: !!r.data.esJefe });
+        sesion.guardar({ token: r.data.token, rol: r.data.rol, nombre: r.data.nombre, genero: r.data.genero || '', tokenTrabajador: r.data.tokenTrabajador || '', esJefe: !!r.data.esJefe, pushId: r.data.pushId || '' });
         precargar('bandejaVacaciones', { estado: estadoVacRRHH });
         if (r.data.tokenTrabajador) precargarTrabajador({ token: r.data.tokenTrabajador });
         if (r.data.esJefe && !r.data.tokenTrabajador) precargar('equipoVacaciones');   // si es empleado, su equipo va en «Mi cuenta» (ya precargado)
@@ -90,7 +95,7 @@ function vistaLogin() {
         pideClave = true; f.cedula.readOnly = true; lblClave.hidden = false; otra.hidden = false; f.clave.required = true; f.clave.focus();
         return;
       }
-      sesion.guardar({ token: r.data.token, rol: 'TRABAJADOR', nombre: r.data.nombre, genero: r.data.genero || '' });
+      sesion.guardar({ token: r.data.token, rol: 'TRABAJADOR', nombre: r.data.nombre, genero: r.data.genero || '', pushId: r.data.pushId || '' });
       precargarTrabajador();
       arrancar();
     });
@@ -104,7 +109,7 @@ function vistaLogin() {
 // así funcionan los botones Atrás/Adelante del navegador y del celular.
 let cuenta = { cont: app, token: '', seccion: 'inicio' };
 const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
-const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'equipo'];
+const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'equipo'];
 // Fideicomiso queda en «Próximamente» para los trabajadores hasta que esté la pantalla de aportes (cambiar a true para abrirlo).
 const FIDEICOMISO_ACTIVO = true;
 const seccionDesdeHash = () => { const m = /^#\/(\w+)$/.exec(location.hash); return m && SECCIONES.includes(m[1]) ? m[1] : 'inicio'; };
@@ -130,13 +135,15 @@ const ICONOS = {
   fideicomiso: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
   equipo: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   inicio: '<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/>',
+  recibos: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+  campana: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   volver: '<path d="m15 18-6-6 6-6"/>',
   ir: '<path d="m9 18 6-6-6-6"/>',
 };
 const icono = (n, clase = 'icono') => `<svg class="${clase}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[n]}</svg>`;
 const volver = () => `<button class="volver" type="button" data-ir="inicio">${icono('volver')} Volver al inicio</button>`;
 
-const MENU_TRABAJADOR = [['inicio', 'Inicio', 'inicio'], ['constancia', 'Constancia de trabajo', 'constancia'], ['vacaciones', 'Vacaciones', 'vacaciones'], ['fideicomiso', 'Fideicomiso', 'fideicomiso']];
+const MENU_TRABAJADOR = [['inicio', 'Inicio', 'inicio'], ['constancia', 'Constancia de trabajo', 'constancia'], ['vacaciones', 'Vacaciones', 'vacaciones'], ['fideicomiso', 'Fideicomiso', 'fideicomiso'], ['recibos', 'Recibos de pago', 'recibos']];
 
 /** Sitio del trabajador: en computadora, menú lateral fijo; en el celular, el inicio con tarjetas y «Volver». */
 function marcoTrabajador() {
@@ -173,6 +180,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   if (seccion === 'constancia') await seccionConstancia(destino);
   else if (seccion === 'vacaciones') await seccionVacaciones(destino);
   else if (seccion === 'equipo') await seccionEquipo(destino);
+  else if (seccion === 'recibos') await seccionRecibos(destino);
   else if (seccion === 'fideicomiso') await seccionFideicomiso(destino);
   else seccionInicio(destino);
   if (cont !== app && !token) destino.querySelectorAll('.volver').forEach((b) => b.remove());   // «Mi equipo» del panel de RRHH
@@ -182,7 +190,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
 /** Mientras la persona ve su inicio, se piden en segundo plano los datos de cada tarjeta. */
 async function precargarTrabajador(tk = {}) {
   // De una en una: así cada persona ocupa un solo cupo de Google a la vez (el límite es 30 simultáneas).
-  for (const accion of ['datosVacaciones', 'misConstancias', 'datosAnticipo', 'equipoVacaciones']) {
+  for (const accion of ['equipoVacaciones', 'misRecibos', 'datosVacaciones', 'misConstancias', 'datosAnticipo']) {
     await obtener(accion, tk).catch(() => {});
   }
 }
@@ -203,13 +211,23 @@ function seccionInicio(cont) {
   cont.innerHTML = `
     <section class="bienvenida">
       <h1>${saludo(s.genero)}, ${esc(primerNombre(s.nombre))}</h1>
-      <p>al sistema de atención de solicitudes de Gestión Humana.</p>
+      <p>al Centro de Atención al Colaborador de Gestión Humana.</p>
     </section>
     <nav class="accesos" aria-label="Solicitudes">
       ${tarjeta('constancia', 'Constancia de trabajo', 'Descárgala al instante en PDF, con código QR de verificación.', 'rojo')}
       ${tarjeta('vacaciones', 'Vacaciones', 'Consulta tus días pendientes y solicita tus vacaciones; tu jefe directo las aprueba.', 'azul')}
       ${tarjeta('fideicomiso', 'Fideicomiso', 'Solicita un anticipo de tus prestaciones sociales.', 'carbon', FIDEICOMISO_ACTIVO ? '' : '<span class="chip chip-neutro">Próximamente</span>')}
-    </nav>`;
+      ${tarjeta('recibos', 'Recibos de pago', 'Consulta tus recibos y confirma «Recibí conforme».', 'oro')}
+    </nav>
+    <div id="aviso-push"></div>`;
+  // después de «Mi equipo» (en ese orden los precarga el inicio): así no se piden a la vez
+  const tras = () => obtener('misRecibos', conToken());
+  obtener('equipoVacaciones', conToken()).then(tras, tras).then((r) => {
+    const n = r.ok ? r.data.filter((x) => !x.conforme).length : 0;
+    const t = cont.querySelector('[data-ir=recibos] .acceso-texto');
+    if (n && t) t.insertAdjacentHTML('beforeend', `<span class="chip chip-espera">${n} por confirmar</span>`);
+  });
+  if (!cuenta.token) pintarAvisoPush(cont.querySelector('#aviso-push'));
   // Si es jefe de alguien, aparece «Mi equipo» con las solicitudes por aprobar
   obtener('equipoVacaciones', conToken()).then((r) => {
     if (!r.ok || !r.data.esJefe || !cont.querySelector('.accesos')) return;
@@ -487,6 +505,7 @@ async function seccionFideicomiso(cont) {
 /* ---------- RRHH: panel ---------- */
 
 let pestana = 'vacaciones';
+let seccionMiCuenta = 'inicio';   // al abrir un aviso desde la campanita
 let abrirSinJefe = false;   // al venir desde Vacaciones → Empleados con el filtro «solo sin jefe»
 
 async function vistaRRHH() {
@@ -497,18 +516,19 @@ async function vistaRRHH() {
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel" class="contenido"></div></div>`;
   app.querySelectorAll('.pestana').forEach((b) => b.addEventListener('click', () => { pestana = b.dataset.p; vistaRRHH(); }));
   const panel = app.querySelector('#panel');
   if (pestana === 'fideicomiso') return panelFideicomiso(panel);
+  if (pestana === 'recibos') return panelRecibos(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'vacaciones') return panelVacaciones(panel);
   if (pestana === 'miequipo') return vistaCuenta(panel, '', 'equipo');
-  if (pestana === 'micuenta') return vistaCuenta(panel, sesion.leer().tokenTrabajador);
+  if (pestana === 'micuenta') { const sec = seccionMiCuenta; seccionMiCuenta = 'inicio'; return vistaCuenta(panel, sesion.leer().tokenTrabajador, sec); }
   return panelVacaciones(panel);
 }
 
@@ -1193,6 +1213,412 @@ function elegirJefe(titulo, aplicar) {
     }, 250);
   });
   dlg.showModal(); dlg.querySelector('#qj').focus();
+}
+
+
+/* ---------- Campanita de notificaciones ---------- */
+
+const campana = document.getElementById('campana');
+const avisosEl = document.getElementById('avisos');
+let avisos = { items: [], noLeidas: 0 };
+let relojCampana = null;
+
+async function actualizarCampana() {
+  const s = sesion.leer();
+  if (!s) return;
+  if (!relojCampana) relojCampana = setInterval(() => { if (sesion.leer()) actualizarCampana(); }, 3 * 60 * 1000);
+  const r = await llamar('misNotificaciones', { token: s.token });
+  if (!r.ok) return;
+  avisos = r.data;
+  const n = campana.querySelector('.campana-n');
+  n.textContent = avisos.noLeidas > 9 ? '9+' : String(avisos.noLeidas);
+  n.hidden = !avisos.noLeidas;
+  campana.setAttribute('aria-label', avisos.noLeidas ? `Notificaciones: ${avisos.noLeidas} sin leer` : 'Notificaciones');
+}
+
+const ICONO_AVISO = { RECIBO: 'recibos', VACACIONES_APROBADAS: 'vacaciones', VACACIONES_RECHAZADAS: 'vacaciones', VACACIONES_REGISTRADAS: 'vacaciones',
+  VACACIONES_POR_APROBAR: 'equipo', ANTICIPO_APERTURA: 'fideicomiso', ANTICIPO_PAGADO: 'fideicomiso', ANTICIPO_RECHAZADO: 'fideicomiso', CONSTANCIA_VENCIDA: 'constancia' };
+
+function hace(ms) {
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  if (min < 24 * 60) return `hace ${Math.round(min / 60)} h`;
+  return fechaCaracas(ms);
+}
+
+function pintarAvisos() {
+  const s = sesion.leer() || {};
+  avisosEl.innerHTML = `<div class="avisos-cab"><b>Notificaciones</b><button type="button" class="avisos-x" aria-label="Cerrar">×</button></div>
+    ${avisos.items.length ? `<div class="avisos-lista">${avisos.items.map((n) => `
+      <button type="button" class="aviso${n.nueva ? ' aviso-nuevo' : ''}" data-ruta="${esc(n.ruta)}">
+        <span class="aviso-icono">${icono(ICONO_AVISO[n.tipo] || 'campana')}</span>
+        <span class="aviso-texto"><b>${esc(n.titulo)}</b>${n.texto ? `<span>${esc(n.texto)}</span>` : ''}<small>${hace(n.creada)}</small></span>
+      </button>`).join('')}</div>` : '<p class="vacio">No tienes notificaciones.</p>'}
+    <div class="avisos-pie" id="pie-push"></div>`;
+  avisosEl.querySelector('.avisos-x').addEventListener('click', cerrarAvisos);
+  avisosEl.querySelectorAll('[data-ruta]').forEach((b) => b.addEventListener('click', () => irAviso(b.dataset.ruta)));
+  pintarEstadoPush(avisosEl.querySelector('#pie-push'), s.pushId, true);
+}
+
+function abrirAvisos() {
+  pintarAvisos();
+  avisosEl.hidden = false; campana.setAttribute('aria-expanded', 'true');
+  if (avisos.noLeidas) {
+    llamar('marcarNotificacionesLeidas', { token: (sesion.leer() || {}).token }).then((r) => {
+      if (!r.ok) return;
+      avisos.noLeidas = 0; campana.querySelector('.campana-n').hidden = true; campana.setAttribute('aria-label', 'Notificaciones');
+    });
+  }
+}
+function cerrarAvisos() {
+  avisosEl.hidden = true; campana.setAttribute('aria-expanded', 'false');
+  avisos.items.forEach((n) => { n.nueva = false; });
+}
+campana.addEventListener('click', (e) => { e.stopPropagation(); avisosEl.hidden ? abrirAvisos() : cerrarAvisos(); });
+document.addEventListener('click', (e) => { if (!avisosEl.hidden && !avisosEl.contains(e.target)) cerrarAvisos(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !avisosEl.hidden) { cerrarAvisos(); campana.focus(); } });
+
+/** Abre la sección del aviso: en el sitio del colaborador o, en el panel de RRHH, dentro de «Mi cuenta» / «Mi equipo». */
+function irAviso(ruta) {
+  cerrarAvisos();
+  const s = sesion.leer() || {};
+  const destino = SECCIONES.includes(ruta) ? ruta : 'inicio';
+  if (s.rol === 'TRABAJADOR') return navegar(destino);
+  if (destino === 'equipo' && s.esJefe && !s.tokenTrabajador) pestana = 'miequipo';
+  else if (s.tokenTrabajador) { pestana = 'micuenta'; seccionMiCuenta = destino; }
+  vistaRRHH();
+}
+
+/* ---------- Avisos al celular (OneSignal) ---------- */
+
+const POSPUESTO_PUSH = 'cac:push-pospuesto';
+
+/** Estado de los avisos al celular en este dispositivo, con el botón para activarlos. */
+function pintarEstadoPush(caja, pushId, compacto = false) {
+  if (!caja) return;
+  const e = estadoPush();
+  if (e === 'no') { caja.innerHTML = ''; return; }
+  if (e === 'activo') { caja.innerHTML = compacto ? '<p class="suave">✓ Avisos activos en este dispositivo.</p>' : ''; return; }
+  if (e === 'bloqueado') { caja.innerHTML = compacto ? '<p class="suave">Los avisos están bloqueados en este navegador. Actívalos en la configuración del sitio (candado junto a la dirección).</p>' : ''; return; }
+  if (e === 'instalar') { caja.innerHTML = '<p class="suave">En iPhone, para recibir avisos primero instala el CAC: toca <b>Compartir</b> y luego <b>«Agregar a pantalla de inicio»</b>, y ábrelo desde ese ícono.</p>'; return; }
+  caja.innerHTML = `<div class="fila"><button type="button" class="btn btn-chico" id="btn-push">${icono('campana')} Activar avisos en este dispositivo</button></div>`;
+  caja.querySelector('#btn-push').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
+    try {
+      const r = await activarPush(pushId);
+      toast(r === 'activo' ? 'Listo: te avisaremos en este dispositivo.' : r === 'bloqueado' ? 'No diste permiso: los avisos quedan solo en la campanita.' : 'No se activaron los avisos.');
+    } catch { toast('No se pudo activar los avisos. Intenta de nuevo.'); }
+    pintarEstadoPush(caja, pushId, compacto);
+    const tarjeta = document.getElementById('aviso-push');
+    if (tarjeta && tarjeta !== caja) pintarAvisoPush(tarjeta);
+  }));
+}
+
+/** Tarjeta en el inicio del colaborador para activar los avisos (se puede posponer). */
+function pintarAvisoPush(caja) {
+  if (!caja) return;
+  const e = estadoPush();
+  let pospuesto = false;
+  try { pospuesto = Number(localStorage.getItem(POSPUESTO_PUSH)) > Date.now(); } catch { /* sin almacenamiento */ }
+  if (pospuesto || !['pendiente', 'instalar'].includes(e)) { caja.innerHTML = ''; return; }
+  caja.innerHTML = `<section class="tarjeta tarjeta-push"><div class="fila"><span class="acceso-icono">${icono('campana')}</span>
+      <div class="grow"><b>Recibe avisos en tu celular</b><p class="suave">Te avisamos cuando tengas un recibo nuevo, cuando aprueben tus vacaciones o se abra la solicitud de anticipos.</p></div></div>
+      <div id="push-accion"></div><div><button type="button" class="btn-link" id="push-luego">Ahora no</button></div></section>`;
+  pintarEstadoPush(caja.querySelector('#push-accion'), (sesion.leer() || {}).pushId);
+  caja.querySelector('#push-luego').addEventListener('click', () => {
+    try { localStorage.setItem(POSPUESTO_PUSH, String(Date.now() + 14 * 86400000)); } catch { /* nada */ }
+    caja.innerHTML = '';
+  });
+}
+
+/* ---------- Recibos de pago (colaborador) ---------- */
+
+function bytesDeBase64(b64) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+function base64DeBytes(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function descargarPdf(b64, nombre) {
+  const url = URL.createObjectURL(new Blob([bytesDeBase64(b64)], { type: 'application/pdf' }));
+  // sin tildes: algunos navegadores descartan el nombre si lleva caracteres especiales
+  const limpio = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w .()-]/g, '-');
+  const a = Object.assign(document.createElement('a'), { href: url, download: limpio });
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+const chipRecibo = (x) => (x.conforme ? '<span class="chip chip-ok">Recibido conforme</span>' : x.visto ? '<span class="chip chip-austral">Visto</span>' : '<span class="chip chip-espera">Nuevo</span>');
+
+async function seccionRecibos(cont) {
+  cont.innerHTML = `${volver()}${esqueleto(2)}`;
+  const r = await obtener('misRecibos', conToken());
+  if (!r.ok && r.code === 'SESION') { toast(r.message); return arrancar(); }
+  const lista = r.ok ? r.data : [];
+  cont.innerHTML = `${volver()}<section class="tarjeta">
+    <div><h2>Recibos de pago</h2><p class="suave">Abre tu recibo, revísalo y confirma con <b>«Recibí conforme»</b>. Gestión Humana verá la fecha y hora de tu confirmación.</p></div>
+    ${!r.ok ? `<p class="error-msg">${esc(r.message)}</p>` : lista.length ? `<div class="lista">${lista.map((x) => `
+      <div class="item">
+        <div class="item-cab"><div><b>${esc(x.concepto)}</b><p class="suave">Publicado el ${fechaCaracas(x.publicado)}</p></div>${chipRecibo(x)}</div>
+        ${x.conforme ? `<p class="suave">Confirmaste «Recibí conforme» el ${fechaHoraMin(x.conforme)}</p>` : x.visto ? '' : '<p class="suave">Ábrelo para poder confirmar que lo recibiste.</p>'}
+        <div class="fila"><button class="btn btn-chico${x.visto ? ' btn-sec' : ''}" data-ver="${esc(x.id)}">Ver recibo</button>
+          ${x.conforme ? '' : `<button class="btn btn-chico" data-conforme="${esc(x.id)}" data-concepto="${esc(x.concepto)}"${x.visto ? '' : ' disabled'}>Recibí conforme</button>`}</div>
+      </div>`).join('')}</div>` : '<p class="vacio">Todavía no tienes recibos de pago publicados.</p>'}
+  </section>`;
+  cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+  cont.querySelectorAll('[data-ver]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('verRecibo', { id: b.dataset.ver, ...conToken() });
+    if (!x.ok) return toast(x.message);
+    descargarPdf(x.data.pdf, x.data.archivo);
+    seccionRecibos(cont);
+  })));
+  cont.querySelectorAll('[data-conforme]').forEach((b) => b.addEventListener('click', () => {
+    dlg.innerHTML = `<form id="fconf" novalidate><h2>Recibí conforme</h2>
+      <p>Confirmo que recibí mi recibo de pago <b>${esc(b.dataset.concepto)}</b>.</p>
+      <p class="suave">Quedará registrada la fecha y hora de tu confirmación.</p>
+      <div class="error-msg" id="err" hidden></div>
+      <div class="fila"><button class="btn" type="submit">Confirmar</button><button class="btn btn-sec" type="button" id="no">Cancelar</button></div></form>`;
+    dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+    dlg.querySelector('#fconf').addEventListener('submit', (e) => { e.preventDefault(); conBoton(e.submitter || dlg.querySelector('button[type=submit]'), async () => {
+      const x = await llamar('confirmarRecibo', { id: b.dataset.conforme, ...conToken() });
+      if (!x.ok) return errorEn(dlg.querySelector('#err'), x.message);
+      dlg.close(); toast('Listo: quedó registrado tu «Recibí conforme».'); seccionRecibos(cont);
+    }); });
+    dlg.showModal();
+  }));
+}
+
+/* ---------- RRHH: Recibos de pago ---------- */
+
+const URL_PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+const URL_PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const URL_PDFLIB = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+function cargarScript(url, global) {
+  if (window[global]) return Promise.resolve(window[global]);
+  return new Promise((ok, no) => {
+    const sc = Object.assign(document.createElement('script'), { src: url, onload: () => ok(window[global]), onerror: () => no(new Error('No se pudo cargar una librería. Revisa tu conexión.')) });
+    document.head.appendChild(sc);
+  });
+}
+async function cargarPdfJs() {
+  const lib = await cargarScript(URL_PDFJS, 'pdfjsLib');
+  lib.GlobalWorkerOptions.workerSrc = URL_PDFJS_WORKER;
+  return lib;
+}
+
+const EMPRESAS_RECIBO = [['PCA', 'Prosein'], ['AIV', 'Austral'], ['MIL', 'Mil Cerámicas']];
+const empresaDeTexto = (t) => (/AUSTRAL/i.test(t) ? 'AIV' : /MIL\s+CER/i.test(t) ? 'MIL' : 'PCA');
+const nombreEmpresa = (k) => (EMPRESAS_RECIBO.find(([c]) => c === k) || [k, k])[1];
+let cargaRecibos = null;   // { bytes, hojas, empleados, concepto, empresa } mientras se revisa la vista previa
+let loteAbierto = '';
+
+/** Lee el texto de cada hoja del PDF (en el navegador: el archivo no se envía entero). */
+async function leerPdfRecibos(archivo, progreso) {
+  const pdfjs = await cargarPdfJs();
+  const bytes = new Uint8Array(await archivo.arrayBuffer());
+  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const hojas = [];
+  let primera = '';
+  for (let i = 1; i <= doc.numPages; i++) {
+    const tc = await (await doc.getPage(i)).getTextContent();
+    const texto = tc.items.map((it) => it.str).join(' ');
+    if (i === 1) primera = texto;
+    hojas.push({ pagina: i, cedula: window.Recibos.cedulaDeTexto(texto), nombre: window.Recibos.nombreDeTexto(texto) });
+    progreso(i, doc.numPages);
+  }
+  return { bytes, hojas, concepto: window.Recibos.conceptoSugerido(primera), empresa: empresaDeTexto(primera) };
+}
+
+async function panelRecibos(panel) {
+  panel.innerHTML = `
+    <section class="tarjeta">
+      <div><h2>Cargar recibos de pago</h2><p class="suave">Sube el PDF de la nómina de una empresa (una hoja por colaborador). El sistema separa las hojas y asigna cada recibo por la cédula impresa; los que no identifique los asignas tú. Nada lo ven los colaboradores hasta que toques <b>Publicar</b>.</p></div>
+      <form id="frec" class="form-vac" novalidate>
+        <label>PDF de recibos <input type="file" name="pdf" accept="application/pdf,.pdf"></label>
+        <div class="error-msg" id="err-rec" hidden></div>
+        <div><button class="btn" type="submit">Leer PDF</button></div>
+      </form>
+    </section>
+    <div id="previa-rec"></div>
+    <section class="tarjeta"><h2>Cargas de recibos</h2><div id="lotes">${esqueleto(1)}</div></section>`;
+  const f = panel.querySelector('#frec'), err = panel.querySelector('#err-rec');
+  f.addEventListener('submit', (e) => { e.preventDefault(); errorEn(err, ''); conBoton(f.querySelector('button'), async () => {
+    const archivo = f.pdf.files[0];
+    if (!archivo) return errorEn(err, 'Elige el PDF de los recibos.');
+    const boton = f.querySelector('button');
+    try {
+      const leido = await leerPdfRecibos(archivo, (i, n) => { boton.textContent = `Leyendo hoja ${i} de ${n}…`; });
+      boton.textContent = 'Asignando…';
+      const r = await llamar('asignarRecibos', { hojas: leido.hojas });
+      if (!r.ok) return errorEn(err, r.message);
+      cargaRecibos = { ...leido, hojas: r.data.hojas, empleados: r.data.empleados };
+      pintarPreviaRecibos(panel);
+    } catch (ex) { errorEn(err, ex.message || 'No se pudo leer el PDF.'); }
+    finally { boton.textContent = 'Leer PDF'; }
+  }); });
+  pintarLotes(panel);
+}
+
+function pintarPreviaRecibos(panel) {
+  const c = cargaRecibos, caja = panel.querySelector('#previa-rec');
+  if (!c) { caja.innerHTML = ''; return; }
+  const porCedula = c.hojas.filter((h) => h.como === 'cedula').length, porNombre = c.hojas.filter((h) => h.como === 'nombre').length;
+  const sin = c.hojas.filter((h) => !h.clave).length, repetidas = c.hojas.filter((h) => h.repetida).length;
+  const opciones = (sel) => `<option value="">— No subir esta hoja —</option>${c.empleados.map((e) => `<option value="${esc(e.clave)}"${e.clave === sel ? ' selected' : ''}>${esc(e.nombre)}${e.inactivo ? ' (inactivo)' : ''}</option>`).join('')}`;
+  const estado = (h) => (!h.clave ? '<span class="chip chip-error">Sin identificar</span>' : h.repetida ? '<span class="chip chip-espera">Repetida</span>'
+    : h.inactivo ? '<span class="chip chip-espera">Inactivo</span>' : h.como === 'nombre' ? '<span class="chip chip-austral">Por nombre</span>' : '<span class="chip chip-ok">Por cédula</span>');
+  const revisar = (h) => !h.clave || h.repetida || h.inactivo || h.como === 'nombre' || h.editada;
+  caja.innerHTML = `<section class="tarjeta">
+    <div><h2>Revisa antes de subir</h2><p class="suave">${c.hojas.length} hojas leídas.</p></div>
+    <div class="fila">
+      <span class="chip chip-ok">${porCedula} por cédula</span>${porNombre ? `<span class="chip chip-austral">${porNombre} por nombre</span>` : ''}
+      ${sin ? `<span class="chip chip-error">${sin} sin identificar</span>` : ''}${repetidas ? `<span class="chip chip-espera">${repetidas} repetidas</span>` : ''}
+    </div>
+    <div class="dos-campos">
+      <label>Concepto (lo verá el colaborador) <input id="rec-concepto" maxlength="80" value="${esc(c.concepto)}" placeholder="Ej.: Nómina 1Q noviembre 2026"></label>
+      <label>Empresa <select id="rec-empresa">${EMPRESAS_RECIBO.map(([k, t]) => `<option value="${k}"${k === c.empresa ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+    </div>
+    ${sin || repetidas ? '<p class="advertencia">Asigna las hojas marcadas o déjalas en «No subir esta hoja». Las que no se suban no las verá nadie.</p>' : ''}
+    <label class="acepto"><input type="checkbox" id="rec-todas"> <span>Mostrar también las hojas asignadas por cédula</span></label>
+    <div class="tabla-caja"><table class="tabla-recibos"><thead><tr><th>Hoja</th><th>En el recibo</th><th>Asignado a</th><th>Estado</th></tr></thead><tbody>
+      ${c.hojas.map((h, i) => `<tr data-i="${i}"${revisar(h) ? '' : ' class="ok-oculta" hidden'}><td>${h.pagina}</td><td><b>${esc(h.nombre || '—')}</b><br><span class="suave">${esc(h.cedula || 'sin cédula')}</span></td>
+        <td><select data-asig="${i}">${opciones(h.clave)}</select></td><td>${estado(h)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="error-msg" id="err-subir" hidden></div>
+    <div class="progreso" id="prog-rec" hidden><span></span></div>
+    <div class="fila"><button class="btn" id="btn-subir">Subir ${c.hojas.filter((h) => h.clave).length} recibos</button><button class="btn btn-sec" id="btn-descartar">Descartar</button></div>
+  </section>`;
+  caja.querySelector('#rec-todas').addEventListener('change', (e) => caja.querySelectorAll('tr.ok-oculta').forEach((tr) => { tr.hidden = !e.target.checked; }));
+  caja.querySelectorAll('[data-asig]').forEach((sel) => sel.addEventListener('change', () => {
+    const h = c.hojas[+sel.dataset.asig], emp = c.empleados.find((e) => e.clave === sel.value);
+    Object.assign(h, { clave: sel.value, nombreEmpleado: emp ? emp.nombre : '', inactivo: !!(emp && emp.inactivo), como: sel.value ? 'manual' : '', editada: true });
+    const usadas = {};
+    c.hojas.forEach((x) => { x.repetida = !!(x.clave && usadas[x.clave]); if (x.clave) usadas[x.clave] = true; });
+    caja.querySelector('#btn-subir').textContent = `Subir ${c.hojas.filter((x) => x.clave).length} recibos`;
+    sel.closest('tr').lastElementChild.innerHTML = !h.clave ? '<span class="chip chip-neutro">No se sube</span>' : h.repetida ? '<span class="chip chip-espera">Repetida</span>' : '<span class="chip chip-austral">Asignada a mano</span>';
+  }));
+  caja.querySelector('#btn-descartar').addEventListener('click', () => { cargaRecibos = null; pintarPreviaRecibos(panel); panel.querySelector('#frec').reset(); });
+  caja.querySelector('#btn-subir').addEventListener('click', (e) => conBoton(e.currentTarget, () => subirRecibos(panel, caja)));
+}
+
+/** Separa cada hoja en su propio PDF y la sube por grupos (si se corta, «Subir» continúa donde quedó). */
+async function subirRecibos(panel, caja) {
+  const c = cargaRecibos, err = caja.querySelector('#err-subir'), prog = caja.querySelector('#prog-rec');
+  errorEn(err, '');
+  const concepto = caja.querySelector('#rec-concepto').value.trim(), empresa = caja.querySelector('#rec-empresa').value;
+  const hojas = c.hojas.filter((h) => h.clave);
+  if (!concepto) return errorEn(err, 'Escribe el concepto (por ejemplo, «Nómina 1Q noviembre 2026»).');
+  if (!hojas.length) return errorEn(err, 'No hay hojas asignadas para subir.');
+  const repetidas = hojas.filter((h) => h.repetida).length, fuera = c.hojas.length - hojas.length;
+  if (repetidas && !confirm(`${repetidas} persona(s) tienen más de una hoja asignada. ¿Subir de todas formas?`)) return;
+  if (fuera && !confirm(`${fuera} hoja(s) no se subirán porque no tienen colaborador asignado. ¿Continuar?`)) return;
+  if (!c.lote) {
+    const l = await llamar('crearLoteRecibos', { concepto, empresa, total: hojas.length });
+    if (!l.ok) return errorEn(err, l.message);
+    c.lote = l.data.id;
+  }
+  const PDFLib = await cargarScript(URL_PDFLIB, 'PDFLib');
+  const origen = await PDFLib.PDFDocument.load(c.bytes);
+  prog.hidden = false;
+  const GRUPO = 15;   // cada hoja pesa pocos KB; Drive tarda ~0,3 s por archivo
+  for (let i = 0; i < hojas.length; i += GRUPO) {
+    const items = [];
+    for (const h of hojas.slice(i, i + GRUPO)) {
+      if (h.subida) continue;
+      const doc = await PDFLib.PDFDocument.create();
+      const [pag] = await doc.copyPages(origen, [h.pagina - 1]);
+      doc.addPage(pag);
+      items.push({ pagina: h.pagina, clave: h.clave, pdf: base64DeBytes(await doc.save()) });
+    }
+    if (items.length) {
+      let r;
+      for (let intento = 0; intento < 3; intento++) { r = await llamar('subirRecibos', { lote: c.lote, items }); if (r.ok || r.code === 'VALIDACION') break; }
+      if (!r.ok) return errorEn(err, `${r.message} Toca «Subir» otra vez para continuar donde quedó.`);
+      items.forEach((it) => { hojas.find((h) => h.pagina === it.pagina).subida = true; });
+    }
+    const hechas = hojas.filter((h) => h.subida).length;
+    prog.firstElementChild.style.width = `${Math.round((hechas / hojas.length) * 100)}%`;
+    caja.querySelector('#btn-subir').textContent = `Subiendo ${hechas} de ${hojas.length}…`;
+  }
+  loteAbierto = c.lote;
+  cargaRecibos = null;
+  toast(`${hojas.length} recibos subidos. Revísalos y toca «Publicar».`);
+  pintarPreviaRecibos(panel); panel.querySelector('#frec').reset();
+  await pintarLotes(panel);
+  panel.querySelector('#lotes').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function pintarLotes(panel) {
+  const caja = panel.querySelector('#lotes');
+  const r = await obtener('listarLotes');
+  if (!r.ok) { caja.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  if (!r.data.length) { caja.innerHTML = '<p class="vacio">Todavía no has cargado recibos.</p>'; return; }
+  const barra = (n, t) => `<span class="barra"><span style="width:${t ? Math.round((n / t) * 100) : 0}%"></span></span>`;
+  caja.innerHTML = `<div class="lista">${r.data.map((l) => `
+    <div class="item" data-lote="${esc(l.id)}">
+      <div class="item-cab"><div><b>${esc(l.concepto)}</b><p class="suave">${esc(nombreEmpresa(l.empresa))} · ${l.cargados} recibos · ${l.estado === 'PUBLICADO' ? `publicado el ${fechaCaracas(l.publicado)}` : `subido el ${fechaCaracas(l.creado)}`}</p></div>
+        ${l.estado === 'PUBLICADO' ? '<span class="chip chip-ok">Publicado</span>' : '<span class="chip chip-espera">Borrador · no visible</span>'}</div>
+      ${l.estado === 'PUBLICADO' ? `<div class="avance"><span>Vistos ${l.vistos} de ${l.cargados}</span>${barra(l.vistos, l.cargados)}<span>Recibí conforme ${l.conformes} de ${l.cargados}</span>${barra(l.conformes, l.cargados)}</div>` : ''}
+      <div class="fila">
+        ${l.estado === 'BORRADOR' ? `<button class="btn btn-chico" data-publicar="${esc(l.id)}" data-n="${l.cargados}">Publicar a los colaboradores</button>` : ''}
+        <button class="btn btn-sec btn-chico" data-detalle="${esc(l.id)}">${loteAbierto === l.id ? 'Ocultar detalle' : 'Ver detalle'}</button>
+        ${l.conformes ? '' : `<button class="btn btn-sec btn-chico" data-eliminar="${esc(l.id)}">Eliminar</button>`}
+      </div>
+      <div class="detalle-lote"></div>
+    </div>`).join('')}</div>`;
+  caja.querySelectorAll('[data-publicar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm(`¿Publicar ${b.dataset.n} recibos? Cada colaborador recibirá un aviso y podrá verlo.`)) return;
+    const x = await llamar('publicarLote', { id: b.dataset.publicar });
+    if (!x.ok) return toast(x.message);
+    toast('Recibos publicados. Ya les llegó el aviso.'); pintarLotes(panel);
+  })));
+  caja.querySelectorAll('[data-eliminar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm('¿Eliminar esta carga y sus recibos? Si ya estaba publicada, los colaboradores dejarán de verla.')) return;
+    const x = await llamar('eliminarLote', { id: b.dataset.eliminar });
+    if (!x.ok) return toast(x.message);
+    toast('Carga eliminada.'); pintarLotes(panel);
+  })));
+  caja.querySelectorAll('[data-detalle]').forEach((b) => b.addEventListener('click', () => {
+    loteAbierto = loteAbierto === b.dataset.detalle ? '' : b.dataset.detalle;
+    pintarLotes(panel);
+  }));
+  if (loteAbierto) {
+    const item = caja.querySelector(`[data-lote="${CSS.escape(loteAbierto)}"]`);
+    if (item) pintarDetalleLote(item.querySelector('.detalle-lote'), loteAbierto);
+  }
+}
+
+async function pintarDetalleLote(caja, id, filtro = 'todos') {
+  caja.innerHTML = esqueleto(1);
+  const r = await obtener('detalleLote', { id });
+  if (!r.ok) { caja.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const { lote, recibos } = r.data;
+  const lista = recibos.filter((x) => filtro === 'todos' || (filtro === 'sinabrir' ? !x.visto : !x.conforme));
+  caja.innerHTML = `<div class="fila">
+      <label>Mostrar <select id="filtro-lote"><option value="todos">Todos (${recibos.length})</option><option value="sinabrir">Sin abrir (${recibos.filter((x) => !x.visto).length})</option><option value="sinconf">Sin «Recibí conforme» (${recibos.filter((x) => !x.conforme).length})</option></select></label>
+      <button class="btn btn-sec btn-chico" id="csv-lote">Descargar Excel (CSV)</button></div>
+    <div class="tabla-caja"><table><thead><tr><th>Colaborador</th><th>Visto</th><th>Recibí conforme</th><th></th></tr></thead><tbody>
+      ${lista.map((x) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.clave)} · hoja ${x.pagina}</span></td>
+        <td>${x.visto ? fechaHoraMin(x.visto) : '<span class="chip chip-neutro">No</span>'}</td>
+        <td>${x.conforme ? `<span class="chip chip-ok">✓</span> ${fechaHoraMin(x.conforme)}` : '<span class="chip chip-neutro">Pendiente</span>'}</td>
+        <td><button class="btn btn-sec btn-chico" data-pdf="${esc(x.id)}">PDF</button></td></tr>`).join('') || '<tr><td colspan="4" class="vacio">Nadie en este filtro.</td></tr>'}
+    </tbody></table></div>`;
+  const sel = caja.querySelector('#filtro-lote');
+  sel.value = filtro;
+  sel.addEventListener('change', () => pintarDetalleLote(caja, id, sel.value));
+  caja.querySelector('#csv-lote').addEventListener('click', () => {
+    const f = (ms) => (ms ? new Date(ms).toLocaleString('es-VE') : '');
+    const filas = [['Colaborador', 'Cédula', 'Hoja', 'Visto', 'Recibí conforme'], ...recibos.map((x) => [x.nombre, x.clave, x.pagina, f(x.visto), f(x.conforme)])];
+    descargar(`Recibos ${lote.concepto}.csv`, filas.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n'));
+  });
+  caja.querySelectorAll('[data-pdf]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('verReciboRRHH', { id: b.dataset.pdf });
+    if (!x.ok) return toast(x.message);
+    descargarPdf(x.data.pdf, x.data.archivo);
+  })));
 }
 
 

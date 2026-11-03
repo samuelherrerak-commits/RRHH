@@ -6,9 +6,9 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-02.3';
+var VERSION = '2026-11-03.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -16,7 +16,7 @@ function modulosCargados_() {
     Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
     Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
     Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
-    Aportes: typeof Aportes !== 'undefined' && !!Aportes,
+    Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -37,6 +37,10 @@ var HOJAS = {
   VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
     'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
+  NOTIFICACIONES: ['id', 'clave', 'tipo', 'titulo', 'texto', 'ruta', 'creada'],
+  NOTIF_LECTURAS: ['clave', 'hasta'],
+  RECIBOS_LOTES: ['id', 'concepto', 'empresa', 'total', 'estado', 'creado', 'por', 'publicado'],
+  RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -83,9 +87,22 @@ var RUTAS_TRABAJADOR = {
   estadoDeCuenta: function (repo, ctx, d) { return Servicio.miEstadoDeCuenta(repo, ctx, d.token); },
   solicitarAnticipo: function (repo, ctx, d) { return Servicio.solicitarAnticipo(repo, ctx, d.token, d); },
   cancelarAnticipo: function (repo, ctx, d) { return Servicio.cancelarAnticipo(repo, ctx, d.token, d.id); },
+  misNotificaciones: function (repo, ctx, d) { return Servicio.misNotificaciones(repo, ctx, d.token); },
+  marcarNotificacionesLeidas: function (repo, ctx, d) { return Servicio.marcarNotificacionesLeidas(repo, ctx, d.token); },
+  misRecibos: function (repo, ctx, d) { return Servicio.misRecibos(repo, ctx, d.token); },
+  verRecibo: function (repo, ctx, d) { return Servicio.verRecibo(repo, ctx, d.token, d.id); },
+  confirmarRecibo: function (repo, ctx, d) { return Servicio.confirmarRecibo(repo, ctx, d.token, d.id); },
 };
 
 var RUTAS_RRHH = {
+  asignarRecibos: function (repo, ctx, d) { return Servicio.asignarRecibos(repo, ctx, d.token, d.hojas); },
+  crearLoteRecibos: function (repo, ctx, d) { return Servicio.crearLoteRecibos(repo, ctx, d.token, d); },
+  subirRecibos: function (repo, ctx, d) { return Servicio.subirRecibos(repo, ctx, d.token, d); },
+  publicarLote: function (repo, ctx, d) { return Servicio.publicarLote(repo, ctx, d.token, d.id); },
+  eliminarLote: function (repo, ctx, d) { return Servicio.eliminarLote(repo, ctx, d.token, d.id); },
+  listarLotes: function (repo, ctx, d) { return Servicio.listarLotes(repo, ctx, d.token); },
+  detalleLote: function (repo, ctx, d) { return Servicio.detalleLote(repo, ctx, d.token, d.id); },
+  verReciboRRHH: function (repo, ctx, d) { return Servicio.verReciboRRHH(repo, ctx, d.token, d.id); },
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
   listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
@@ -132,6 +149,9 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
+  misNotificaciones: 1, misRecibos: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
+  subirRecibos: 1,
 };
 
 function doPost(e) {
@@ -524,7 +544,153 @@ function crearRepo_() {
     log: function (accion, actor, detalle) {
       hoja_('LOG').appendRow([new Date(), accion, actor, detalle]);
     },
+
+    /* ---- Notificaciones ---- */
+    agregarNotificaciones: function (lista) { agregarFilas_('NOTIFICACIONES', lista); },
+    nuevoIdNotificacion: function () { return 'N-' + Utilities.getUuid().slice(0, 13).toUpperCase(); },
+    /** Solo las últimas 3.000 filas: la campanita muestra los avisos de los últimos 60 días. */
+    notificacionesRecientes: function () {
+      var h = hoja_('NOTIFICACIONES'), ultima = h.getLastRow(), cab = HOJAS.NOTIFICACIONES;
+      if (ultima < 2) return [];
+      var desde = Math.max(2, ultima - 2999);
+      return h.getRange(desde, 1, ultima - desde + 1, cab.length).getValues().map(function (f) {
+        return { id: texto_(f[0]), clave: texto_(f[1]), tipo: texto_(f[2]), titulo: texto_(f[3]), texto: texto_(f[4]), ruta: texto_(f[5]), creada: Number(f[6]) || 0 };
+      });
+    },
+    notificacionesLeidasHasta: function (d) {
+      var f = leer_('NOTIF_LECTURAS').filter(function (x) { return texto_(x.clave) === d; })[0];
+      return f ? Number(f.hasta) || 0 : 0;
+    },
+    marcarNotificacionesLeidas: function (d, t) {
+      var f = leer_('NOTIF_LECTURAS').filter(function (x) { return texto_(x.clave) === d; })[0];
+      if (!f) { var h = hoja_('NOTIF_LECTURAS'); h.getRange(h.getLastRow() + 1, 1).setNumberFormat('@'); }
+      escribirFila_('NOTIF_LECTURAS', { _fila: f ? f._fila : 0, clave: d, hasta: t });
+    },
+    enviarPush: enviarPush_,
+
+    /* ---- Recibos de pago ---- */
+    nuevoIdLote: function () { return 'LOT-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+    nuevoIdRecibo: function () { return 'REC-' + Utilities.getUuid().slice(0, 13).toUpperCase(); },
+    lotes: function () { return leer_('RECIBOS_LOTES').map(lote_).filter(function (l) { return l.id; }); },
+    lotePorId: function (id) { return leer_('RECIBOS_LOTES').map(lote_).filter(function (l) { return l.id === id; })[0] || null; },
+    guardarLote: function (l) { escribirFila_('RECIBOS_LOTES', l); },
+    todosRecibos: function () { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.id; }); },
+    recibosDeLote: function (id) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.lote === id; }); },
+    recibosDe: function (clave) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.clave === clave; }); },
+    reciboPorId: function (id) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.id === id; })[0] || null; },
+    agregarRecibos: function (lista) {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(20000);
+      try { agregarFilas_('RECIBOS', lista); } finally { lock.releaseLock(); }
+    },
+    guardarRecibo: function (r) { escribirFila_('RECIBOS', r); },
+    guardarArchivoRecibo: function (nombre, b64) {
+      var blob = Utilities.newBlob(Utilities.base64Decode(b64), 'application/pdf', nombre);
+      return carpetaRecibos_().createFile(blob).getId();
+    },
+    leerArchivoRecibo: function (id) { return Utilities.base64Encode(DriveApp.getFileById(id).getBlob().getBytes()); },
+    eliminarLote: function (lote, recibos) {
+      recibos.forEach(function (r) { try { DriveApp.getFileById(r.archivo).setTrashed(true); } catch (e) { /* ya no estaba */ } });
+      var ids = {}; recibos.forEach(function (r) { ids[r.id] = true; });
+      quitarFilas_('RECIBOS', function (f) { return ids[texto_(f.id)]; });
+      quitarFilas_('RECIBOS_LOTES', function (f) { return texto_(f.id) === lote.id; });
+    },
   };
+}
+
+function lote_(f) {
+  return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), empresa: texto_(f.empresa), total: Number(f.total) || 0, estado: texto_(f.estado),
+    creado: Number(f.creado) || 0, por: texto_(f.por), publicado: Number(f.publicado) || 0 };
+}
+
+function recibo_(f) {
+  return { _fila: f._fila, id: texto_(f.id), lote: texto_(f.lote), clave: texto_(f.clave), nombre: texto_(f.nombre), pagina: Number(f.pagina) || 0,
+    archivo: texto_(f.archivo), creado: Number(f.creado) || 0, visto: Number(f.visto) || 0, conforme: Number(f.conforme) || 0 };
+}
+
+/** Agrega varias filas de una vez (mucho más rápido que appendRow una por una). */
+function agregarFilas_(nombre, lista) {
+  if (!lista.length) return;
+  var h = hoja_(nombre), cab = HOJAS[nombre], desde = h.getLastRow() + 1;
+  var r = h.getRange(desde, 1, lista.length, cab.length);
+  r.setNumberFormat('@');
+  r.setValues(lista.map(function (o) { return cab.map(function (c) { return o[c] == null ? '' : String(o[c]); }); }));
+  invalidar_(nombre);
+}
+
+/** Reescribe la hoja sin las filas que cumplen la condición. */
+function quitarFilas_(nombre, condicion) {
+  var h = hoja_(nombre), cab = HOJAS[nombre];
+  var quedan = leer_(nombre).filter(function (f) { return !condicion(f); }).map(function (f) { return cab.map(function (c) { return f[c] == null ? '' : f[c]; }); });
+  var ultima = h.getLastRow();
+  if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+  if (quedan.length) { var r = h.getRange(2, 1, quedan.length, cab.length); r.setNumberFormat('@'); r.setValues(quedan); }
+  invalidar_(nombre);
+}
+
+/** Carpeta de Drive donde se guardan los recibos (privada: solo la ve la cuenta dueña del Apps Script). */
+function carpetaRecibos_() {
+  var props = PropertiesService.getScriptProperties(), id = props.getProperty('RECIBOS_CARPETA');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* la borraron: se crea otra */ } }
+  var c = DriveApp.createFolder('CAC · Recibos de pago');
+  props.setProperty('RECIBOS_CARPETA', c.getId());
+  return c;
+}
+
+/**
+ * Notificación al celular con OneSignal (si está configurado en el menú RRHH). destinos: identificadores de
+ * notificación (no cédulas) o '*' para todos los que activaron los avisos. Si falla, no interrumpe nada.
+ */
+function enviarPush_(destinos, titulo, texto, ruta) {
+  var props = PropertiesService.getScriptProperties();
+  var appId = props.getProperty('ONESIGNAL_APP_ID'), clave = props.getProperty('ONESIGNAL_API_KEY');
+  if (!appId || !clave || !destinos || !destinos.length) return false;
+  var sitio = props.getProperty('CAC_URL') || '';
+  var cuerpo = { app_id: appId, target_channel: 'push', headings: { en: titulo, es: titulo }, contents: { en: texto || titulo, es: texto || titulo } };
+  if (sitio) cuerpo.url = sitio.replace(/\/?$/, '/') + (ruta ? '#/' + ruta : '');
+  if (destinos === '*') cuerpo.included_segments = ['Total Subscriptions'];
+  else cuerpo.include_aliases = { external_id: destinos };
+  try {
+    var r = UrlFetchApp.fetch('https://api.onesignal.com/notifications?c=push', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { Authorization: 'Key ' + clave }, payload: JSON.stringify(cuerpo),
+    });
+    if (r.getResponseCode() >= 300) registrarError_(new Error('OneSignal ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 300)));
+    return r.getResponseCode() < 300;
+  } catch (e) { registrarError_(e); return false; }
+}
+
+/** Tarea diaria (la instala «Configurar hojas»): avisa al celular las constancias que vencieron desde la última vez. */
+function avisosDiarios() {
+  var props = PropertiesService.getScriptProperties(), ahora = Date.now();
+  var desde = Number(props.getProperty('AVISOS_DESDE')) || ahora - 86400000;
+  memo_ = {}; constanciasCache = null;
+  Servicio.avisosDiarios(crearRepo_(), crearCtx_(), desde);
+  props.setProperty('AVISOS_DESDE', String(ahora));
+}
+
+function instalarTareaDiaria_() {
+  try {
+    var ya = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'avisosDiarios'; });
+    if (!ya) ScriptApp.newTrigger('avisosDiarios').timeBased().everyDays(1).atHour(7).create();
+  } catch (e) { /* sin permiso para tareas: los avisos siguen en la campanita */ }
+}
+
+/** Menú RRHH → «3 · Notificaciones al celular»: datos de la app de OneSignal. */
+function configurarNotificaciones() {
+  var ui = SpreadsheetApp.getUi(), props = PropertiesService.getScriptProperties();
+  var pedir = function (titulo, texto, prop) {
+    var r = ui.prompt(titulo, texto + (props.getProperty(prop) ? '\n\n(Ya hay uno guardado. Deja en blanco para no cambiarlo.)' : ''), ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK) return false;
+    var v = String(r.getResponseText() || '').trim();
+    if (v) props.setProperty(prop, v);
+    return true;
+  };
+  if (!pedir('OneSignal · App ID', 'App ID de OneSignal (Settings → Keys & IDs):', 'ONESIGNAL_APP_ID')) return;
+  if (!pedir('OneSignal · REST API Key', 'REST API Key de OneSignal (Settings → Keys & IDs):', 'ONESIGNAL_API_KEY')) return;
+  if (!pedir('Dirección del CAC', 'Dirección del sitio, por ejemplo https://cac.onrender.com', 'CAC_URL')) return;
+  instalarTareaDiaria_();
+  ui.alert('Listo', 'Las notificaciones al celular quedaron configuradas.', ui.ButtonSet.OK);
 }
 
 /* ---------- Puesta en marcha (se ejecutan desde el editor) ---------- */
@@ -581,6 +747,7 @@ function configurarInicial() {
     // cédulas y claves como texto, para que Sheets no les quite ceros ni letras
     ss.getSheetByName(n).getRange(2, 1, 1000, n === 'EMPLEADOS' ? 2 : 1).setNumberFormat('@');
   });
+  instalarTareaDiaria_();
   invalidarTodo_();
 }
 
@@ -590,6 +757,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('RRHH')
     .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
     .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
+    .addItem('3 · Notificaciones al celular (OneSignal)', 'configurarNotificaciones')
     .addItem('Refrescar datos', 'refrescarDatos')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
@@ -661,6 +829,7 @@ function diagnostico() {
   var pr = PropertiesService.getScriptProperties();
   l.push((pr.getProperty('SECRETO') ? '✔ ' : '✘ FALTA ') + 'clave secreta');
   l.push((pr.getProperty('API_TOKEN') ? '✔ ' : '✘ FALTA ') + 'token de la API');
+  l.push((pr.getProperty('ONESIGNAL_APP_ID') && pr.getProperty('ONESIGNAL_API_KEY') ? '✔ ' : '· (opcional) sin ') + 'notificaciones al celular (OneSignal)');
   var cargados = modulosCargados_();
   MODULOS.forEach(function (m) { l.push((cargados[m] ? '✔ ' : '✘ FALTA ') + 'módulo ' + m); });
   l.push('Versión del código: ' + VERSION);

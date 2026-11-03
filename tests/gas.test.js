@@ -274,3 +274,52 @@ test('poner clave de RRHH escribiendo el número de la lista en vez de la cédul
   e.ejecutar('ponerClaveRRHH');
   assert.equal(e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-por-lista' }).ok, true);   // la 1 de la lista es Samuel
 });
+
+test('recibos de pago y avisos sobre las hojas: Drive, campanita y OneSignal', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  assert.equal(e.tareas.length, 1);                                   // tarea diaria de avisos instalada
+  e.props.ONESIGNAL_APP_ID = 'app-1'; e.props.ONESIGNAL_API_KEY = 'clave-1'; e.props.CAC_URL = 'https://cac-pruebas.onrender.com';
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', puesto: 'Vendedora', estado: 'Active', fechaInicio: '05/03/2025', salarioMensual: 100 },
+  ] });
+  const asig = e.llamar({ action: 'asignarRecibos', token: admin, hojas: [{ pagina: 1, cedula: 'V111111119', nombre: 'ANA PRUEBA' }] }).data;
+  assert.equal(asig.hojas[0].clave, 'V11111111');
+  const lote = e.llamar({ action: 'crearLoteRecibos', token: admin, concepto: 'Nómina 1Q noviembre 2026', empresa: 'PCA', total: 1 }).data;
+  const pdf = Buffer.from('%PDF-1.4 recibo de Ana').toString('base64');
+  assert.equal(e.llamar({ action: 'subirRecibos', token: admin, lote: lote.id, items: [{ pagina: 1, clave: 'V11111111', pdf }] }).data.guardados, 1);
+  const archivo = Object.values(e.drive.archivos)[0];
+  assert.match(archivo.nombre, /^Nómina 1Q noviembre 2026 - V11111111/);
+  assert.equal(e.llamar({ action: 'publicarLote', token: admin, id: lote.id }).data.estado, 'PUBLICADO');
+
+  // OneSignal: a la persona por su identificador (no la cédula), con enlace a su sección
+  const envio = e.pedidos.at(-1);
+  assert.equal(envio.url, 'https://api.onesignal.com/notifications?c=push');
+  assert.equal(envio.headers.Authorization, 'Key clave-1');
+  assert.equal(envio.cuerpo.include_aliases.external_id.length, 1);
+  assert.ok(!JSON.stringify(envio.cuerpo).includes('11111111'));
+  assert.equal(envio.cuerpo.url, 'https://cac-pruebas.onrender.com/#/recibos');
+
+  const ana = e.llamar({ action: 'login', cedula: '11111111' }).data;
+  assert.equal(ana.pushId, envio.cuerpo.include_aliases.external_id[0]);
+  const n = e.llamar({ action: 'misNotificaciones', token: ana.token }).data;
+  assert.equal(n.noLeidas, 1);
+  assert.equal(e.llamar({ action: 'marcarNotificacionesLeidas', token: ana.token }).ok, true);
+  assert.equal(e.llamar({ action: 'misNotificaciones', token: ana.token }).data.noLeidas, 0);
+
+  const mio = e.llamar({ action: 'misRecibos', token: ana.token }).data;
+  const visto = e.llamar({ action: 'verRecibo', token: ana.token, id: mio[0].id }).data;
+  assert.equal(visto.pdf, pdf);
+  assert.ok(e.llamar({ action: 'confirmarRecibo', token: ana.token, id: mio[0].id }).data.conforme > 0);
+  const det = e.llamar({ action: 'detalleLote', token: admin, id: lote.id }).data;
+  assert.equal(det.lote.conformes, 1);
+  assert.equal(e.llamar({ action: 'eliminarLote', token: admin, id: lote.id }).code, 'VALIDACION');
+
+  // una carga sin confirmaciones se elimina con sus archivos (a la papelera)
+  const l2 = e.llamar({ action: 'crearLoteRecibos', token: admin, concepto: 'Prueba', empresa: 'PCA' }).data;
+  e.llamar({ action: 'subirRecibos', token: admin, lote: l2.id, items: [{ pagina: 1, clave: 'V11111111', pdf }] });
+  assert.equal(e.llamar({ action: 'eliminarLote', token: admin, id: l2.id }).ok, true);
+  assert.equal(Object.values(e.drive.archivos).filter((a) => a.papelera).length, 1);
+  assert.equal(e.llamar({ action: 'listarLotes', token: admin }).data.length, 1);
+});

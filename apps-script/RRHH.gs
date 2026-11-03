@@ -13,7 +13,7 @@ var ERRORES_CARGA = [];
 var Calculo = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Cálculo del aporte trimestral al fideicomiso.
        Funciones puras: sin hojas, sin DOM, sin fecha del sistema.
@@ -165,7 +165,7 @@ var Calculo = (function () {
 var Empleados = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Base de empleados y cruce del aporte. Funciones puras.
        ========================================================== */
@@ -572,7 +572,7 @@ var Empleados = (function () {
 var Prestaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Módulo 1 · Prestaciones sociales: lo que ve el trabajador y
        las reglas del anticipo. Funciones puras.
@@ -727,7 +727,7 @@ var Prestaciones = (function () {
 var Exportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Archivos para el banco. Funciones puras.
        Diseño NOMINA APORTES: FIDEICOMISO | Cedula (letra) | (número)
@@ -774,7 +774,7 @@ var Exportes = (function () {
 var Constancia = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Constancia de trabajo: textos, monto en letras y vigencia (30 días).
        Funciones puras; las usan el servidor, el navegador (PDF) y las pruebas.
@@ -902,7 +902,7 @@ var Constancia = (function () {
 var Vacaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Vacaciones: días hábiles, períodos, saldo y reglas de la solicitud.
        Funciones puras. Fechas como texto 'AAAA-MM-DD' (sin horas ni zonas).
@@ -1157,7 +1157,7 @@ var Vacaciones = (function () {
 var Aportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Aporte trimestral al fideicomiso: arma la vista previa a partir del Excel (nombre + monto).
        Función pura: recibe empleados, filas, días adicionales forzados y el aporte anterior.
@@ -1261,11 +1261,105 @@ var Aportes = (function () {
   } catch (e) { ERRORES_CARGA.push('Aportes: ' + (e && e.message)); return undefined; }
 })();
 
+// ===== core/recibos.js =====
+var Recibos = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Recibos de pago: leer cada hoja del PDF de nómina (texto ya extraído),
+       proponer el concepto y asignar cada hoja a su colaborador.
+       Funciones puras: las usan el navegador, Apps Script y las pruebas.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      function dependencia(r, n) { return new Proxy({}, { get: function (_, k) { return r[n][k]; } }); }
+      var isNode = typeof require === 'function' && typeof module !== 'undefined';
+      var Empleados = isNode ? require('./empleados.js') : dependencia(raiz, 'Empleados');
+    
+      var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    
+      /** Cédula impresa en la hoja («Cédula … V028180545» o «V-14.891.031»). Devuelve el texto tal cual o ''. */
+      function cedulaDeTexto(texto) {
+        var t = String(texto || '');
+        var tras = /C[ée]dula[\s\S]{0,200}?\b([VE])\s*-?\s*([\d.]{6,12})\b/i.exec(t);
+        var m = tras || /\b([VE])\s*-?\s*(\d{6,10})\b/.exec(t);
+        return m ? (m[1].toUpperCase() + m[2].replace(/\./g, '')) : '';
+      }
+    
+      /** Nombre del colaborador en la hoja: «Total a Pagar NOMBRE 28.096,05» (formato de la nómina) o la línea bajo «Nombre y Apellido». */
+      function nombreDeTexto(texto) {
+        var t = String(texto || '').replace(/\s+/g, ' ');
+        var m = /Total a Pagar\s+(.+?)\s+-?[\d.]+,\d{2}\b/i.exec(t) || /Nombre y Apellido\s+(?:Departamento\s+)?([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ' ]{3,80}?)\s{1,}(?=[A-ZÁÉÍÓÚ][a-záéíóúñ])/.exec(t);
+        return m ? m[1].trim() : '';
+      }
+    
+      /**
+       * Concepto propuesto a partir del encabezado «Nómina: Nómina Quincenal - NQ-155 (16/10/2026 - 31/10/2026)».
+       * Quincena 1-15 → «1Q», 16-fin → «2Q»; mes completo → solo el mes. Devuelve '' si no lo reconoce.
+       */
+      function conceptoSugerido(texto) {
+        var t = String(texto || '').replace(/\s+/g, ' ');
+        var nom = /N[óo]mina:\s*([^()]+?)\s*\((\d{1,2})\/(\d{1,2})\/(\d{4})\s*-\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\)/i.exec(t);
+        if (!nom) return '';
+        var nombre = nom[1], d1 = +nom[2], m1 = +nom[3], y1 = +nom[4], d2 = +nom[5], m2 = +nom[6];
+        var tipo = /cesta|alimenta/i.test(nombre) ? 'Cestaticket' : /vacaci/i.test(nombre) ? 'Vacaciones' : /utilidad|aguinaldo/i.test(nombre) ? 'Utilidades'
+          : /bono/i.test(nombre) ? 'Bono' : 'Nómina';
+        if (m1 !== m2) return tipo + ' ' + nom[2] + '/' + nom[3] + ' al ' + nom[5] + '/' + nom[6] + '/' + nom[7];
+        var mes = MESES[m1 - 1] + ' ' + y1;
+        if (d1 === 1 && d2 <= 15) return tipo + ' 1Q ' + mes;
+        if (d1 >= 16) return tipo + ' 2Q ' + mes;
+        return tipo + ' ' + mes;
+      }
+    
+      /**
+       * Asigna cada hoja a un empleado: 1) por cédula (con o sin dígito verificador); 2) por nombre exacto
+       * (sin tildes ni espacios dobles). hojas: [{ pagina, cedula, nombre }]. Devuelve la misma lista con
+       * { clave, nombreEmpleado, como: 'cedula' | 'nombre' | '', inactivo, repetida }.
+       */
+      function asignarHojas(hojas, empleados) {
+        var porNumero = {}, porNombre = {};
+        (empleados || []).forEach(function (e) {
+          if (!e.cedulaNumero) return;
+          var n = String(e.cedulaNumero).replace(/^0+/, '');
+          if (!porNumero[n] || porNumero[n].estado === 'Inactivo') porNumero[n] = e;
+          var k = Empleados.normalizarNombre(e.nombre);
+          porNombre[k] = porNombre[k] === undefined ? e : null;   // nombre repetido: no se usa
+        });
+        var usadas = {};
+        return (hojas || []).map(function (h) {
+          var r = { pagina: h.pagina, cedula: h.cedula || '', nombre: h.nombre || '', clave: '', nombreEmpleado: '', como: '', inactivo: false, repetida: false };
+          var c = Empleados.parsearCedula(h.cedula || '');
+          var e = c.numero ? porNumero[c.numero] : null;
+          if (!e && h.cedula) {
+            var d = String(h.cedula).replace(/\D/g, '');
+            if (d.length === 8) e = porNumero[d.slice(0, 7).replace(/^0+/, '')] || null;   // cédula de 7 dígitos con verificador
+          }
+          if (e) r.como = 'cedula';
+          else if (h.nombre && porNombre[Empleados.normalizarNombre(h.nombre)]) { e = porNombre[Empleados.normalizarNombre(h.nombre)]; r.como = 'nombre'; }
+          if (e) {
+            r.clave = Empleados.claveCedula(e); r.nombreEmpleado = e.nombre; r.inactivo = e.estado === 'Inactivo';
+            if (usadas[r.clave]) r.repetida = true;
+            usadas[r.clave] = true;
+          }
+          return r;
+        });
+      }
+    
+      var api = { cedulaDeTexto: cedulaDeTexto, nombreDeTexto: nombreDeTexto, conceptoSugerido: conceptoSugerido, asignarHojas: asignarHojas, MESES: MESES };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Recibos = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Recibos: ' + (e && e.message)); return undefined; }
+})();
+
 // ===== core/servicio.js =====
 var Servicio = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Casos de uso del módulo de prestaciones. No sabe de Sheets:
        recibe un `repo` (hojas en producción, memoria en pruebas) y
@@ -1286,6 +1380,7 @@ var Servicio = (function () {
       var Constancia = isNode ? require('./constancia.js') : dependencia(raiz, 'Constancia');
       var Vacaciones = isNode ? require('./vacaciones.js') : dependencia(raiz, 'Vacaciones');
       var Aportes = isNode ? require('./aportes.js') : dependencia(raiz, 'Aportes');
+      var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
     
       var HORAS_SESION = 8;
       var MAX_FALLOS_CEDULA = 5;
@@ -1332,7 +1427,7 @@ var Servicio = (function () {
         }
         var clave = Empleados.claveCedula(emp);
         repo.log('LOGIN', clave, 'Entrada de trabajador');
-        return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp) });
+        return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp), pushId: idPush(ctx, clave) });
       }
     
       /**
@@ -1351,7 +1446,7 @@ var Servicio = (function () {
         }
         var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
         repo.log('LOGIN_ADMIN', digitos, 'Entrada ' + u.rol);
-        var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '' };
+        var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '', pushId: idPush(ctx, digitos) };
         if (emp && emp.estado !== 'Inactivo') data.tokenTrabajador = crearToken(ctx, Empleados.claveCedula(emp), 'TRABAJADOR');
         if (!emp) data.nombre = u.nombre || '';
         var mias = ['V' + digitos, 'E' + digitos];
@@ -1431,6 +1526,12 @@ var Servicio = (function () {
         if (!v.ok) return err('VALIDACION', v.errores.join(' '));
         repo.guardarAperturaAnticipo(Object.assign(previa || {}, c, { por: s.clave, actualizada: ctx.ahora() }));
         repo.log('ANTICIPO_APERTURA', s.clave, c.clave + ' · ' + c.inicio + ' a ' + c.fin);
+        if (!previa) {
+          var yaAbierta = c.inicio <= hoyCaracas(ctx);
+          notificar(repo, ctx, '*', { tipo: 'ANTICIPO_APERTURA', ruta: 'fideicomiso',
+            titulo: yaAbierta ? 'Ya puedes solicitar tu anticipo de fideicomiso' : 'Se abrirá la solicitud de anticipos de fideicomiso',
+            texto: 'Del ' + fechaCorta(c.inicio) + ' al ' + fechaCorta(c.fin) + ' (' + Prestaciones.etiquetaVentana(c.clave) + ').' });
+        }
         return ok(vistaApertura(c, hoyCaracas(ctx)));
       }
     
@@ -1454,7 +1555,9 @@ var Servicio = (function () {
         var a = repo.anticipoPorId(id);
         if (!a) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
         if (a.estado !== 'EN_ARCHIVO') return err('TRANSICION', 'Solo se marca así una solicitud enviada al banco.');
-        return cambiarEstado(repo, ctx, a, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo || '').trim() || 'Rechazada por el banco: el monto supera el disponible.' });
+        var r = cambiarEstado(repo, ctx, a, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo || '').trim() || 'Rechazada por el banco: el monto supera el disponible.' });
+        if (r.ok) notificar(repo, ctx, [a.clave], { tipo: 'ANTICIPO_RECHAZADO', ruta: 'fideicomiso', titulo: 'El banco rechazó tu solicitud de anticipo', texto: a.motivoRechazo });
+        return r;
       }
     
       function cancelarAnticipo(repo, ctx, token, id) {
@@ -1517,6 +1620,7 @@ var Servicio = (function () {
           var a = repo.anticipoPorId(ids[i]);
           if (a && Prestaciones.puedePasar(Prestaciones.SIGUIENTE_SOLICITUD, a.estado, 'PAGADA')) {
             cambiarEstado(repo, ctx, a, 'PAGADA', s.clave, {}); cambiados++;
+            notificar(repo, ctx, [a.clave], { tipo: 'ANTICIPO_PAGADO', ruta: 'fideicomiso', titulo: 'Tu anticipo de fideicomiso fue pagado', texto: 'Revisa tu cuenta del fideicomiso en el banco.' });
           }
         }
         return ok({ cambiados: cambiados });
@@ -1890,6 +1994,8 @@ var Servicio = (function () {
         };
         repo.guardarVacSolicitud(sol);
         repo.log('VACACIONES_SOLICITADA', c.clave, sol.id + ' · ' + sol.dias + ' días desde ' + sol.inicio);
+        notificar(repo, ctx, [emp.jefe], { tipo: 'VACACIONES_POR_APROBAR', ruta: 'equipo', titulo: 'Nueva solicitud de vacaciones por aprobar',
+          texto: emp.nombre + ' pide ' + sol.dias + ' día' + (sol.dias === 1 ? '' : 's') + ' desde el ' + fechaCorta(sol.inicio) + '.' });
         return ok(vistaVac(sol, nombresPorClave(repo)));
       }
     
@@ -1926,7 +2032,11 @@ var Servicio = (function () {
         if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
         var extra = { decididaJefePor: s.clave, decisionJefe: ctx.ahora(), motivoRechazo: aprobar ? '' : String(motivo).trim() };
         if (aprobar) Object.assign(extra, datosConstanciaVac(repo, ctx, sol));   // la constancia de aprobación sale con el visto bueno del jefe
-        return cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave, extra);
+        var r = cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave, extra);
+        if (r.ok) notificar(repo, ctx, [sol.clave], aprobar
+          ? { tipo: 'VACACIONES_APROBADAS', ruta: 'vacaciones', titulo: '¡Tu jefe aprobó tus vacaciones!', texto: 'Del ' + fechaCorta(sol.inicio) + ' al ' + fechaCorta(sol.culminacion) + '. Ya puedes descargar tu constancia de aprobación.' }
+          : { tipo: 'VACACIONES_RECHAZADAS', ruta: 'vacaciones', titulo: 'Tu solicitud de vacaciones fue rechazada', texto: 'Motivo: ' + extra.motivoRechazo });
+        return r;
       }
     
       /** Número de la constancia de aprobación (formato del Excel) y días que quedan por período una vez aplicado este disfrute. */
@@ -1961,7 +2071,9 @@ var Servicio = (function () {
         if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
         var extra = { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() };
         if (!sol.numeroConstancia) Object.assign(extra, datosConstanciaVac(repo, ctx, sol));
-        return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
+        var r = cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
+        if (r.ok) notificar(repo, ctx, [sol.clave], { tipo: 'VACACIONES_REGISTRADAS', ruta: 'vacaciones', titulo: 'Gestión Humana registró tus vacaciones', texto: 'Del ' + fechaCorta(sol.inicio) + ' al ' + fechaCorta(sol.culminacion) + '. Te reintegras el ' + fechaCorta(sol.reintegro) + '.' });
+        return r;
       }
     
       function rechazarVacacionesRRHH(repo, ctx, token, id, motivo) {
@@ -1970,7 +2082,9 @@ var Servicio = (function () {
         if (!String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
         var sol = repo.vacSolicitudPorId(id);
         if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
-        return cambiarVac(repo, ctx, sol, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo).trim(), registradaPor: s.clave });
+        var r = cambiarVac(repo, ctx, sol, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo).trim(), registradaPor: s.clave });
+        if (r.ok) notificar(repo, ctx, [sol.clave], { tipo: 'VACACIONES_RECHAZADAS', ruta: 'vacaciones', titulo: 'Gestión Humana rechazó tu solicitud de vacaciones', texto: 'Motivo: ' + String(motivo).trim() });
+        return r;
       }
     
       /**
@@ -2223,8 +2337,234 @@ var Servicio = (function () {
         return p && p.porcentajeAnticipoMax != null ? { porcentajeAnticipoMax: Number(p.porcentajeAnticipoMax) } : {};
       }
     
+    
+      /* ---------- Notificaciones (campanita y celular) ---------- */
+    
+      var DIA_MS = 86400000;
+      function digitos(clave) { return String(clave || '').replace(/\D/g, ''); }
+      function fechaCorta(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || ''); }
+      /** Identificador para el servicio de notificaciones al celular: no revela la cédula. */
+      function idPush(ctx, clave) { return ctx.firmar('push:' + digitos(clave)).slice(0, 32); }
+    
+      /**
+       * Guarda el aviso (campanita) y lo envía al celular de quienes lo activaron. destinos: claves (V12345678) o '*' (todos).
+       * El envío al celular es «mejor esfuerzo»: si falla, el aviso sigue en la campanita.
+       */
+      function notificar(repo, ctx, destinos, n) {
+        var lista = destinos === '*' ? ['*'] : (destinos || []).filter(Boolean);
+        if (!lista.length || !repo.agregarNotificaciones) return;
+        var ahora = ctx.ahora();
+        repo.agregarNotificaciones(lista.map(function (c) {
+          return { id: repo.nuevoIdNotificacion(), clave: c, tipo: n.tipo, titulo: n.titulo, texto: n.texto || '', ruta: n.ruta || '', creada: ahora };
+        }));
+        try { if (repo.enviarPush) repo.enviarPush(destinos === '*' ? '*' : lista.map(function (c) { return idPush(ctx, c); }), n.titulo, n.texto || '', n.ruta || ''); }
+        catch (e) { /* sin celular: queda en la campanita */ }
+      }
+    
+      /** La última constancia de una persona, si venció (y no fue anulada ni reemplazada). */
+      function constanciaVencida(repo, clave, ahora) {
+        var ult = repo.constanciasDe(clave).sort(function (a, b) { return b.emision - a.emision; })[0];
+        return ult && ult.estado !== 'ANULADA' && ult.vence < ahora ? ult : null;
+      }
+    
+      function misNotificaciones(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var d = digitos(s.clave), ahora = ctx.ahora(), desde = ahora - 60 * DIA_MS;
+        var hasta = repo.notificacionesLeidasHasta(d) || 0;
+        var items = repo.notificacionesRecientes().filter(function (n) {
+          return n.creada >= desde && (n.clave === '*' || digitos(n.clave) === d);
+        }).map(function (n) { return { id: n.id, tipo: n.tipo, titulo: n.titulo, texto: n.texto, ruta: n.ruta, creada: n.creada }; });
+        (s.rol === 'TRABAJADOR' ? [s.clave] : ['V' + d, 'E' + d]).forEach(function (c) {
+          var v = constanciaVencida(repo, c, ahora);
+          if (v && v.vence >= desde) items.push({ id: 'VENCE-' + v.id, tipo: 'CONSTANCIA_VENCIDA', titulo: 'Tu constancia de trabajo venció', texto: 'Ya puedes generar una nueva.', ruta: 'constancia', creada: v.vence });
+        });
+        items.sort(function (a, b) { return b.creada - a.creada; });
+        items = items.slice(0, 30);
+        return ok({ items: items.map(function (n) { return Object.assign(n, { nueva: n.creada > hasta }); }), noLeidas: items.filter(function (n) { return n.creada > hasta; }).length });
+      }
+    
+      function marcarNotificacionesLeidas(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        repo.marcarNotificacionesLeidas(digitos(s.clave), ctx.ahora());
+        return ok({ noLeidas: 0 });
+      }
+    
+      /** Tarea diaria: avisa al celular a quienes se les venció la constancia desde la última revisión. */
+      function avisosDiarios(repo, ctx, desde) {
+        var ahora = ctx.ahora(), avisadas = {};
+        repo.todasConstancias().forEach(function (c) {
+          if (c.vence > desde && c.vence <= ahora && !avisadas[c.clave] && constanciaVencida(repo, c.clave, ahora) && constanciaVencida(repo, c.clave, ahora).id === c.id) avisadas[c.clave] = true;
+        });
+        var claves = Object.keys(avisadas);
+        try { if (claves.length && repo.enviarPush) repo.enviarPush(claves.map(function (c) { return idPush(ctx, c); }), 'Tu constancia de trabajo venció', 'Ya puedes generar una nueva en el CAC.', 'constancia'); }
+        catch (e) { /* sin celular */ }
+        return ok({ avisadas: claves.length });
+      }
+    
+      /* ---------- Recibos de pago ---------- */
+    
+      var MAX_PDF_RECIBO = 3 * 1024 * 1024;   // base64 de una hoja: sobra con 3 MB
+    
+      function vistaLote(l, recibos) {
+        var v = { id: l.id, concepto: l.concepto, empresa: l.empresa, estado: l.estado, creado: l.creado, publicado: l.publicado || 0, total: Number(l.total) || 0 };
+        if (recibos) {
+          v.cargados = recibos.length;
+          v.vistos = recibos.filter(function (r) { return r.visto; }).length;
+          v.conformes = recibos.filter(function (r) { return r.conforme; }).length;
+        }
+        return v;
+      }
+    
+      /** RRHH: asigna las hojas leídas del PDF (cédula y nombre impresos) a los empleados. */
+      function asignarRecibos(repo, ctx, token, hojas) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        if (!Array.isArray(hojas) || !hojas.length) return err('VALIDACION', 'El PDF no trae hojas.');
+        var emps = repo.todosEmpleados();
+        return ok({
+          hojas: Recibos.asignarHojas(hojas, emps),
+          empleados: emps.filter(function (e) { return e.cedulaNumero; }).map(function (e) {
+            return { clave: Empleados.claveCedula(e), nombre: e.nombre, inactivo: e.estado === 'Inactivo' };
+          }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; }),
+        });
+      }
+    
+      function crearLoteRecibos(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var concepto = String(datos && datos.concepto || '').replace(/\s+/g, ' ').trim();
+        if (!concepto) return err('VALIDACION', 'Escribe el concepto (por ejemplo, «Nómina 1Q noviembre 2026»).');
+        if (concepto.length > 80) return err('VALIDACION', 'El concepto es muy largo (máximo 80 caracteres).');
+        var lote = { id: repo.nuevoIdLote(), concepto: concepto, empresa: String(datos.empresa || ''), total: Number(datos.total) || 0,
+          estado: 'BORRADOR', creado: ctx.ahora(), por: s.clave, publicado: 0 };
+        repo.guardarLote(lote);
+        repo.log('RECIBOS_LOTE', s.clave, lote.id + ' · ' + concepto);
+        return ok(vistaLote(lote, []));
+      }
+    
+      /** Sube un grupo de hojas (PDF de una página en base64) a un lote en borrador. Repetir el envío no duplica. */
+      function subirRecibos(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lote = repo.lotePorId(datos && datos.lote);
+        if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+        if (lote.estado !== 'BORRADOR') return err('TRANSICION', 'Esa carga ya fue publicada.');
+        var previos = repo.recibosDeLote(lote.id), hechas = {};
+        previos.forEach(function (r) { hechas[r.pagina] = true; });
+        var nuevos = [], items = (datos && datos.items) || [];
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i], pdf = String(it.pdf || '');
+          if (hechas[it.pagina]) continue;
+          var emp = repo.empleadoPorClave(String(it.clave || ''));
+          if (!emp) return err('VALIDACION', 'La hoja ' + it.pagina + ' no tiene un colaborador válido asignado.');
+          if (!pdf || pdf.length > MAX_PDF_RECIBO) return err('VALIDACION', 'La hoja ' + it.pagina + ' está vacía o es demasiado grande.');
+          var archivo = repo.guardarArchivoRecibo(lote.concepto + ' - ' + Empleados.claveCedula(emp) + ' - hoja ' + it.pagina + '.pdf', pdf);
+          nuevos.push({ id: repo.nuevoIdRecibo(), lote: lote.id, clave: Empleados.claveCedula(emp), nombre: emp.nombre, pagina: Number(it.pagina), archivo: archivo, creado: ctx.ahora(), visto: 0, conforme: 0 });
+          hechas[it.pagina] = true;
+        }
+        if (nuevos.length) repo.agregarRecibos(nuevos);
+        return ok({ guardados: nuevos.length, cargados: previos.length + nuevos.length });
+      }
+    
+      function publicarLote(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lote = repo.lotePorId(id);
+        if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+        if (lote.estado !== 'BORRADOR') return err('TRANSICION', 'Esa carga ya fue publicada.');
+        var recibos = repo.recibosDeLote(id);
+        if (!recibos.length) return err('VACIO', 'Esta carga no tiene recibos.');
+        lote.estado = 'PUBLICADO'; lote.publicado = ctx.ahora();
+        repo.guardarLote(lote);
+        var claves = {}; recibos.forEach(function (r) { claves[r.clave] = true; });
+        notificar(repo, ctx, Object.keys(claves), { tipo: 'RECIBO', ruta: 'recibos', titulo: 'Tienes un recibo de pago nuevo', texto: lote.concepto });
+        repo.log('RECIBOS_PUBLICADOS', s.clave, id + ' · ' + recibos.length + ' recibos');
+        return ok(vistaLote(lote, recibos));
+      }
+    
+      function eliminarLote(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lote = repo.lotePorId(id);
+        if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+        var recibos = repo.recibosDeLote(id);
+        if (recibos.some(function (r) { return r.conforme; })) return err('VALIDACION', 'No se puede eliminar: hay colaboradores que ya confirmaron «Recibí conforme».');
+        repo.eliminarLote(lote, recibos);
+        repo.log('RECIBOS_ELIMINADOS', s.clave, id + ' · ' + lote.concepto);
+        return ok({ id: id });
+      }
+    
+      function listarLotes(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var porLote = {};
+        repo.todosRecibos().forEach(function (r) { (porLote[r.lote] = porLote[r.lote] || []).push(r); });
+        return ok(repo.lotes().sort(function (a, b) { return b.creado - a.creado; }).map(function (l) { return vistaLote(l, porLote[l.id] || []); }));
+      }
+    
+      function detalleLote(repo, ctx, token, id) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var lote = repo.lotePorId(id);
+        if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+        var recibos = repo.recibosDeLote(id);
+        return ok({ lote: vistaLote(lote, recibos), recibos: recibos.sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; }).map(function (r) {
+          return { id: r.id, clave: r.clave, nombre: r.nombre, pagina: r.pagina, visto: r.visto || 0, conforme: r.conforme || 0 };
+        }) });
+      }
+    
+      /** RRHH abre el recibo de cualquier persona (no cuenta como visto por el colaborador). */
+      function verReciboRRHH(repo, ctx, token, id) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var r = repo.reciboPorId(id), lote = r && repo.lotePorId(r.lote);
+        if (!r || !lote) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+        return ok({ pdf: repo.leerArchivoRecibo(r.archivo), archivo: 'Recibo ' + lote.concepto + ' - ' + r.nombre + '.pdf' });
+      }
+    
+      function misRecibos(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var lotes = {};
+        repo.lotes().forEach(function (l) { if (l.estado === 'PUBLICADO') lotes[l.id] = l; });
+        return ok(repo.recibosDe(s.clave).filter(function (r) { return lotes[r.lote]; }).map(function (r) {
+          var l = lotes[r.lote];
+          return { id: r.id, concepto: l.concepto, empresa: l.empresa, publicado: l.publicado, visto: r.visto || 0, conforme: r.conforme || 0 };
+        }).sort(function (a, b) { return b.publicado - a.publicado; }));
+      }
+    
+      function reciboPropio(repo, s, id) {
+        var r = repo.reciboPorId(id), lote = r && repo.lotePorId(r.lote);
+        return r && lote && r.clave === s.clave && lote.estado === 'PUBLICADO' ? { r: r, lote: lote } : null;
+      }
+    
+      /** El colaborador abre su recibo: la primera vez queda la fecha en que lo vio. */
+      function verRecibo(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var x = reciboPropio(repo, s, id);
+        if (!x) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+        if (!x.r.visto) { x.r.visto = ctx.ahora(); repo.guardarRecibo(x.r); }
+        return ok({ pdf: repo.leerArchivoRecibo(x.r.archivo), archivo: 'Recibo ' + x.lote.concepto + '.pdf', visto: x.r.visto, conforme: x.r.conforme || 0 });
+      }
+    
+      /** «Recibí conforme»: el sello de entrega, con fecha y hora. */
+      function confirmarRecibo(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var x = reciboPropio(repo, s, id);
+        if (!x) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+        if (!x.r.conforme) {
+          x.r.visto = x.r.visto || ctx.ahora(); x.r.conforme = ctx.ahora();
+          repo.guardarRecibo(x.r);
+          repo.log('RECIBO_CONFORME', s.clave, x.r.id + ' · ' + x.lote.concepto);
+        }
+        return ok({ id: x.r.id, visto: x.r.visto, conforme: x.r.conforme });
+      }
+    
       var api = {
         iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
+        misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisosDiarios: avisosDiarios, idPush: idPush,
+        asignarRecibos: asignarRecibos, crearLoteRecibos: crearLoteRecibos, subirRecibos: subirRecibos, publicarLote: publicarLote, eliminarLote: eliminarLote,
+        listarLotes: listarLotes, detalleLote: detalleLote, verReciboRRHH: verReciboRRHH, misRecibos: misRecibos, verRecibo: verRecibo, confirmarRecibo: confirmarRecibo,
         miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
         estadoAporte: estadoAporte, prepararAporte: prepararAporte, cerrarAporte: cerrarAporte, archivoAporte: archivoAporte,
         candidatosCancelacion: candidatosCancelacion, listarCancelaciones: listarCancelaciones, registrarCancelacion: registrarCancelacion,
@@ -2259,9 +2599,9 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-02.3';
+var VERSION = '2026-11-03.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -2269,7 +2609,7 @@ function modulosCargados_() {
     Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
     Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
     Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
-    Aportes: typeof Aportes !== 'undefined' && !!Aportes,
+    Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -2290,6 +2630,10 @@ var HOJAS = {
   VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
     'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
+  NOTIFICACIONES: ['id', 'clave', 'tipo', 'titulo', 'texto', 'ruta', 'creada'],
+  NOTIF_LECTURAS: ['clave', 'hasta'],
+  RECIBOS_LOTES: ['id', 'concepto', 'empresa', 'total', 'estado', 'creado', 'por', 'publicado'],
+  RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -2336,9 +2680,22 @@ var RUTAS_TRABAJADOR = {
   estadoDeCuenta: function (repo, ctx, d) { return Servicio.miEstadoDeCuenta(repo, ctx, d.token); },
   solicitarAnticipo: function (repo, ctx, d) { return Servicio.solicitarAnticipo(repo, ctx, d.token, d); },
   cancelarAnticipo: function (repo, ctx, d) { return Servicio.cancelarAnticipo(repo, ctx, d.token, d.id); },
+  misNotificaciones: function (repo, ctx, d) { return Servicio.misNotificaciones(repo, ctx, d.token); },
+  marcarNotificacionesLeidas: function (repo, ctx, d) { return Servicio.marcarNotificacionesLeidas(repo, ctx, d.token); },
+  misRecibos: function (repo, ctx, d) { return Servicio.misRecibos(repo, ctx, d.token); },
+  verRecibo: function (repo, ctx, d) { return Servicio.verRecibo(repo, ctx, d.token, d.id); },
+  confirmarRecibo: function (repo, ctx, d) { return Servicio.confirmarRecibo(repo, ctx, d.token, d.id); },
 };
 
 var RUTAS_RRHH = {
+  asignarRecibos: function (repo, ctx, d) { return Servicio.asignarRecibos(repo, ctx, d.token, d.hojas); },
+  crearLoteRecibos: function (repo, ctx, d) { return Servicio.crearLoteRecibos(repo, ctx, d.token, d); },
+  subirRecibos: function (repo, ctx, d) { return Servicio.subirRecibos(repo, ctx, d.token, d); },
+  publicarLote: function (repo, ctx, d) { return Servicio.publicarLote(repo, ctx, d.token, d.id); },
+  eliminarLote: function (repo, ctx, d) { return Servicio.eliminarLote(repo, ctx, d.token, d.id); },
+  listarLotes: function (repo, ctx, d) { return Servicio.listarLotes(repo, ctx, d.token); },
+  detalleLote: function (repo, ctx, d) { return Servicio.detalleLote(repo, ctx, d.token, d.id); },
+  verReciboRRHH: function (repo, ctx, d) { return Servicio.verReciboRRHH(repo, ctx, d.token, d.id); },
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
   listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
@@ -2385,6 +2742,9 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
+  misNotificaciones: 1, misRecibos: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
+  subirRecibos: 1,
 };
 
 function doPost(e) {
@@ -2777,7 +3137,153 @@ function crearRepo_() {
     log: function (accion, actor, detalle) {
       hoja_('LOG').appendRow([new Date(), accion, actor, detalle]);
     },
+
+    /* ---- Notificaciones ---- */
+    agregarNotificaciones: function (lista) { agregarFilas_('NOTIFICACIONES', lista); },
+    nuevoIdNotificacion: function () { return 'N-' + Utilities.getUuid().slice(0, 13).toUpperCase(); },
+    /** Solo las últimas 3.000 filas: la campanita muestra los avisos de los últimos 60 días. */
+    notificacionesRecientes: function () {
+      var h = hoja_('NOTIFICACIONES'), ultima = h.getLastRow(), cab = HOJAS.NOTIFICACIONES;
+      if (ultima < 2) return [];
+      var desde = Math.max(2, ultima - 2999);
+      return h.getRange(desde, 1, ultima - desde + 1, cab.length).getValues().map(function (f) {
+        return { id: texto_(f[0]), clave: texto_(f[1]), tipo: texto_(f[2]), titulo: texto_(f[3]), texto: texto_(f[4]), ruta: texto_(f[5]), creada: Number(f[6]) || 0 };
+      });
+    },
+    notificacionesLeidasHasta: function (d) {
+      var f = leer_('NOTIF_LECTURAS').filter(function (x) { return texto_(x.clave) === d; })[0];
+      return f ? Number(f.hasta) || 0 : 0;
+    },
+    marcarNotificacionesLeidas: function (d, t) {
+      var f = leer_('NOTIF_LECTURAS').filter(function (x) { return texto_(x.clave) === d; })[0];
+      if (!f) { var h = hoja_('NOTIF_LECTURAS'); h.getRange(h.getLastRow() + 1, 1).setNumberFormat('@'); }
+      escribirFila_('NOTIF_LECTURAS', { _fila: f ? f._fila : 0, clave: d, hasta: t });
+    },
+    enviarPush: enviarPush_,
+
+    /* ---- Recibos de pago ---- */
+    nuevoIdLote: function () { return 'LOT-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+    nuevoIdRecibo: function () { return 'REC-' + Utilities.getUuid().slice(0, 13).toUpperCase(); },
+    lotes: function () { return leer_('RECIBOS_LOTES').map(lote_).filter(function (l) { return l.id; }); },
+    lotePorId: function (id) { return leer_('RECIBOS_LOTES').map(lote_).filter(function (l) { return l.id === id; })[0] || null; },
+    guardarLote: function (l) { escribirFila_('RECIBOS_LOTES', l); },
+    todosRecibos: function () { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.id; }); },
+    recibosDeLote: function (id) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.lote === id; }); },
+    recibosDe: function (clave) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.clave === clave; }); },
+    reciboPorId: function (id) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.id === id; })[0] || null; },
+    agregarRecibos: function (lista) {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(20000);
+      try { agregarFilas_('RECIBOS', lista); } finally { lock.releaseLock(); }
+    },
+    guardarRecibo: function (r) { escribirFila_('RECIBOS', r); },
+    guardarArchivoRecibo: function (nombre, b64) {
+      var blob = Utilities.newBlob(Utilities.base64Decode(b64), 'application/pdf', nombre);
+      return carpetaRecibos_().createFile(blob).getId();
+    },
+    leerArchivoRecibo: function (id) { return Utilities.base64Encode(DriveApp.getFileById(id).getBlob().getBytes()); },
+    eliminarLote: function (lote, recibos) {
+      recibos.forEach(function (r) { try { DriveApp.getFileById(r.archivo).setTrashed(true); } catch (e) { /* ya no estaba */ } });
+      var ids = {}; recibos.forEach(function (r) { ids[r.id] = true; });
+      quitarFilas_('RECIBOS', function (f) { return ids[texto_(f.id)]; });
+      quitarFilas_('RECIBOS_LOTES', function (f) { return texto_(f.id) === lote.id; });
+    },
   };
+}
+
+function lote_(f) {
+  return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), empresa: texto_(f.empresa), total: Number(f.total) || 0, estado: texto_(f.estado),
+    creado: Number(f.creado) || 0, por: texto_(f.por), publicado: Number(f.publicado) || 0 };
+}
+
+function recibo_(f) {
+  return { _fila: f._fila, id: texto_(f.id), lote: texto_(f.lote), clave: texto_(f.clave), nombre: texto_(f.nombre), pagina: Number(f.pagina) || 0,
+    archivo: texto_(f.archivo), creado: Number(f.creado) || 0, visto: Number(f.visto) || 0, conforme: Number(f.conforme) || 0 };
+}
+
+/** Agrega varias filas de una vez (mucho más rápido que appendRow una por una). */
+function agregarFilas_(nombre, lista) {
+  if (!lista.length) return;
+  var h = hoja_(nombre), cab = HOJAS[nombre], desde = h.getLastRow() + 1;
+  var r = h.getRange(desde, 1, lista.length, cab.length);
+  r.setNumberFormat('@');
+  r.setValues(lista.map(function (o) { return cab.map(function (c) { return o[c] == null ? '' : String(o[c]); }); }));
+  invalidar_(nombre);
+}
+
+/** Reescribe la hoja sin las filas que cumplen la condición. */
+function quitarFilas_(nombre, condicion) {
+  var h = hoja_(nombre), cab = HOJAS[nombre];
+  var quedan = leer_(nombre).filter(function (f) { return !condicion(f); }).map(function (f) { return cab.map(function (c) { return f[c] == null ? '' : f[c]; }); });
+  var ultima = h.getLastRow();
+  if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+  if (quedan.length) { var r = h.getRange(2, 1, quedan.length, cab.length); r.setNumberFormat('@'); r.setValues(quedan); }
+  invalidar_(nombre);
+}
+
+/** Carpeta de Drive donde se guardan los recibos (privada: solo la ve la cuenta dueña del Apps Script). */
+function carpetaRecibos_() {
+  var props = PropertiesService.getScriptProperties(), id = props.getProperty('RECIBOS_CARPETA');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* la borraron: se crea otra */ } }
+  var c = DriveApp.createFolder('CAC · Recibos de pago');
+  props.setProperty('RECIBOS_CARPETA', c.getId());
+  return c;
+}
+
+/**
+ * Notificación al celular con OneSignal (si está configurado en el menú RRHH). destinos: identificadores de
+ * notificación (no cédulas) o '*' para todos los que activaron los avisos. Si falla, no interrumpe nada.
+ */
+function enviarPush_(destinos, titulo, texto, ruta) {
+  var props = PropertiesService.getScriptProperties();
+  var appId = props.getProperty('ONESIGNAL_APP_ID'), clave = props.getProperty('ONESIGNAL_API_KEY');
+  if (!appId || !clave || !destinos || !destinos.length) return false;
+  var sitio = props.getProperty('CAC_URL') || '';
+  var cuerpo = { app_id: appId, target_channel: 'push', headings: { en: titulo, es: titulo }, contents: { en: texto || titulo, es: texto || titulo } };
+  if (sitio) cuerpo.url = sitio.replace(/\/?$/, '/') + (ruta ? '#/' + ruta : '');
+  if (destinos === '*') cuerpo.included_segments = ['Total Subscriptions'];
+  else cuerpo.include_aliases = { external_id: destinos };
+  try {
+    var r = UrlFetchApp.fetch('https://api.onesignal.com/notifications?c=push', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { Authorization: 'Key ' + clave }, payload: JSON.stringify(cuerpo),
+    });
+    if (r.getResponseCode() >= 300) registrarError_(new Error('OneSignal ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 300)));
+    return r.getResponseCode() < 300;
+  } catch (e) { registrarError_(e); return false; }
+}
+
+/** Tarea diaria (la instala «Configurar hojas»): avisa al celular las constancias que vencieron desde la última vez. */
+function avisosDiarios() {
+  var props = PropertiesService.getScriptProperties(), ahora = Date.now();
+  var desde = Number(props.getProperty('AVISOS_DESDE')) || ahora - 86400000;
+  memo_ = {}; constanciasCache = null;
+  Servicio.avisosDiarios(crearRepo_(), crearCtx_(), desde);
+  props.setProperty('AVISOS_DESDE', String(ahora));
+}
+
+function instalarTareaDiaria_() {
+  try {
+    var ya = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'avisosDiarios'; });
+    if (!ya) ScriptApp.newTrigger('avisosDiarios').timeBased().everyDays(1).atHour(7).create();
+  } catch (e) { /* sin permiso para tareas: los avisos siguen en la campanita */ }
+}
+
+/** Menú RRHH → «3 · Notificaciones al celular»: datos de la app de OneSignal. */
+function configurarNotificaciones() {
+  var ui = SpreadsheetApp.getUi(), props = PropertiesService.getScriptProperties();
+  var pedir = function (titulo, texto, prop) {
+    var r = ui.prompt(titulo, texto + (props.getProperty(prop) ? '\n\n(Ya hay uno guardado. Deja en blanco para no cambiarlo.)' : ''), ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK) return false;
+    var v = String(r.getResponseText() || '').trim();
+    if (v) props.setProperty(prop, v);
+    return true;
+  };
+  if (!pedir('OneSignal · App ID', 'App ID de OneSignal (Settings → Keys & IDs):', 'ONESIGNAL_APP_ID')) return;
+  if (!pedir('OneSignal · REST API Key', 'REST API Key de OneSignal (Settings → Keys & IDs):', 'ONESIGNAL_API_KEY')) return;
+  if (!pedir('Dirección del CAC', 'Dirección del sitio, por ejemplo https://cac.onrender.com', 'CAC_URL')) return;
+  instalarTareaDiaria_();
+  ui.alert('Listo', 'Las notificaciones al celular quedaron configuradas.', ui.ButtonSet.OK);
 }
 
 /* ---------- Puesta en marcha (se ejecutan desde el editor) ---------- */
@@ -2834,6 +3340,7 @@ function configurarInicial() {
     // cédulas y claves como texto, para que Sheets no les quite ceros ni letras
     ss.getSheetByName(n).getRange(2, 1, 1000, n === 'EMPLEADOS' ? 2 : 1).setNumberFormat('@');
   });
+  instalarTareaDiaria_();
   invalidarTodo_();
 }
 
@@ -2843,6 +3350,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('RRHH')
     .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
     .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
+    .addItem('3 · Notificaciones al celular (OneSignal)', 'configurarNotificaciones')
     .addItem('Refrescar datos', 'refrescarDatos')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
@@ -2914,6 +3422,7 @@ function diagnostico() {
   var pr = PropertiesService.getScriptProperties();
   l.push((pr.getProperty('SECRETO') ? '✔ ' : '✘ FALTA ') + 'clave secreta');
   l.push((pr.getProperty('API_TOKEN') ? '✔ ' : '✘ FALTA ') + 'token de la API');
+  l.push((pr.getProperty('ONESIGNAL_APP_ID') && pr.getProperty('ONESIGNAL_API_KEY') ? '✔ ' : '· (opcional) sin ') + 'notificaciones al celular (OneSignal)');
   var cargados = modulosCargados_();
   MODULOS.forEach(function (m) { l.push((cargados[m] ? '✔ ' : '✘ FALTA ') + 'módulo ' + m); });
   l.push('Versión del código: ' + VERSION);

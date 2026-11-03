@@ -27,6 +27,16 @@ function crearHoja(nombre) {
 /** codigo: texto del proyecto de Apps Script (por defecto, el archivo real apps-script/RRHH.gs). */
 function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'utf8') } = {}) {
   const hojas = {}, props = {}, cache = {}, ui = { alertas: [], respuestas: respuestasUi.slice() };
+  const drive = { carpetas: {}, archivos: {} }, pedidos = [], tareas = [];
+  let nId = 0;
+  const carpeta = (nombre) => {
+    const id = 'CARP' + (++nId);
+    return (drive.carpetas[id] = { getId: () => id, nombre, createFile: (blob) => {
+      const fid = 'ARCH' + (++nId), datos = blob.getBytes();
+      drive.archivos[fid] = { getId: () => fid, nombre: blob.getName(), papelera: false, getBlob: () => ({ getBytes: () => datos }), setTrashed(v) { this.papelera = v; } };
+      return drive.archivos[fid];
+    } });
+  };
   const bytes = (buf) => Array.from(buf, (b) => (b > 127 ? b - 256 : b));
   const sandbox = {
     console,
@@ -51,8 +61,17 @@ function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'ut
       computeHmacSha256Signature: (txt, clave) => bytes(crypto.createHmac('sha256', clave).update(txt, 'utf8').digest()),
       base64EncodeWebSafe: (s) => Buffer.from(s, 'utf8').toString('base64url'),
       base64DecodeWebSafe: (s) => bytes(Buffer.from(s, 'base64url')),
-      newBlob: (arr) => ({ getDataAsString: () => Buffer.from(arr.map((b) => (b < 0 ? b + 256 : b))).toString('utf8') }),
+      newBlob: (arr, tipo, nombre) => ({ getDataAsString: () => Buffer.from(arr.map((b) => (b < 0 ? b + 256 : b))).toString('utf8'), getBytes: () => arr, getName: () => nombre }),
+      base64Decode: (s) => bytes(Buffer.from(s, 'base64')),
+      base64Encode: (arr) => Buffer.from(arr.map((b) => (b < 0 ? b + 256 : b))).toString('base64'),
     },
+    // Drive en memoria (recibos de pago)
+    DriveApp: {
+      createFolder: (n) => carpeta(n), getFolderById: (id) => { if (!drive.carpetas[id]) throw new Error('no existe'); return drive.carpetas[id]; },
+      getFileById: (id) => { const f = drive.archivos[id]; if (!f) throw new Error('no existe'); return f; },
+    },
+    UrlFetchApp: { fetch: (url, op) => { pedidos.push({ url, ...op, cuerpo: JSON.parse(op.payload) }); return { getResponseCode: () => 200, getContentText: () => '{}' }; } },
+    ScriptApp: { getProjectTriggers: () => tareas.slice(), newTrigger: (fn) => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create: () => tareas.push({ getHandlerFunction: () => fn }) }) }) }) }) },
   };
   // Apps Script real: asignar a `globalThis`/`this` desde dentro de un módulo no basta para crear los globales.
   // Este señuelo reproduce ese fallo: solo los `var` de nivel superior del archivo cuentan.
@@ -61,7 +80,7 @@ function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'ut
   vm.runInContext(codigo, ctx, { filename: 'RRHH.gs' });
   const llamar = (cuerpo) => JSON.parse(vm.runInContext('doPost', ctx)({ postData: { contents: JSON.stringify({ api_token: 'RRHH2026', ...cuerpo }) } }).contenido);
   const ejecutar = (fn) => vm.runInContext(fn + '()', ctx);
-  return { ctx, hojas, props, ui, llamar, ejecutar };
+  return { ctx, hojas, props, ui, llamar, ejecutar, drive, pedidos, tareas };
 }
 
 module.exports = { crearEntorno, crearHoja };

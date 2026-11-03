@@ -18,6 +18,7 @@
   var Constancia = isNode ? require('./constancia.js') : dependencia(raiz, 'Constancia');
   var Vacaciones = isNode ? require('./vacaciones.js') : dependencia(raiz, 'Vacaciones');
   var Aportes = isNode ? require('./aportes.js') : dependencia(raiz, 'Aportes');
+  var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
@@ -64,7 +65,7 @@
     }
     var clave = Empleados.claveCedula(emp);
     repo.log('LOGIN', clave, 'Entrada de trabajador');
-    return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp) });
+    return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp), pushId: idPush(ctx, clave) });
   }
 
   /**
@@ -83,7 +84,7 @@
     }
     var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
     repo.log('LOGIN_ADMIN', digitos, 'Entrada ' + u.rol);
-    var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '' };
+    var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '', pushId: idPush(ctx, digitos) };
     if (emp && emp.estado !== 'Inactivo') data.tokenTrabajador = crearToken(ctx, Empleados.claveCedula(emp), 'TRABAJADOR');
     if (!emp) data.nombre = u.nombre || '';
     var mias = ['V' + digitos, 'E' + digitos];
@@ -163,6 +164,12 @@
     if (!v.ok) return err('VALIDACION', v.errores.join(' '));
     repo.guardarAperturaAnticipo(Object.assign(previa || {}, c, { por: s.clave, actualizada: ctx.ahora() }));
     repo.log('ANTICIPO_APERTURA', s.clave, c.clave + ' · ' + c.inicio + ' a ' + c.fin);
+    if (!previa) {
+      var yaAbierta = c.inicio <= hoyCaracas(ctx);
+      notificar(repo, ctx, '*', { tipo: 'ANTICIPO_APERTURA', ruta: 'fideicomiso',
+        titulo: yaAbierta ? 'Ya puedes solicitar tu anticipo de fideicomiso' : 'Se abrirá la solicitud de anticipos de fideicomiso',
+        texto: 'Del ' + fechaCorta(c.inicio) + ' al ' + fechaCorta(c.fin) + ' (' + Prestaciones.etiquetaVentana(c.clave) + ').' });
+    }
     return ok(vistaApertura(c, hoyCaracas(ctx)));
   }
 
@@ -186,7 +193,9 @@
     var a = repo.anticipoPorId(id);
     if (!a) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
     if (a.estado !== 'EN_ARCHIVO') return err('TRANSICION', 'Solo se marca así una solicitud enviada al banco.');
-    return cambiarEstado(repo, ctx, a, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo || '').trim() || 'Rechazada por el banco: el monto supera el disponible.' });
+    var r = cambiarEstado(repo, ctx, a, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo || '').trim() || 'Rechazada por el banco: el monto supera el disponible.' });
+    if (r.ok) notificar(repo, ctx, [a.clave], { tipo: 'ANTICIPO_RECHAZADO', ruta: 'fideicomiso', titulo: 'El banco rechazó tu solicitud de anticipo', texto: a.motivoRechazo });
+    return r;
   }
 
   function cancelarAnticipo(repo, ctx, token, id) {
@@ -249,6 +258,7 @@
       var a = repo.anticipoPorId(ids[i]);
       if (a && Prestaciones.puedePasar(Prestaciones.SIGUIENTE_SOLICITUD, a.estado, 'PAGADA')) {
         cambiarEstado(repo, ctx, a, 'PAGADA', s.clave, {}); cambiados++;
+        notificar(repo, ctx, [a.clave], { tipo: 'ANTICIPO_PAGADO', ruta: 'fideicomiso', titulo: 'Tu anticipo de fideicomiso fue pagado', texto: 'Revisa tu cuenta del fideicomiso en el banco.' });
       }
     }
     return ok({ cambiados: cambiados });
@@ -622,6 +632,8 @@
     };
     repo.guardarVacSolicitud(sol);
     repo.log('VACACIONES_SOLICITADA', c.clave, sol.id + ' · ' + sol.dias + ' días desde ' + sol.inicio);
+    notificar(repo, ctx, [emp.jefe], { tipo: 'VACACIONES_POR_APROBAR', ruta: 'equipo', titulo: 'Nueva solicitud de vacaciones por aprobar',
+      texto: emp.nombre + ' pide ' + sol.dias + ' día' + (sol.dias === 1 ? '' : 's') + ' desde el ' + fechaCorta(sol.inicio) + '.' });
     return ok(vistaVac(sol, nombresPorClave(repo)));
   }
 
@@ -658,7 +670,11 @@
     if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
     var extra = { decididaJefePor: s.clave, decisionJefe: ctx.ahora(), motivoRechazo: aprobar ? '' : String(motivo).trim() };
     if (aprobar) Object.assign(extra, datosConstanciaVac(repo, ctx, sol));   // la constancia de aprobación sale con el visto bueno del jefe
-    return cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave, extra);
+    var r = cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave, extra);
+    if (r.ok) notificar(repo, ctx, [sol.clave], aprobar
+      ? { tipo: 'VACACIONES_APROBADAS', ruta: 'vacaciones', titulo: '¡Tu jefe aprobó tus vacaciones!', texto: 'Del ' + fechaCorta(sol.inicio) + ' al ' + fechaCorta(sol.culminacion) + '. Ya puedes descargar tu constancia de aprobación.' }
+      : { tipo: 'VACACIONES_RECHAZADAS', ruta: 'vacaciones', titulo: 'Tu solicitud de vacaciones fue rechazada', texto: 'Motivo: ' + extra.motivoRechazo });
+    return r;
   }
 
   /** Número de la constancia de aprobación (formato del Excel) y días que quedan por período una vez aplicado este disfrute. */
@@ -693,7 +709,9 @@
     if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
     var extra = { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() };
     if (!sol.numeroConstancia) Object.assign(extra, datosConstanciaVac(repo, ctx, sol));
-    return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
+    var r = cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
+    if (r.ok) notificar(repo, ctx, [sol.clave], { tipo: 'VACACIONES_REGISTRADAS', ruta: 'vacaciones', titulo: 'Gestión Humana registró tus vacaciones', texto: 'Del ' + fechaCorta(sol.inicio) + ' al ' + fechaCorta(sol.culminacion) + '. Te reintegras el ' + fechaCorta(sol.reintegro) + '.' });
+    return r;
   }
 
   function rechazarVacacionesRRHH(repo, ctx, token, id, motivo) {
@@ -702,7 +720,9 @@
     if (!String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
     var sol = repo.vacSolicitudPorId(id);
     if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
-    return cambiarVac(repo, ctx, sol, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo).trim(), registradaPor: s.clave });
+    var r = cambiarVac(repo, ctx, sol, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo).trim(), registradaPor: s.clave });
+    if (r.ok) notificar(repo, ctx, [sol.clave], { tipo: 'VACACIONES_RECHAZADAS', ruta: 'vacaciones', titulo: 'Gestión Humana rechazó tu solicitud de vacaciones', texto: 'Motivo: ' + String(motivo).trim() });
+    return r;
   }
 
   /**
@@ -955,8 +975,234 @@
     return p && p.porcentajeAnticipoMax != null ? { porcentajeAnticipoMax: Number(p.porcentajeAnticipoMax) } : {};
   }
 
+
+  /* ---------- Notificaciones (campanita y celular) ---------- */
+
+  var DIA_MS = 86400000;
+  function digitos(clave) { return String(clave || '').replace(/\D/g, ''); }
+  function fechaCorta(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || ''); }
+  /** Identificador para el servicio de notificaciones al celular: no revela la cédula. */
+  function idPush(ctx, clave) { return ctx.firmar('push:' + digitos(clave)).slice(0, 32); }
+
+  /**
+   * Guarda el aviso (campanita) y lo envía al celular de quienes lo activaron. destinos: claves (V12345678) o '*' (todos).
+   * El envío al celular es «mejor esfuerzo»: si falla, el aviso sigue en la campanita.
+   */
+  function notificar(repo, ctx, destinos, n) {
+    var lista = destinos === '*' ? ['*'] : (destinos || []).filter(Boolean);
+    if (!lista.length || !repo.agregarNotificaciones) return;
+    var ahora = ctx.ahora();
+    repo.agregarNotificaciones(lista.map(function (c) {
+      return { id: repo.nuevoIdNotificacion(), clave: c, tipo: n.tipo, titulo: n.titulo, texto: n.texto || '', ruta: n.ruta || '', creada: ahora };
+    }));
+    try { if (repo.enviarPush) repo.enviarPush(destinos === '*' ? '*' : lista.map(function (c) { return idPush(ctx, c); }), n.titulo, n.texto || '', n.ruta || ''); }
+    catch (e) { /* sin celular: queda en la campanita */ }
+  }
+
+  /** La última constancia de una persona, si venció (y no fue anulada ni reemplazada). */
+  function constanciaVencida(repo, clave, ahora) {
+    var ult = repo.constanciasDe(clave).sort(function (a, b) { return b.emision - a.emision; })[0];
+    return ult && ult.estado !== 'ANULADA' && ult.vence < ahora ? ult : null;
+  }
+
+  function misNotificaciones(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var d = digitos(s.clave), ahora = ctx.ahora(), desde = ahora - 60 * DIA_MS;
+    var hasta = repo.notificacionesLeidasHasta(d) || 0;
+    var items = repo.notificacionesRecientes().filter(function (n) {
+      return n.creada >= desde && (n.clave === '*' || digitos(n.clave) === d);
+    }).map(function (n) { return { id: n.id, tipo: n.tipo, titulo: n.titulo, texto: n.texto, ruta: n.ruta, creada: n.creada }; });
+    (s.rol === 'TRABAJADOR' ? [s.clave] : ['V' + d, 'E' + d]).forEach(function (c) {
+      var v = constanciaVencida(repo, c, ahora);
+      if (v && v.vence >= desde) items.push({ id: 'VENCE-' + v.id, tipo: 'CONSTANCIA_VENCIDA', titulo: 'Tu constancia de trabajo venció', texto: 'Ya puedes generar una nueva.', ruta: 'constancia', creada: v.vence });
+    });
+    items.sort(function (a, b) { return b.creada - a.creada; });
+    items = items.slice(0, 30);
+    return ok({ items: items.map(function (n) { return Object.assign(n, { nueva: n.creada > hasta }); }), noLeidas: items.filter(function (n) { return n.creada > hasta; }).length });
+  }
+
+  function marcarNotificacionesLeidas(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    repo.marcarNotificacionesLeidas(digitos(s.clave), ctx.ahora());
+    return ok({ noLeidas: 0 });
+  }
+
+  /** Tarea diaria: avisa al celular a quienes se les venció la constancia desde la última revisión. */
+  function avisosDiarios(repo, ctx, desde) {
+    var ahora = ctx.ahora(), avisadas = {};
+    repo.todasConstancias().forEach(function (c) {
+      if (c.vence > desde && c.vence <= ahora && !avisadas[c.clave] && constanciaVencida(repo, c.clave, ahora) && constanciaVencida(repo, c.clave, ahora).id === c.id) avisadas[c.clave] = true;
+    });
+    var claves = Object.keys(avisadas);
+    try { if (claves.length && repo.enviarPush) repo.enviarPush(claves.map(function (c) { return idPush(ctx, c); }), 'Tu constancia de trabajo venció', 'Ya puedes generar una nueva en el CAC.', 'constancia'); }
+    catch (e) { /* sin celular */ }
+    return ok({ avisadas: claves.length });
+  }
+
+  /* ---------- Recibos de pago ---------- */
+
+  var MAX_PDF_RECIBO = 3 * 1024 * 1024;   // base64 de una hoja: sobra con 3 MB
+
+  function vistaLote(l, recibos) {
+    var v = { id: l.id, concepto: l.concepto, empresa: l.empresa, estado: l.estado, creado: l.creado, publicado: l.publicado || 0, total: Number(l.total) || 0 };
+    if (recibos) {
+      v.cargados = recibos.length;
+      v.vistos = recibos.filter(function (r) { return r.visto; }).length;
+      v.conformes = recibos.filter(function (r) { return r.conforme; }).length;
+    }
+    return v;
+  }
+
+  /** RRHH: asigna las hojas leídas del PDF (cédula y nombre impresos) a los empleados. */
+  function asignarRecibos(repo, ctx, token, hojas) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    if (!Array.isArray(hojas) || !hojas.length) return err('VALIDACION', 'El PDF no trae hojas.');
+    var emps = repo.todosEmpleados();
+    return ok({
+      hojas: Recibos.asignarHojas(hojas, emps),
+      empleados: emps.filter(function (e) { return e.cedulaNumero; }).map(function (e) {
+        return { clave: Empleados.claveCedula(e), nombre: e.nombre, inactivo: e.estado === 'Inactivo' };
+      }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; }),
+    });
+  }
+
+  function crearLoteRecibos(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var concepto = String(datos && datos.concepto || '').replace(/\s+/g, ' ').trim();
+    if (!concepto) return err('VALIDACION', 'Escribe el concepto (por ejemplo, «Nómina 1Q noviembre 2026»).');
+    if (concepto.length > 80) return err('VALIDACION', 'El concepto es muy largo (máximo 80 caracteres).');
+    var lote = { id: repo.nuevoIdLote(), concepto: concepto, empresa: String(datos.empresa || ''), total: Number(datos.total) || 0,
+      estado: 'BORRADOR', creado: ctx.ahora(), por: s.clave, publicado: 0 };
+    repo.guardarLote(lote);
+    repo.log('RECIBOS_LOTE', s.clave, lote.id + ' · ' + concepto);
+    return ok(vistaLote(lote, []));
+  }
+
+  /** Sube un grupo de hojas (PDF de una página en base64) a un lote en borrador. Repetir el envío no duplica. */
+  function subirRecibos(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var lote = repo.lotePorId(datos && datos.lote);
+    if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+    if (lote.estado !== 'BORRADOR') return err('TRANSICION', 'Esa carga ya fue publicada.');
+    var previos = repo.recibosDeLote(lote.id), hechas = {};
+    previos.forEach(function (r) { hechas[r.pagina] = true; });
+    var nuevos = [], items = (datos && datos.items) || [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], pdf = String(it.pdf || '');
+      if (hechas[it.pagina]) continue;
+      var emp = repo.empleadoPorClave(String(it.clave || ''));
+      if (!emp) return err('VALIDACION', 'La hoja ' + it.pagina + ' no tiene un colaborador válido asignado.');
+      if (!pdf || pdf.length > MAX_PDF_RECIBO) return err('VALIDACION', 'La hoja ' + it.pagina + ' está vacía o es demasiado grande.');
+      var archivo = repo.guardarArchivoRecibo(lote.concepto + ' - ' + Empleados.claveCedula(emp) + ' - hoja ' + it.pagina + '.pdf', pdf);
+      nuevos.push({ id: repo.nuevoIdRecibo(), lote: lote.id, clave: Empleados.claveCedula(emp), nombre: emp.nombre, pagina: Number(it.pagina), archivo: archivo, creado: ctx.ahora(), visto: 0, conforme: 0 });
+      hechas[it.pagina] = true;
+    }
+    if (nuevos.length) repo.agregarRecibos(nuevos);
+    return ok({ guardados: nuevos.length, cargados: previos.length + nuevos.length });
+  }
+
+  function publicarLote(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var lote = repo.lotePorId(id);
+    if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+    if (lote.estado !== 'BORRADOR') return err('TRANSICION', 'Esa carga ya fue publicada.');
+    var recibos = repo.recibosDeLote(id);
+    if (!recibos.length) return err('VACIO', 'Esta carga no tiene recibos.');
+    lote.estado = 'PUBLICADO'; lote.publicado = ctx.ahora();
+    repo.guardarLote(lote);
+    var claves = {}; recibos.forEach(function (r) { claves[r.clave] = true; });
+    notificar(repo, ctx, Object.keys(claves), { tipo: 'RECIBO', ruta: 'recibos', titulo: 'Tienes un recibo de pago nuevo', texto: lote.concepto });
+    repo.log('RECIBOS_PUBLICADOS', s.clave, id + ' · ' + recibos.length + ' recibos');
+    return ok(vistaLote(lote, recibos));
+  }
+
+  function eliminarLote(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var lote = repo.lotePorId(id);
+    if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+    var recibos = repo.recibosDeLote(id);
+    if (recibos.some(function (r) { return r.conforme; })) return err('VALIDACION', 'No se puede eliminar: hay colaboradores que ya confirmaron «Recibí conforme».');
+    repo.eliminarLote(lote, recibos);
+    repo.log('RECIBOS_ELIMINADOS', s.clave, id + ' · ' + lote.concepto);
+    return ok({ id: id });
+  }
+
+  function listarLotes(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var porLote = {};
+    repo.todosRecibos().forEach(function (r) { (porLote[r.lote] = porLote[r.lote] || []).push(r); });
+    return ok(repo.lotes().sort(function (a, b) { return b.creado - a.creado; }).map(function (l) { return vistaLote(l, porLote[l.id] || []); }));
+  }
+
+  function detalleLote(repo, ctx, token, id) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var lote = repo.lotePorId(id);
+    if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+    var recibos = repo.recibosDeLote(id);
+    return ok({ lote: vistaLote(lote, recibos), recibos: recibos.sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; }).map(function (r) {
+      return { id: r.id, clave: r.clave, nombre: r.nombre, pagina: r.pagina, visto: r.visto || 0, conforme: r.conforme || 0 };
+    }) });
+  }
+
+  /** RRHH abre el recibo de cualquier persona (no cuenta como visto por el colaborador). */
+  function verReciboRRHH(repo, ctx, token, id) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var r = repo.reciboPorId(id), lote = r && repo.lotePorId(r.lote);
+    if (!r || !lote) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+    return ok({ pdf: repo.leerArchivoRecibo(r.archivo), archivo: 'Recibo ' + lote.concepto + ' - ' + r.nombre + '.pdf' });
+  }
+
+  function misRecibos(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var lotes = {};
+    repo.lotes().forEach(function (l) { if (l.estado === 'PUBLICADO') lotes[l.id] = l; });
+    return ok(repo.recibosDe(s.clave).filter(function (r) { return lotes[r.lote]; }).map(function (r) {
+      var l = lotes[r.lote];
+      return { id: r.id, concepto: l.concepto, empresa: l.empresa, publicado: l.publicado, visto: r.visto || 0, conforme: r.conforme || 0 };
+    }).sort(function (a, b) { return b.publicado - a.publicado; }));
+  }
+
+  function reciboPropio(repo, s, id) {
+    var r = repo.reciboPorId(id), lote = r && repo.lotePorId(r.lote);
+    return r && lote && r.clave === s.clave && lote.estado === 'PUBLICADO' ? { r: r, lote: lote } : null;
+  }
+
+  /** El colaborador abre su recibo: la primera vez queda la fecha en que lo vio. */
+  function verRecibo(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var x = reciboPropio(repo, s, id);
+    if (!x) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+    if (!x.r.visto) { x.r.visto = ctx.ahora(); repo.guardarRecibo(x.r); }
+    return ok({ pdf: repo.leerArchivoRecibo(x.r.archivo), archivo: 'Recibo ' + x.lote.concepto + '.pdf', visto: x.r.visto, conforme: x.r.conforme || 0 });
+  }
+
+  /** «Recibí conforme»: el sello de entrega, con fecha y hora. */
+  function confirmarRecibo(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var x = reciboPropio(repo, s, id);
+    if (!x) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+    if (!x.r.conforme) {
+      x.r.visto = x.r.visto || ctx.ahora(); x.r.conforme = ctx.ahora();
+      repo.guardarRecibo(x.r);
+      repo.log('RECIBO_CONFORME', s.clave, x.r.id + ' · ' + x.lote.concepto);
+    }
+    return ok({ id: x.r.id, visto: x.r.visto, conforme: x.r.conforme });
+  }
+
   var api = {
     iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
+    misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisosDiarios: avisosDiarios, idPush: idPush,
+    asignarRecibos: asignarRecibos, crearLoteRecibos: crearLoteRecibos, subirRecibos: subirRecibos, publicarLote: publicarLote, eliminarLote: eliminarLote,
+    listarLotes: listarLotes, detalleLote: detalleLote, verReciboRRHH: verReciboRRHH, misRecibos: misRecibos, verRecibo: verRecibo, confirmarRecibo: confirmarRecibo,
     miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
     estadoAporte: estadoAporte, prepararAporte: prepararAporte, cerrarAporte: cerrarAporte, archivoAporte: archivoAporte,
     candidatosCancelacion: candidatosCancelacion, listarCancelaciones: listarCancelaciones, registrarCancelacion: registrarCancelacion,
