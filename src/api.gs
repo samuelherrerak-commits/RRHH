@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-06.1';
+var VERSION = '2026-11-06.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Servicio'];
 
@@ -45,6 +45,7 @@ var HOJAS = {
   RECIBOS_LOTES: ['id', 'concepto', 'empresa', 'total', 'estado', 'creado', 'por', 'publicado'],
   PUSH_DISPOSITIVOS: ['pushId', 'suscripcion', 'tipo', 'creado'],
   RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
+  PINES: ['clave', 'sal', 'hash', 'creado'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -87,7 +88,8 @@ var RUTAS_TRABAJADOR = {
   emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
   misConstancias: function (repo, ctx, d) { return Servicio.misConstancias(repo, ctx, d.token); },
   verificarConstancia: function (repo, ctx, d) { return Servicio.verificarConstancia(repo, ctx, d.id); },   // pública (QR)
-  login: function (repo, ctx, d) { return Servicio.iniciarSesion(repo, ctx, d.cedula); },
+  login: function (repo, ctx, d) { return Servicio.iniciarSesion(repo, ctx, d.cedula, d.pin); },
+  crearPin: function (repo, ctx, d) { return Servicio.crearPin(repo, ctx, d.cedula, d.pin, d.confirmacion); },
   estadoDeCuenta: function (repo, ctx, d) { return Servicio.miEstadoDeCuenta(repo, ctx, d.token); },
   solicitarAnticipo: function (repo, ctx, d) { return Servicio.solicitarAnticipo(repo, ctx, d.token, d); },
   cancelarAnticipo: function (repo, ctx, d) { return Servicio.cancelarAnticipo(repo, ctx, d.token, d.id); },
@@ -113,6 +115,7 @@ var RUTAS_RRHH = {
   listarLotes: function (repo, ctx, d) { return Servicio.listarLotes(repo, ctx, d.token); },
   detalleLote: function (repo, ctx, d) { return Servicio.detalleLote(repo, ctx, d.token, d.id); },
   verReciboRRHH: function (repo, ctx, d) { return Servicio.verReciboRRHH(repo, ctx, d.token, d.id); },
+  restablecerPin: function (repo, ctx, d) { return Servicio.restablecerPin(repo, ctx, d.token, d.clave); },
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
   listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
@@ -547,6 +550,23 @@ function crearRepo_() {
       if (!c._fila) { var h = hoja_('APERTURAS_ANTICIPO'); h.getRange(h.getLastRow() + 1, 1, 1, 4).setNumberFormat('@'); }
       escribirFila_('APERTURAS_ANTICIPO', c);
     },
+    /* ---- PIN de los colaboradores (hoja PINES: solo la huella con sal, nunca el PIN) ---- */
+    pinDe: function (clave) {
+      asegurarHojaPines_();
+      var f = leer_('PINES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      return f && texto_(f.hash) ? { sal: texto_(f.sal), hash: texto_(f.hash) } : null;
+    },
+    guardarPin: function (clave, d) {
+      asegurarHojaPines_();
+      var f = leer_('PINES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      if (!f) { var h = hoja_('PINES'); h.getRange(h.getLastRow() + 1, 1, 1, 3).setNumberFormat('@'); }
+      escribirFila_('PINES', { _fila: f ? f._fila : 0, clave: clave, sal: d.sal, hash: d.hash, creado: d.creado });
+    },
+    borrarPin: function (clave) {
+      asegurarHojaPines_();
+      var f = leer_('PINES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      if (f) { hoja_('PINES').deleteRow(f._fila); invalidar_('PINES'); }
+    },
     eliminarAperturaAnticipo: function (id) {
       var f = leer_('APERTURAS_ANTICIPO').filter(function (x) { return texto_(x.id) === id; })[0];
       if (f) { hoja_('APERTURAS_ANTICIPO').deleteRow(f._fila); invalidar_('APERTURAS_ANTICIPO'); }
@@ -862,6 +882,15 @@ function configurarNotificaciones() {
   if (!pedir('Dirección del CAC', 'Dirección del sitio, por ejemplo https://cac.onrender.com', 'CAC_URL')) return;
   instalarTareaDiaria_();
   ui.alert('Listo', 'Las notificaciones al celular quedaron configuradas.', ui.ButtonSet.OK);
+}
+
+/** La hoja PINES se crea sola (para no exigir «Configurar hojas» al actualizar). */
+function asegurarHojaPines_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName('PINES')) return;
+  var h = ss.insertSheet('PINES');
+  h.getRange(1, 1, 1, HOJAS.PINES.length).setValues([HOJAS.PINES]).setFontWeight('bold');
+  h.setFrozenRows(1);
 }
 
 /* ---------- Puesta en marcha (se ejecutan desde el editor) ---------- */

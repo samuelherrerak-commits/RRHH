@@ -52,7 +52,27 @@
    * no se entrega sesión: se pide la clave (iniciarSesionAdmin). Si no, entra como trabajador.
    * Acepta con o sin letra, con RIF o sin él, y con o sin ceros a la izquierda.
    */
-  function iniciarSesion(repo, ctx, cedulaTexto) {
+  /** PIN de 4 números, que no sea de los fáciles (todos iguales o seguidos, como 1234 o 4321). */
+  function revisarPin(pin) {
+    pin = String(pin == null ? '' : pin);
+    if (!/^\d{4}$/.test(pin)) return 'El PIN debe tener exactamente 4 números.';
+    var d = pin.split('').map(Number), sube = true, baja = true;
+    for (var i = 1; i < 4; i++) { if (d[i] !== d[i - 1] + 1) sube = false; if (d[i] !== d[i - 1] - 1) baja = false; }
+    if (/^(\d)\1{3}$/.test(pin) || sube || baja) return 'Ese PIN es muy fácil de adivinar. Elige otro (no uses números iguales ni seguidos).';
+    return '';
+  }
+
+  function sesionTrabajador(repo, ctx, emp) {
+    var clave = Empleados.claveCedula(emp);
+    repo.log('LOGIN', clave, 'Entrada de trabajador');
+    return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp), pushId: idPush(ctx, clave) });
+  }
+
+  /**
+   * Entrada del colaborador: cédula y PIN de 4 números. Sin PIN en la petición responde qué falta
+   * ({ requierePin, crearPin }). La primera vez crea su PIN (crearPin); si lo olvida, RRHH lo restablece.
+   */
+  function iniciarSesion(repo, ctx, cedulaTexto, pinTexto) {
     var digitos = Empleados.numeroDeCedulaTexto(cedulaTexto);
     if (!digitos) return err('CEDULA', 'Escribe tu cédula, solo números.');
     if (repo.fallos('global') >= MAX_FALLOS_GLOBAL || repo.fallos(digitos) >= MAX_FALLOS_CEDULA) {
@@ -64,9 +84,49 @@
       repo.registrarFallo(digitos); repo.registrarFallo('global');
       return err('NO_ENCONTRADO', 'No encontramos esa cédula. Revisa el número o consulta con Recursos Humanos.');
     }
+    if (repo.pinDe) {
+      var reg = repo.pinDe(Empleados.claveCedula(emp));
+      if (!reg) return ok({ requierePin: true, crearPin: true });
+      if (pinTexto == null || pinTexto === '') return ok({ requierePin: true, crearPin: false });
+      if (ctx.hash(String(pinTexto), reg.sal) !== reg.hash) {
+        repo.registrarFallo(digitos); repo.registrarFallo('global');
+        var quedan = MAX_FALLOS_CEDULA - repo.fallos(digitos);
+        return err('PIN', quedan > 0 ? 'PIN incorrecto. Te queda' + (quedan === 1 ? '' : 'n') + ' ' + quedan + ' intento' + (quedan === 1 ? '' : 's') + '.'
+          : 'PIN incorrecto. Por seguridad, espera unos minutos para intentarlo de nuevo.');
+      }
+    }
+    return sesionTrabajador(repo, ctx, emp);
+  }
+
+  /** Primera entrada: el colaborador crea su PIN (dos veces) y entra. Si ya tiene uno, debe usarlo o pedir que lo restablezcan. */
+  function crearPin(repo, ctx, cedulaTexto, pin, confirmacion) {
+    var digitos = Empleados.numeroDeCedulaTexto(cedulaTexto);
+    if (!digitos) return err('CEDULA', 'Escribe tu cédula, solo números.');
+    if (repo.fallos('global') >= MAX_FALLOS_GLOBAL || repo.fallos(digitos) >= MAX_FALLOS_CEDULA) {
+      return err('BLOQUEADO', 'Demasiados intentos. Espera unos minutos e intenta de nuevo.');
+    }
+    var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
+    if (!emp || emp.estado === 'Inactivo' || repo.usuario(digitos)) return err('NO_ENCONTRADO', 'No encontramos esa cédula. Revisa el número o consulta con Recursos Humanos.');
     var clave = Empleados.claveCedula(emp);
-    repo.log('LOGIN', clave, 'Entrada de trabajador');
-    return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp), pushId: idPush(ctx, clave) });
+    if (repo.pinDe(clave)) return err('YA_TIENE', 'Ya creaste tu PIN: escríbelo para entrar. Si lo olvidaste, pide a Gestión Humana que lo restablezca.');
+    var problema = revisarPin(pin);
+    if (problema) return err('VALIDACION', problema);
+    if (String(pin) !== String(confirmacion)) return err('VALIDACION', 'Los dos PIN no coinciden. Escríbelos de nuevo.');
+    var sal = ctx.firmar('pin:' + clave + ':' + ctx.ahora()).slice(0, 16);
+    repo.guardarPin(clave, { sal: sal, hash: ctx.hash(String(pin), sal), creado: ctx.ahora() });
+    repo.log('PIN_CREADO', clave, '');
+    return sesionTrabajador(repo, ctx, emp);
+  }
+
+  /** RRHH borra el PIN de un colaborador (lo olvidó): al entrar de nuevo creará uno nuevo. */
+  function restablecerPin(repo, ctx, token, clave) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var emp = repo.empleadoPorClave(String(clave || ''));
+    if (!emp) return err('NO_ENCONTRADO', 'No encontramos ese empleado.');
+    repo.borrarPin(Empleados.claveCedula(emp));
+    repo.log('PIN_RESTABLECIDO', s.clave, Empleados.claveCedula(emp));
+    return ok({ clave: Empleados.claveCedula(emp) });
   }
 
   /**
@@ -1424,6 +1484,7 @@
     misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisoDePrueba: avisoDePrueba, registrarDispositivo: registrarDispositivo, avisosDiarios: avisosDiarios, idPush: idPush,
     asignarRecibos: asignarRecibos, crearLoteRecibos: crearLoteRecibos, subirRecibos: subirRecibos, publicarLote: publicarLote, eliminarLote: eliminarLote,
     listarLotes: listarLotes, detalleLote: detalleLote, verReciboRRHH: verReciboRRHH, misRecibos: misRecibos, verRecibo: verRecibo, confirmarRecibo: confirmarRecibo,
+    crearPin: crearPin, restablecerPin: restablecerPin, revisarPin: revisarPin,
     miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
     estadoAporte: estadoAporte, prepararAporte: prepararAporte, cerrarAporte: cerrarAporte, archivoAporte: archivoAporte,
     candidatosCancelacion: candidatosCancelacion, listarCancelaciones: listarCancelaciones, registrarCancelacion: registrarCancelacion,

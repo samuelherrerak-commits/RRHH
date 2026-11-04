@@ -326,3 +326,6 @@ details summary { cursor: pointer; color: var(--tinta-2); font-size: 14px; }
 .bloque-n { width: 28px; height: 28px; border-radius: 50%; background: var(--marca); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; align-self: center; }
 .bloque-fin { grid-column: 2 / -1; font-size: 13px; }
 .bloque .btn-link { grid-column: 2 / -1; justify-self: start; }
+/* ---- PIN de entrada ---- */
+.caja-pin { display: grid; gap: var(--s3); }
+input.pin { letter-spacing: .6em; font-size: 22px; text-align: center; max-width: 220px; }
