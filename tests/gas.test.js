@@ -279,7 +279,7 @@ test('recibos de pago y avisos sobre las hojas: Drive, campanita y OneSignal', (
   const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
   e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
   assert.equal(e.tareas.length, 1);                                   // tarea diaria de avisos instalada
-  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'clave-1'; e.props.CAC_URL = 'https://cac-pruebas.onrender.com';
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba'; e.props.CAC_URL = 'https://cac-pruebas.onrender.com';
   const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
   e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
     { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', puesto: 'Vendedora', estado: 'Active', fechaInicio: '05/03/2025', salarioMensual: 100 },
@@ -300,7 +300,7 @@ test('recibos de pago y avisos sobre las hojas: Drive, campanita y OneSignal', (
   // OneSignal: directo al número de suscripción del dispositivo de la persona, con enlace a su sección
   const envio = e.pedidos.at(-1);
   assert.equal(envio.url, 'https://api.onesignal.com/notifications?c=push');
-  assert.equal(envio.headers.Authorization, 'Key clave-1');
+  assert.equal(envio.headers.Authorization, 'Key os_v2_app_clavedepruebaclavedeprueba');
   assert.deepEqual(envio.cuerpo.include_subscription_ids, ['sub-1']);
   assert.ok(!JSON.stringify(envio.cuerpo).includes('11111111'));
   assert.equal(envio.cuerpo.url, 'https://cac-pruebas.onrender.com/#/recibos');
@@ -348,7 +348,7 @@ test('aviso de prueba: dice si falta configurar OneSignal, si el dispositivo no 
   e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
   const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
   assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_CONFIGURAR');
-  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'clave-1';
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba';
   assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_DESTINATARIOS');   // aún sin dispositivo
   const disp = { endpoint: 'https://web.push.apple.com/QGx1Zm9vYmFyYmF6cXV4', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
   assert.equal(e.llamar({ action: 'registrarDispositivo', token: admin, ...disp }).ok, true);
@@ -366,7 +366,7 @@ test('registrar el dispositivo en OneSignal desde el servidor (iPhone = SafariPu
   const ses = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data;
   const disp = { endpoint: 'https://web.push.apple.com/QGx1Zm9vYmFyYmF6cXV4', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
   assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).code, 'SIN_CONFIGURAR');
-  e.props.ONESIGNAL_APP_ID = 'cac pruebas'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_x';
+  e.props.ONESIGNAL_APP_ID = 'cac pruebas'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba';
   assert.match(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).message, /App ID de OneSignal .* no es válido/);
   assert.match(e.llamar({ action: 'avisoDePrueba', token: ses.token }).data.push.detalle, /no es válido/);
   e.props.ONESIGNAL_APP_ID = ' "97b880ba-f53c-4cb8-88f3-9c4cf9fc186f" ';   // con espacios y comillas: se limpia
@@ -390,8 +390,20 @@ test('la hoja PUSH_DISPOSITIVOS se crea sola si la hoja de cálculo es de una ve
   const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
   e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
   delete e.hojas.PUSH_DISPOSITIVOS;
-  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'clave-1';
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba';
   const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
   assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_DESTINATARIOS');
   assert.ok(e.hojas.PUSH_DISPOSITIVOS);
+});
+
+test('OneSignal: REST API Key con formato equivocado o rechazada (401) se explica', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  const disp = { endpoint: 'https://web.push.apple.com/QGx1Zm9vYmFyYmF6cXV4', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'qbwu7rtmxubvvjtcy623yei6y';   // el Key ID, no la clave
+  assert.match(e.llamar({ action: 'registrarDispositivo', token: admin, ...disp }).message, /os_v2_app_/);
+  e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba';
+  e.onesignalResponde(() => ({ codigo: 401, json: { errors: ['Access denied.'] } }));
+  assert.match(e.llamar({ action: 'registrarDispositivo', token: admin, ...disp }).message, /no aceptó la REST API Key/);
 });

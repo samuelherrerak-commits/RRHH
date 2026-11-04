@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-05.3';
+var VERSION = '2026-11-05.4';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Servicio'];
 
@@ -675,6 +675,9 @@ function configOneSignal_() {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appId)) {
     return { error: 'El App ID de OneSignal guardado en la hoja no es válido (debe verse como 97b880ba-f53c-4cb8-…). Vuelve a ponerlo en el menú RRHH → «3».' };
   }
+  if (!/^os_v2_[a-z0-9_]{20,}$/i.test(clave)) {
+    return { error: 'La REST API Key de OneSignal guardada en la hoja no es válida: debe empezar con «os_v2_app_» (no uses el «Key ID»). Vuelve a ponerla en el menú RRHH → «3».' };
+  }
   return { appId: appId, clave: clave, sitio: props.getProperty('CAC_URL') || '' };
 }
 
@@ -690,6 +693,7 @@ function pedirOneSignal_(cfg, ruta, cuerpo) {
 function errorOneSignal_(r) {
   var e = r.json && r.json.errors;
   var txt = e && e.join ? e.map(function (x) { return typeof x === 'string' ? x : (x.title || JSON.stringify(x)); }).join(' ') : r.texto;
+  if (r.codigo === 401 || r.codigo === 403) return 'OneSignal no aceptó la REST API Key guardada en la hoja (HTTP ' + r.codigo + '). Crea una nueva en OneSignal (Settings → Keys & IDs → Add key) y ponla en el menú RRHH → «3».';
   return 'HTTP ' + r.codigo + ' · ' + String(txt).slice(0, 200);
 }
 
@@ -766,7 +770,7 @@ function enviarPush_(destinos, titulo, texto, ruta) {
     try { j = JSON.parse(texto); } catch (x) { /* no es JSON */ }
     if (r.getResponseCode() >= 300) {
       registrarError_(new Error('OneSignal ' + r.getResponseCode() + ': ' + texto.slice(0, 300)));
-      return { estado: 'ERROR', detalle: 'HTTP ' + r.getResponseCode() + ' · ' + String((j.errors && j.errors.join ? j.errors.join(' ') : texto)).slice(0, 200) };
+      return { estado: 'ERROR', detalle: errorOneSignal_({ codigo: r.getResponseCode(), json: j, texto: texto }) };
     }
     // dispositivos que OneSignal ya no acepta (la persona quitó el permiso o borró el CAC): se olvidan
     var invalidos = (j.errors && (j.errors.invalid_player_ids || j.errors.invalid_subscription_ids)) || [];
