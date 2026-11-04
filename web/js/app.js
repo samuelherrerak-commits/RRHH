@@ -3,7 +3,7 @@ import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
-import { vincular, desvincular, estadoPush, activarPush, esIphone } from './push.js';
+import { vincular, desvincular, estadoPush, activarPush, esIphone, registrarServiceWorker } from './push.js';
 
 const URL_BASE = location.origin + location.pathname;
 
@@ -1632,5 +1632,5 @@ async function pintarDetalleLote(caja, id, filtro = 'todos') {
 
 // En el sitio de pruebas, una franja fija recuerda que no son los datos reales.
 if (CONFIG.PRUEBAS) document.body.insertAdjacentHTML('afterbegin', `<div class="franja-pruebas">Sitio de PRUEBAS${CONFIG.API_URL ? '' : ' · falta la URL del Apps Script de pruebas en config.js'}</div>`);
-iniciarInstalacion();
+iniciarInstalacion(registrarServiceWorker);
 arrancar();
