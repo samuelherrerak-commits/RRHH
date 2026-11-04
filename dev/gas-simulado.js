@@ -28,7 +28,11 @@ function crearHoja(nombre) {
 function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'utf8') } = {}) {
   const hojas = {}, props = {}, cache = {}, ui = { alertas: [], respuestas: respuestasUi.slice() };
   const drive = { carpetas: {}, archivos: {} }, pedidos = [], tareas = [];
-  let respuestaOneSignal = { id: 'envio-1' };
+  // OneSignal simulado: al registrar un dispositivo devuelve su número de suscripción; al enviar, un id de envío
+  let nSub = 0;
+  const respuestaPorDefecto = (url, cuerpo) => (/\/users$/.test(url) ? { codigo: 201, json: { subscriptions: cuerpo.subscriptions.map((x) => ({ id: 'sub-' + (++nSub), token: x.token })) } }
+    : /\/subscriptions$/.test(url) ? { codigo: 201, json: { subscription: { id: 'sub-' + (++nSub), token: cuerpo.subscription.token } } } : { codigo: 200, json: { id: 'envio-1' } });
+  let respuestaOneSignal = respuestaPorDefecto;
   let nId = 0;
   const carpeta = (nombre) => {
     const id = 'CARP' + (++nId);
@@ -71,7 +75,11 @@ function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'ut
       createFolder: (n) => carpeta(n), getFolderById: (id) => { if (!drive.carpetas[id]) throw new Error('no existe'); return drive.carpetas[id]; },
       getFileById: (id) => { const f = drive.archivos[id]; if (!f) throw new Error('no existe'); return f; },
     },
-    UrlFetchApp: { fetch: (url, op) => { pedidos.push({ url, ...op, cuerpo: JSON.parse(op.payload) }); const r = typeof respuestaOneSignal === 'function' ? respuestaOneSignal(url) : { codigo: 200, json: respuestaOneSignal }; return { getResponseCode: () => r.codigo, getContentText: () => JSON.stringify(r.json) }; } },
+    UrlFetchApp: { fetch: (url, op) => {
+      const cuerpo = JSON.parse(op.payload); pedidos.push({ url, ...op, cuerpo });
+      const r = typeof respuestaOneSignal === 'function' ? respuestaOneSignal(url, cuerpo) : { codigo: 200, json: respuestaOneSignal };
+      return { getResponseCode: () => r.codigo, getContentText: () => JSON.stringify(r.json) };
+    } },
     ScriptApp: { getProjectTriggers: () => tareas.slice(), newTrigger: (fn) => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create: () => tareas.push({ getHandlerFunction: () => fn }) }) }) }) }) },
   };
   // Apps Script real: asignar a `globalThis`/`this` desde dentro de un módulo no basta para crear los globales.
@@ -81,7 +89,7 @@ function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'ut
   vm.runInContext(codigo, ctx, { filename: 'RRHH.gs' });
   const llamar = (cuerpo) => JSON.parse(vm.runInContext('doPost', ctx)({ postData: { contents: JSON.stringify({ api_token: 'RRHH2026', ...cuerpo }) } }).contenido);
   const ejecutar = (fn) => vm.runInContext(fn + '()', ctx);
-  return { ctx, hojas, props, ui, llamar, ejecutar, drive, pedidos, tareas, onesignalResponde: (r) => { respuestaOneSignal = r; } };
+  return { ctx, hojas, props, ui, llamar, ejecutar, drive, pedidos, tareas, onesignalResponde: (r) => { respuestaOneSignal = r || respuestaPorDefecto; } };
 }
 
 module.exports = { crearEntorno, crearHoja };

@@ -8,7 +8,8 @@ import { CONFIG } from '../config.js';
 // Misma dirección con la que OneSignal registra su service worker (lee el appId de ella).
 const SDK_VERSION = '160700';
 const urlSw = () => `sw.js?appId=${CONFIG.ONESIGNAL_APP_ID}&sdkVersion=${SDK_VERSION}`;
-const REGISTRO = 'cac:push';   // { endpoint, pushId } del último registro hecho en este dispositivo
+// { endpoint, pushId } del último registro hecho en este dispositivo («v2»: desde que se guarda el número de suscripción)
+const REGISTRO = 'cac:push-v2';
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export const pushDisponible = () => !!CONFIG.ONESIGNAL_APP_ID && 'serviceWorker' in navigator && 'Notification' in window && 'PushManager' in window;

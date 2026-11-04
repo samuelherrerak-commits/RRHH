@@ -290,19 +290,23 @@ test('recibos de pago y avisos sobre las hojas: Drive, campanita y OneSignal', (
   const pdf = Buffer.from('%PDF-1.4 recibo de Ana').toString('base64');
   assert.equal(e.llamar({ action: 'subirRecibos', token: admin, lote: lote.id, items: [{ pagina: 1, clave: 'V11111111', pdf }] }).data.guardados, 1);
   const archivo = Object.values(e.drive.archivos)[0];
+  const ana0 = e.llamar({ action: 'login', cedula: '11111111' }).data;
+  const disp = { endpoint: 'https://fcm.googleapis.com/fcm/send/abcdefghijk', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: ana0.token, ...disp }).ok, true);
+  assert.equal(e.hojas.PUSH_DISPOSITIVOS.getLastRow(), 2);   // quedó guardado el número de suscripción
   assert.match(archivo.nombre, /^Nómina 1Q noviembre 2026 - V11111111/);
   assert.equal(e.llamar({ action: 'publicarLote', token: admin, id: lote.id }).data.estado, 'PUBLICADO');
 
-  // OneSignal: a la persona por su identificador (no la cédula), con enlace a su sección
+  // OneSignal: directo al número de suscripción del dispositivo de la persona, con enlace a su sección
   const envio = e.pedidos.at(-1);
   assert.equal(envio.url, 'https://api.onesignal.com/notifications?c=push');
   assert.equal(envio.headers.Authorization, 'Key clave-1');
-  assert.equal(envio.cuerpo.include_aliases.external_id.length, 1);
+  assert.deepEqual(envio.cuerpo.include_subscription_ids, ['sub-1']);
   assert.ok(!JSON.stringify(envio.cuerpo).includes('11111111'));
   assert.equal(envio.cuerpo.url, 'https://cac-pruebas.onrender.com/#/recibos');
+  assert.equal(e.pedidos.find((x) => /\/users$/.test(x.url)).cuerpo.identity.external_id, ana0.pushId);   // el dispositivo, a nombre de Ana
 
   const ana = e.llamar({ action: 'login', cedula: '11111111' }).data;
-  assert.equal(ana.pushId, envio.cuerpo.include_aliases.external_id[0]);
   const n = e.llamar({ action: 'misNotificaciones', token: ana.token }).data;
   assert.equal(n.noLeidas, 1);
   assert.equal(e.llamar({ action: 'marcarNotificacionesLeidas', token: ana.token }).ok, true);
@@ -345,12 +349,15 @@ test('aviso de prueba: dice si falta configurar OneSignal, si el dispositivo no 
   const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
   assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_CONFIGURAR');
   e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'clave-1';
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_DESTINATARIOS');   // aún sin dispositivo
+  const disp = { endpoint: 'https://web.push.apple.com/QGx1Zm9vYmFyYmF6cXV4', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: admin, ...disp }).ok, true);
   assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'ENVIADO');
-  assert.equal(e.pedidos.at(-1).cuerpo.include_aliases.external_id[0], e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.pushId);
-  e.onesignalResponde({ id: '', errors: ['All included players are not subscribed'] });
-  const r = e.llamar({ action: 'avisoDePrueba', token: admin }).data.push;
-  assert.equal(r.estado, 'SIN_DESTINATARIOS');
-  assert.match(r.detalle, /not subscribed/);
+  assert.deepEqual(e.pedidos.at(-1).cuerpo.include_subscription_ids, ['sub-1']);
+  // OneSignal dice que ese dispositivo ya no es válido (quitaron el permiso): se olvida y se informa
+  e.onesignalResponde(() => ({ codigo: 200, json: { id: 'x', errors: { invalid_player_ids: ['sub-1'] } } }));
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_DESTINATARIOS');
+  assert.equal(e.hojas.PUSH_DISPOSITIVOS.getLastRow(), 1);
 });
 
 test('registrar el dispositivo en OneSignal desde el servidor (iPhone = SafariPush) y App ID mal escrito', () => {
@@ -377,4 +384,14 @@ test('registrar el dispositivo en OneSignal desde el servidor (iPhone = SafariPu
   assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).ok, true);
   assert.match(e.pedidos.at(-1).url, /\/users\/by\/external_id\/[0-9a-f]{32}\/subscriptions$/);
   assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, endpoint: 'http://x', p256dh: 'a', auth: 'b' }).code, 'VALIDACION');
+});
+
+test('la hoja PUSH_DISPOSITIVOS se crea sola si la hoja de cálculo es de una versión anterior', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  delete e.hojas.PUSH_DISPOSITIVOS;
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'clave-1';
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_DESTINATARIOS');
+  assert.ok(e.hojas.PUSH_DISPOSITIVOS);
 });

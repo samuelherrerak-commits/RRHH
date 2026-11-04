@@ -2627,7 +2627,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-05.2';
+var VERSION = '2026-11-05.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Servicio'];
 
@@ -2661,6 +2661,7 @@ var HOJAS = {
   NOTIFICACIONES: ['id', 'clave', 'tipo', 'titulo', 'texto', 'ruta', 'creada'],
   NOTIF_LECTURAS: ['clave', 'hasta'],
   RECIBOS_LOTES: ['id', 'concepto', 'empresa', 'total', 'estado', 'creado', 'por', 'publicado'],
+  PUSH_DISPOSITIVOS: ['pushId', 'suscripcion', 'tipo', 'creado'],
   RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
@@ -3330,8 +3331,35 @@ function registrarSuscripcionPush_(externalId, d) {
     var r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users', { identity: { external_id: externalId }, subscriptions: [sub] });
     if (r.codigo === 409) r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users/by/external_id/' + encodeURIComponent(externalId) + '/subscriptions', { subscription: sub });
     if (r.codigo >= 300) { registrarError_(new Error('OneSignal suscripción ' + errorOneSignal_(r))); return { estado: 'ERROR', detalle: errorOneSignal_(r) }; }
+    // número de suscripción del dispositivo: los avisos se envían directo a él (más seguro que por usuario)
+    var subs = (r.json && r.json.subscriptions) || (r.json && r.json.subscription ? [r.json.subscription] : []);
+    var hecha = subs.filter(function (x) { return x && x.token === d.endpoint; })[0] || subs[0];
+    if (hecha && hecha.id) guardarDispositivo_(externalId, hecha.id, tipo);
     return { estado: 'REGISTRADO', tipo: tipo };
   } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
+}
+
+/** Crea la hoja si aún no existe (para no exigir «Configurar hojas» al actualizar). */
+function asegurarHoja_(nombre) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(nombre)) return;
+  var h = ss.insertSheet(nombre);
+  h.getRange(1, 1, 1, HOJAS[nombre].length).setValues([HOJAS[nombre]]).setFontWeight('bold');
+  h.setFrozenRows(1);
+}
+
+/** Guarda (o mueve a esta persona) el número de suscripción de un dispositivo. */
+function guardarDispositivo_(pushId, suscripcion, tipo) {
+  asegurarHoja_('PUSH_DISPOSITIVOS');
+  quitarFilas_('PUSH_DISPOSITIVOS', function (f) { return texto_(f.suscripcion) === suscripcion; });
+  agregarFilas_('PUSH_DISPOSITIVOS', [{ pushId: pushId, suscripcion: suscripcion, tipo: tipo, creado: Date.now() }]);
+}
+
+/** Números de suscripción de los dispositivos de esas personas. */
+function suscripcionesDe_(pushIds) {
+  asegurarHoja_('PUSH_DISPOSITIVOS');
+  var quien = {}; pushIds.forEach(function (p) { quien[p] = true; });
+  return leer_('PUSH_DISPOSITIVOS').filter(function (f) { return quien[texto_(f.pushId)]; }).map(function (f) { return texto_(f.suscripcion); });
 }
 
 function enviarPush_(destinos, titulo, texto, ruta) {
@@ -3342,8 +3370,14 @@ function enviarPush_(destinos, titulo, texto, ruta) {
   var sitio = cfg.sitio;
   var cuerpo = { app_id: appId, target_channel: 'push', headings: { en: titulo, es: titulo }, contents: { en: texto || titulo, es: texto || titulo } };
   if (sitio) cuerpo.url = sitio.replace(/\/?$/, '/') + (ruta ? '#/' + ruta : '');
+  var subs = [];
   if (destinos === '*') cuerpo.included_segments = ['Total Subscriptions'];
-  else cuerpo.include_aliases = { external_id: destinos };
+  else {
+    subs = suscripcionesDe_(destinos);
+    if (!subs.length) return { estado: 'SIN_DESTINATARIOS', detalle: 'Ninguna de esas personas tiene los avisos activos en un dispositivo.' };
+    delete cuerpo.target_channel;
+    cuerpo.include_subscription_ids = subs;
+  }
   try {
     var r = UrlFetchApp.fetch('https://api.onesignal.com/notifications?c=push', {
       method: 'post', contentType: 'application/json', muteHttpExceptions: true,
@@ -3355,8 +3389,16 @@ function enviarPush_(destinos, titulo, texto, ruta) {
       registrarError_(new Error('OneSignal ' + r.getResponseCode() + ': ' + texto.slice(0, 300)));
       return { estado: 'ERROR', detalle: 'HTTP ' + r.getResponseCode() + ' · ' + String((j.errors && j.errors.join ? j.errors.join(' ') : texto)).slice(0, 200) };
     }
-    // 200 sin id: nadie de los destinatarios tiene los avisos activos en un dispositivo
-    if (!j.id) return { estado: 'SIN_DESTINATARIOS', detalle: String(j.errors && j.errors.join ? j.errors.join(' ') : '').slice(0, 200) };
+    // dispositivos que OneSignal ya no acepta (la persona quitó el permiso o borró el CAC): se olvidan
+    var invalidos = (j.errors && (j.errors.invalid_player_ids || j.errors.invalid_subscription_ids)) || [];
+    if (invalidos.length) {
+      var malos = {}; invalidos.forEach(function (x) { malos[x] = true; });
+      quitarFilas_('PUSH_DISPOSITIVOS', function (f) { return malos[texto_(f.suscripcion)]; });
+    }
+    // sin id, o todos inválidos: nadie de los destinatarios puede recibirlo
+    if (!j.id || (subs.length && invalidos.length >= subs.length)) {
+      return { estado: 'SIN_DESTINATARIOS', detalle: 'OneSignal no tiene un dispositivo válido para recibirlo. Vuelve a activar los avisos.' };
+    }
     return { estado: 'ENVIADO', id: j.id };
   } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
 }
