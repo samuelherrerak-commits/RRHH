@@ -1648,7 +1648,7 @@ var Servicio = (function () {
         var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
         if (!emp || emp.estado === 'Inactivo' || repo.usuario(digitos)) return err('NO_ENCONTRADO', 'No encontramos esa cédula. Revisa el número o consulta con Recursos Humanos.');
         var clave = Empleados.claveCedula(emp);
-        if (repo.pinDe(clave)) return err('YA_TIENE', 'Ya creaste tu PIN: escríbelo para entrar. Si lo olvidaste, pide a Gestión Humana que lo restablezca.');
+        if (repo.pinDe(clave)) return err('YA_TIENE', 'Ya creaste tu PIN: escríbelo para entrar. Si lo olvidaste, Gestión Humana lo restablece el primer día hábil de cada mes, sin excepción.');
         var problema = revisarPin(pin);
         if (problema) return err('VALIDACION', problema);
         if (String(pin) !== String(confirmacion)) return err('VALIDACION', 'Los dos PIN no coinciden. Escríbelos de nuevo.');

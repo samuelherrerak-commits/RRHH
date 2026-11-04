@@ -73,7 +73,7 @@ function vistaLogin() {
         <p class="suave" id="pin-ayuda"></p>
         <label><span id="pin-titulo">PIN</span> <input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" class="pin"></label>
         <label id="lbl-pin2" hidden>Repite tu PIN <input name="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" class="pin"></label>
-        <p class="suave" id="pin-olvido" hidden>¿Olvidaste tu PIN? Pide a Gestión Humana que lo restablezca.</p>
+        <p class="aviso" id="pin-olvido" hidden><b>¿Olvidaste tu PIN?</b> Los PIN olvidados se restablecen solo el primer día hábil de cada mes, sin excepción. Escríbelo con cuidado.</p>
       </div>
       <div class="error-msg" id="err" hidden></div>
       <button class="btn" type="submit">Entrar</button>
@@ -117,7 +117,7 @@ function vistaLogin() {
         app.querySelector('#lbl-pin2').hidden = !r.data.crearPin;
         app.querySelector('#pin-olvido').hidden = r.data.crearPin;
         app.querySelector('#pin-ayuda').textContent = r.data.crearPin
-          ? 'Es tu primera vez: crea un PIN de 4 números. Lo usarás cada vez que entres; no lo compartas con nadie.'
+          ? 'Es tu primera vez: crea un PIN de 4 números. Lo usarás cada vez que entres y no lo compartas con nadie. No lo olvides: Los PIN olvidados se restablecen solo el primer día hábil de cada mes, sin excepción.'
           : 'Escribe tu PIN de 4 números.';
         f.querySelector('button[type=submit]').textContent = r.data.crearPin ? 'Crear PIN y entrar' : 'Entrar';
         f.pin.focus();
@@ -1428,7 +1428,7 @@ async function panelEmpleados(panel) {
       toast(jefe ? 'Jefe asignado.' : 'Jefe quitado.'); refrescar(); return r;
     })));
     caja.querySelectorAll('[data-pin]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
-      if (!confirm(`¿Restablecer el PIN de ${b.dataset.nombre}? La próxima vez que entre creará uno nuevo.`)) return;
+      if (!confirm(`¿Restablecer el PIN de ${b.dataset.nombre}? La próxima vez que entre creará uno nuevo.\n\nRecuerda: los PIN olvidados se restablecen el primer día hábil de cada mes.`)) return;
       const x = await llamar('restablecerPin', { clave: b.dataset.pin });
       toast(x.ok ? `Listo: ${b.dataset.nombre} creará un PIN nuevo al entrar.` : x.message);
     })));
