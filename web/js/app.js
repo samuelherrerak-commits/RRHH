@@ -3,7 +3,7 @@ import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
-import { vincular, desvincular, estadoPush, activarPush } from './push.js';
+import { vincular, desvincular, estadoPush, activarPush, esIphone } from './push.js';
 
 const URL_BASE = location.origin + location.pathname;
 
@@ -1300,18 +1300,26 @@ function pintarEstadoPush(caja, pushId, compacto = false) {
   const e = estadoPush();
   if (e === 'no') { caja.innerHTML = ''; return; }
   if (e === 'activo') { caja.innerHTML = compacto ? '<p class="suave">✓ Avisos activos en este dispositivo.</p>' : ''; return; }
-  if (e === 'bloqueado') { caja.innerHTML = compacto ? '<p class="suave">Los avisos están bloqueados en este navegador. Actívalos en la configuración del sitio (candado junto a la dirección).</p>' : ''; return; }
+  if (e === 'bloqueado') {
+    caja.innerHTML = compacto ? (esIphone()
+      ? '<p class="suave">Los avisos están bloqueados. Actívalos en <b>Ajustes → Notificaciones → CAC</b>.</p>'
+      : '<p class="suave">Los avisos están bloqueados en este navegador. Actívalos en la configuración del sitio (candado junto a la dirección).</p>') : '';
+    return;
+  }
   if (e === 'instalar') { caja.innerHTML = '<p class="suave">En iPhone, para recibir avisos primero instala el CAC: toca <b>Compartir</b> y luego <b>«Agregar a pantalla de inicio»</b>, y ábrelo desde ese ícono.</p>'; return; }
   caja.innerHTML = `<div class="fila"><button type="button" class="btn btn-chico" id="btn-push">${icono('campana')} Activar avisos en este dispositivo</button></div>`;
-  caja.querySelector('#btn-push').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
+  caja.querySelector('#btn-push').addEventListener('click', (ev) => {
+    const pedido = activarPush(pushId);   // primero, en el mismo toque (requisito del iPhone)
+    conBoton(ev.currentTarget, async () => {
     try {
-      const r = await activarPush(pushId);
+      const r = await pedido;
       toast(r === 'activo' ? 'Listo: te avisaremos en este dispositivo.' : r === 'bloqueado' ? 'No diste permiso: los avisos quedan solo en la campanita.' : 'No se activaron los avisos.');
     } catch { toast('No se pudo activar los avisos. Intenta de nuevo.'); }
     pintarEstadoPush(caja, pushId, compacto);
     const tarjeta = document.getElementById('aviso-push');
     if (tarjeta && tarjeta !== caja) pintarAvisoPush(tarjeta);
-  }));
+    });
+  });
 }
 
 /** Tarjeta en el inicio del colaborador para activar los avisos (se puede posponer). */

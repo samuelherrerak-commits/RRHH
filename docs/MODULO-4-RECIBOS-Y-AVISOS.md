@@ -46,7 +46,7 @@ Apps Script no puede firmar ni cifrar las notificaciones push de los navegadores
 #### Configuración (una vez por sitio: pruebas y real)
 1. Crear cuenta en **onesignal.com** → *New App* → plataforma **Web**.
 2. *Site URL*: `https://cac-pruebas.onrender.com` (pruebas) o `https://cac.onrender.com` (real). Integración **Custom Code**.
-3. En *Advanced* → *Service worker*: ruta **`/push/`** y archivo **`OneSignalSDKWorker.js`** (el sitio ya lo trae en `web/push/`).
+3. No hace falta subir archivos: el CAC usa su propio `sw.js` (en la raíz) también para OneSignal.
 4. Copiar el **App ID** en `web/config.js` (`ONESIGNAL_PRUEBAS` o `ONESIGNAL_REAL`).
 5. En la hoja: menú **RRHH → «3 · Notificaciones al celular»**: App ID, **REST API Key** (*Settings → Keys & IDs*) y la dirección del sitio.
 

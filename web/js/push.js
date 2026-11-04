@@ -16,7 +16,7 @@ function cargar() {
     window.OneSignalDeferred.push(async (OneSignal) => {
       try {
         await OneSignal.init({
-          appId: CONFIG.ONESIGNAL_APP_ID, serviceWorkerPath: 'push/OneSignalSDKWorker.js', serviceWorkerParam: { scope: '/push/' },
+          appId: CONFIG.ONESIGNAL_APP_ID, serviceWorkerPath: 'sw.js', serviceWorkerParam: { scope: '/' },   // el mismo sw.js del sitio
           allowLocalhostAsSecureOrigin: true, notifyButton: { enable: false },
         });
         ok(OneSignal);
@@ -51,11 +51,17 @@ export function estadoPush() {
   return 'pendiente';
 }
 
-/** Pide el permiso (debe llamarse al tocar un botón). Devuelve el estado final. */
-export async function activarPush(pushId) {
-  const OS = await cargar();
-  if (pushId) await OS.login(pushId);
-  await OS.Notifications.requestPermission();
-  if (Notification.permission === 'granted') { try { await OS.User.PushSubscription.optIn(); } catch { /* ya estaba */ } }
-  return estadoPush();
+/**
+ * Pide el permiso. Debe llamarse directo desde el toque del botón: el iPhone solo muestra la ventana de
+ * «Permitir» si se pide en ese mismo instante, sin esperar antes a que cargue nada.
+ */
+export function activarPush(pushId) {
+  const pedido = Notification.requestPermission();
+  return pedido.then(async () => {
+    if (Notification.permission !== 'granted') return estadoPush();
+    const OS = await cargar();
+    if (pushId) await OS.login(pushId);
+    try { await OS.User.PushSubscription.optIn(); } catch { /* ya estaba */ }
+    return estadoPush();
+  });
 }
