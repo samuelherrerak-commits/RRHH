@@ -30,12 +30,15 @@ function cargar() {
 }
 
 /**
- * Registra el service worker del sitio. Con avisos al celular lo registra OneSignal (sw.js?appId=…): si lo hiciera
- * también el sitio con otra dirección, se reemplazarían en cada visita. Si OneSignal no carga, lo registra el sitio.
+ * Registra el service worker del sitio (sw.js, que también trae lo de OneSignal) solo si aún no hay uno:
+ * al activar los avisos, OneSignal lo registra con su propia dirección (sw.js?appId=…) y desde ahí se respeta,
+ * para que no se reemplacen el uno al otro en cada visita. También deja OneSignal cargado para el botón.
  */
-export function registrarServiceWorker() {
-  if (!pushDisponible()) return navigator.serviceWorker.register('sw.js');
-  return cargar().catch(() => navigator.serviceWorker.register('sw.js'));
+export async function registrarServiceWorker() {
+  const ya = await navigator.serviceWorker.getRegistration('/');
+  const reg = ya || await navigator.serviceWorker.register('sw.js');
+  if (pushDisponible()) cargar().catch(() => { /* sin avisos al celular */ });
+  return reg;
 }
 
 /** Al entrar: asocia este dispositivo a la persona (si ya había activado los avisos aquí, los sigue recibiendo). */
