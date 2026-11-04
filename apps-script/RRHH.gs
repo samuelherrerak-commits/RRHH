@@ -1318,7 +1318,27 @@ var Servicio = (function () {
        * no se entrega sesión: se pide la clave (iniciarSesionAdmin). Si no, entra como trabajador.
        * Acepta con o sin letra, con RIF o sin él, y con o sin ceros a la izquierda.
        */
-      function iniciarSesion(repo, ctx, cedulaTexto) {
+      /** PIN de 4 números, que no sea de los fáciles (todos iguales o seguidos, como 1234 o 4321). */
+      function revisarPin(pin) {
+        pin = String(pin == null ? '' : pin);
+        if (!/^\d{4}$/.test(pin)) return 'El PIN debe tener exactamente 4 números.';
+        var d = pin.split('').map(Number), sube = true, baja = true;
+        for (var i = 1; i < 4; i++) { if (d[i] !== d[i - 1] + 1) sube = false; if (d[i] !== d[i - 1] - 1) baja = false; }
+        if (/^(\d)\1{3}$/.test(pin) || sube || baja) return 'Ese PIN es muy fácil de adivinar. Elige otro (no uses números iguales ni seguidos).';
+        return '';
+      }
+    
+      function sesionTrabajador(repo, ctx, emp) {
+        var clave = Empleados.claveCedula(emp);
+        repo.log('LOGIN', clave, 'Entrada de trabajador');
+        return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp) });
+      }
+    
+      /**
+       * Entrada del colaborador: cédula y PIN de 4 números. Sin PIN en la petición responde qué falta
+       * ({ requierePin, crearPin }). La primera vez crea su PIN (crearPin); si lo olvida, RRHH lo restablece.
+       */
+      function iniciarSesion(repo, ctx, cedulaTexto, pinTexto) {
         var digitos = Empleados.numeroDeCedulaTexto(cedulaTexto);
         if (!digitos) return err('CEDULA', 'Escribe tu cédula, solo números.');
         if (repo.fallos('global') >= MAX_FALLOS_GLOBAL || repo.fallos(digitos) >= MAX_FALLOS_CEDULA) {
@@ -1330,9 +1350,49 @@ var Servicio = (function () {
           repo.registrarFallo(digitos); repo.registrarFallo('global');
           return err('NO_ENCONTRADO', 'No encontramos esa cédula. Revisa el número o consulta con Recursos Humanos.');
         }
+        if (repo.pinDe) {
+          var reg = repo.pinDe(Empleados.claveCedula(emp));
+          if (!reg) return ok({ requierePin: true, crearPin: true });
+          if (pinTexto == null || pinTexto === '') return ok({ requierePin: true, crearPin: false });
+          if (ctx.hash(String(pinTexto), reg.sal) !== reg.hash) {
+            repo.registrarFallo(digitos); repo.registrarFallo('global');
+            var quedan = MAX_FALLOS_CEDULA - repo.fallos(digitos);
+            return err('PIN', quedan > 0 ? 'PIN incorrecto. Te queda' + (quedan === 1 ? '' : 'n') + ' ' + quedan + ' intento' + (quedan === 1 ? '' : 's') + '.'
+              : 'PIN incorrecto. Por seguridad, espera unos minutos para intentarlo de nuevo.');
+          }
+        }
+        return sesionTrabajador(repo, ctx, emp);
+      }
+    
+      /** Primera entrada: el colaborador crea su PIN (dos veces) y entra. Si ya tiene uno, debe usarlo o pedir que lo restablezcan. */
+      function crearPin(repo, ctx, cedulaTexto, pin, confirmacion) {
+        var digitos = Empleados.numeroDeCedulaTexto(cedulaTexto);
+        if (!digitos) return err('CEDULA', 'Escribe tu cédula, solo números.');
+        if (repo.fallos('global') >= MAX_FALLOS_GLOBAL || repo.fallos(digitos) >= MAX_FALLOS_CEDULA) {
+          return err('BLOQUEADO', 'Demasiados intentos. Espera unos minutos e intenta de nuevo.');
+        }
+        var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
+        if (!emp || emp.estado === 'Inactivo' || repo.usuario(digitos)) return err('NO_ENCONTRADO', 'No encontramos esa cédula. Revisa el número o consulta con Recursos Humanos.');
         var clave = Empleados.claveCedula(emp);
-        repo.log('LOGIN', clave, 'Entrada de trabajador');
-        return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp) });
+        if (repo.pinDe(clave)) return err('YA_TIENE', 'Ya creaste tu PIN: escríbelo para entrar. Si lo olvidaste, pide a Gestión Humana que lo restablezca.');
+        var problema = revisarPin(pin);
+        if (problema) return err('VALIDACION', problema);
+        if (String(pin) !== String(confirmacion)) return err('VALIDACION', 'Los dos PIN no coinciden. Escríbelos de nuevo.');
+        var sal = ctx.firmar('pin:' + clave + ':' + ctx.ahora()).slice(0, 16);
+        repo.guardarPin(clave, { sal: sal, hash: ctx.hash(String(pin), sal), creado: ctx.ahora() });
+        repo.log('PIN_CREADO', clave, '');
+        return sesionTrabajador(repo, ctx, emp);
+      }
+    
+      /** RRHH borra el PIN de un colaborador (lo olvidó): al entrar de nuevo creará uno nuevo. */
+      function restablecerPin(repo, ctx, token, clave) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var emp = repo.empleadoPorClave(String(clave || ''));
+        if (!emp) return err('NO_ENCONTRADO', 'No encontramos ese empleado.');
+        repo.borrarPin(Empleados.claveCedula(emp));
+        repo.log('PIN_RESTABLECIDO', s.clave, Empleados.claveCedula(emp));
+        return ok({ clave: Empleados.claveCedula(emp) });
       }
     
       /**
@@ -2225,6 +2285,7 @@ var Servicio = (function () {
     
       var api = {
         iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
+        crearPin: crearPin, restablecerPin: restablecerPin, revisarPin: revisarPin,
         miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
         estadoAporte: estadoAporte, prepararAporte: prepararAporte, cerrarAporte: cerrarAporte, archivoAporte: archivoAporte,
         candidatosCancelacion: candidatosCancelacion, listarCancelaciones: listarCancelaciones, registrarCancelacion: registrarCancelacion,
@@ -2259,7 +2320,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-04.1';
+var VERSION = '2026-11-06.2';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
 
@@ -2290,6 +2351,7 @@ var HOJAS = {
   VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
     'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
+  PINES: ['clave', 'sal', 'hash', 'creado'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -2332,13 +2394,15 @@ var RUTAS_TRABAJADOR = {
   emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
   misConstancias: function (repo, ctx, d) { return Servicio.misConstancias(repo, ctx, d.token); },
   verificarConstancia: function (repo, ctx, d) { return Servicio.verificarConstancia(repo, ctx, d.id); },   // pública (QR)
-  login: function (repo, ctx, d) { return Servicio.iniciarSesion(repo, ctx, d.cedula); },
+  login: function (repo, ctx, d) { return Servicio.iniciarSesion(repo, ctx, d.cedula, d.pin); },
+  crearPin: function (repo, ctx, d) { return Servicio.crearPin(repo, ctx, d.cedula, d.pin, d.confirmacion); },
   estadoDeCuenta: function (repo, ctx, d) { return Servicio.miEstadoDeCuenta(repo, ctx, d.token); },
   solicitarAnticipo: function (repo, ctx, d) { return Servicio.solicitarAnticipo(repo, ctx, d.token, d); },
   cancelarAnticipo: function (repo, ctx, d) { return Servicio.cancelarAnticipo(repo, ctx, d.token, d.id); },
 };
 
 var RUTAS_RRHH = {
+  restablecerPin: function (repo, ctx, d) { return Servicio.restablecerPin(repo, ctx, d.token, d.clave); },
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
   listarUsuariosJefes: function (repo, ctx, d) { return Servicio.listarUsuariosJefes(repo, ctx, d.token); },
@@ -2765,6 +2829,23 @@ function crearRepo_() {
       if (!c._fila) { var h = hoja_('APERTURAS_ANTICIPO'); h.getRange(h.getLastRow() + 1, 1, 1, 4).setNumberFormat('@'); }
       escribirFila_('APERTURAS_ANTICIPO', c);
     },
+    /* ---- PIN de los colaboradores (hoja PINES: solo la huella con sal, nunca el PIN) ---- */
+    pinDe: function (clave) {
+      asegurarHojaPines_();
+      var f = leer_('PINES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      return f && texto_(f.hash) ? { sal: texto_(f.sal), hash: texto_(f.hash) } : null;
+    },
+    guardarPin: function (clave, d) {
+      asegurarHojaPines_();
+      var f = leer_('PINES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      if (!f) { var h = hoja_('PINES'); h.getRange(h.getLastRow() + 1, 1, 1, 3).setNumberFormat('@'); }
+      escribirFila_('PINES', { _fila: f ? f._fila : 0, clave: clave, sal: d.sal, hash: d.hash, creado: d.creado });
+    },
+    borrarPin: function (clave) {
+      asegurarHojaPines_();
+      var f = leer_('PINES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      if (f) { hoja_('PINES').deleteRow(f._fila); invalidar_('PINES'); }
+    },
     eliminarAperturaAnticipo: function (id) {
       var f = leer_('APERTURAS_ANTICIPO').filter(function (x) { return texto_(x.id) === id; })[0];
       if (f) { hoja_('APERTURAS_ANTICIPO').deleteRow(f._fila); invalidar_('APERTURAS_ANTICIPO'); }
@@ -2799,6 +2880,15 @@ function crearRepo_() {
       hoja_('LOG').appendRow([new Date(), accion, actor, detalle]);
     },
   };
+}
+
+/** La hoja PINES se crea sola (para no exigir «Configurar hojas» al actualizar). */
+function asegurarHojaPines_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName('PINES')) return;
+  var h = ss.insertSheet('PINES');
+  h.getRange(1, 1, 1, HOJAS.PINES.length).setValues([HOJAS.PINES]).setFontWeight('bold');
+  h.setFrozenRows(1);
 }
 
 /* ---------- Puesta en marcha (se ejecutan desde el editor) ---------- */

@@ -7,6 +7,14 @@ const { construir } = require('../scripts/build-gas.js');
 
 const { crearEntorno } = require('../dev/gas-simulado.js');
 
+/** Entra como colaborador: la primera vez crea su PIN (4 números) y luego entra con él. */
+function entrarTrabajador(e, cedula, pin = '2580') {
+  const r = e.llamar({ action: 'login', cedula });
+  if (!r.ok || r.data.token) return r.data || r;
+  if (r.data.crearPin) return e.llamar({ action: 'crearPin', cedula, pin, confirmacion: pin }).data;
+  return e.llamar({ action: 'login', cedula, pin }).data;
+}
+
 test('el archivo generado está al día con core/ y src/api.gs', () => {
   assert.equal(fs.readFileSync('apps-script/RRHH.gs', 'utf8'), construir(), 'Ejecuta: npm run build:gas');
 });
@@ -60,7 +68,7 @@ test('flujo completo sobre las hojas: cargar empleados, jefe, anticipo, constanc
   assert.equal(e.llamar({ action: 'listarEmpleados', token: admin, buscar: 'ana' }).data.empleados[0].jefeNombre, 'SAMUEL HERRERA');
 
   // aporte acreditado → anticipo
-  const ana = e.llamar({ action: 'login', cedula: '11111111' }).data.token;
+  const ana = entrarTrabajador(e, '11111111').token;
   e.hojas.APORTES.appendRow(['V11111111', 2026, 1, 'AIV', 4000, 0, 3, 0, false, false]);
   e.hojas.CIERRES.appendRow([2026, 1, 'AIV', 'ACREDITADO', 'x', 0]);
   assert.equal(e.llamar({ action: 'estadoDeCuenta', token: ana }).data.resumen.disponible, 3000);
@@ -191,7 +199,7 @@ test('menú: usuaria de RRHH que no es empleada (CEO) con su nombre, y es jefa e
   const f = e.llamar({ action: 'guardarEmpleadoFueraNomina', token: admin, cedula: 'V9876543', nombre: 'Danilo Koenig', empresa: 'PCA', fechaIngreso: '09/09/2008' });
   assert.equal(f.ok, true, JSON.stringify(f));
   e.llamar({ action: 'cargarEmpleados', token: admin, filas: [{ cedula: 'V222222229', nombre: 'GERENTE GENERAL', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2015' }] });
-  assert.equal(e.llamar({ action: 'login', cedula: '9876543' }).ok, true);
+  assert.ok(entrarTrabajador(e, '9876543').token);
 });
 
 test('configurar crea a Johanna (usuaria) y a María Teresa y Danilo (fuera de nómina); repetir no duplica', () => {
@@ -200,8 +208,8 @@ test('configurar crea a Johanna (usuaria) y a María Teresa y Danilo (fuera de n
   assert.ok(e.hojas.USUARIOS.filas.some((f) => f && f[0] === '6291577' && f[4] === 'JOHANNA RODRIGUEZ' && f[3] === 'ADMIN'));
   const emp = e.hojas.EMPLEADOS.filas.slice(1).filter((f) => f && f[2]);
   assert.deepEqual(emp.map((f) => [f[0] + f[1], f[2], f[9], f[16]]), [['V8542390', 'MARIA TERESA CENCI', 'AIV', true], ['E81053506', 'DANILO KOENIG', 'PCA', true]]);
-  assert.equal(e.llamar({ action: 'login', cedula: '8542390' }).ok, true);
-  assert.equal(e.llamar({ action: 'login', cedula: 'E-81053506' }).ok, true);
+  assert.ok(entrarTrabajador(e, '8542390').token);
+  assert.ok(entrarTrabajador(e, 'E-81053506').token);
 });
 
 test('rendimiento: cada hoja se lee una vez por petición y las que cambian poco salen de la caché', () => {
@@ -213,7 +221,7 @@ test('rendimiento: cada hoja se lee una vez por petición y las que cambian poco
     { cedula: 'V111111119', nombre: 'ANA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '10/03/2022', jefeNombre: 'SAMUEL HERRERA' }] });
   let lecturas = {};
   for (const [n, h] of Object.entries(e.hojas)) { const o = h.getDataRange.bind(h); h.getDataRange = function () { lecturas[n] = (lecturas[n] || 0) + 1; return o(); }; }
-  const t = e.llamar({ action: 'login', cedula: '11111111' }).data.token;
+  const t = entrarTrabajador(e, '11111111').token;
   lecturas = {};
   e.llamar({ action: 'datosVacaciones', token: t });            // primera vez: llena la caché
   assert.ok(Object.values(lecturas).every((n) => n === 1), 'ninguna hoja se lee dos veces: ' + JSON.stringify(lecturas));
@@ -282,10 +290,38 @@ test('constancia: la fecha de ingreso sale bien aunque Sheets la haya convertido
   e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
     { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', puesto: 'Aprendiz', estado: 'Active', fechaInicio: '05/03/2025', salarioMensual: 130 },
   ] });
-  const ana = e.llamar({ action: 'login', cedula: '11111111' }).data.token;
+  const ana = entrarTrabajador(e, '11111111').token;
   assert.equal(e.llamar({ action: 'emitirConstancia', token: ana }).data.fechaIngreso, '05/03/2025');
   // Lo que hacía Google Sheets: la celda «05/03/2025» pasaba a ser una fecha (y en configuración inglesa, ¡3 de mayo!)
   const h = e.hojas.CONSTANCIAS, col = h.filas[0].indexOf('fechaIngreso');
   h.filas[1][col] = new Date(2025, 4, 3);
   assert.equal(e.llamar({ action: 'misConstancias', token: ana }).data[0].fechaIngreso, '05/03/2025');
+});
+
+test('PIN de 4 números: crear la primera vez, entrar, bloqueo tras 5 fallos y RRHH lo restablece', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  delete e.hojas.PINES;                                           // hoja de una versión anterior: se crea sola
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', puesto: 'Vendedora', estado: 'Active', fechaInicio: '05/03/2025', salarioMensual: 1 },
+  ] });
+  // solo con la cédula ya no entra: pide crear el PIN
+  assert.deepEqual(e.llamar({ action: 'login', cedula: '11111111' }).data, { requierePin: true, crearPin: true });
+  assert.match(e.llamar({ action: 'crearPin', cedula: '11111111', pin: '1234', confirmacion: '1234' }).message, /muy fácil/);
+  assert.match(e.llamar({ action: 'crearPin', cedula: '11111111', pin: '7777', confirmacion: '7777' }).message, /muy fácil/);
+  assert.match(e.llamar({ action: 'crearPin', cedula: '11111111', pin: '12a4', confirmacion: '12a4' }).message, /4 números/);
+  assert.match(e.llamar({ action: 'crearPin', cedula: '11111111', pin: '2580', confirmacion: '2581' }).message, /no coinciden/);
+  const creado = e.llamar({ action: 'crearPin', cedula: '11111111', pin: '2580', confirmacion: '2580' });
+  assert.ok(creado.data.token);
+  assert.ok(!JSON.stringify(e.hojas.PINES.filas).includes('2580'));   // en la hoja solo queda la huella
+  assert.equal(e.llamar({ action: 'crearPin', cedula: '11111111', pin: '9753', confirmacion: '9753' }).code, 'YA_TIENE');   // nadie lo cambia sin RRHH
+  assert.deepEqual(e.llamar({ action: 'login', cedula: '11111111' }).data, { requierePin: true, crearPin: false });
+  assert.ok(e.llamar({ action: 'login', cedula: '11111111', pin: '2580' }).data.token);
+  assert.match(e.llamar({ action: 'login', cedula: '11111111', pin: '0000' }).message, /Te quedan 4 intentos/);
+  for (let i = 0; i < 4; i++) e.llamar({ action: 'login', cedula: '11111111', pin: '0000' });
+  assert.equal(e.llamar({ action: 'login', cedula: '11111111', pin: '2580' }).code, 'BLOQUEADO');   // bloqueado aunque ahora acierte
+  // RRHH lo restablece: al entrar crea uno nuevo
+  assert.equal(e.llamar({ action: 'restablecerPin', token: admin, clave: 'V11111111' }).ok, true);
+  assert.equal(e.llamar({ action: 'restablecerPin', token: creado.data.token, clave: 'V11111111' }).code, 'SESION');   // solo RRHH
 });

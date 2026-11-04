@@ -251,3 +251,7 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 
 /* ---- Sitio de pruebas ---- */
 .franja-pruebas { position: sticky; top: 0; z-index: 50; background: #FFB020; color: #141618; text-align: center; font-weight: 600; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; padding: 6px 12px; }
+
+/* ---- PIN de entrada ---- */
+.caja-pin { display: grid; gap: var(--s3); }
+input.pin { letter-spacing: .6em; font-size: 22px; text-align: center; max-width: 220px; }

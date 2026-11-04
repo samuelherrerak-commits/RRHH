@@ -62,6 +62,12 @@ function vistaLogin() {
       <div><h2>Bienvenido</h2><p class="suave">Escribe tu cédula para hacer tus solicitudes: constancia de trabajo, vacaciones y más.</p></div>
       <label>Cédula <input name="cedula" inputmode="numeric" autocomplete="username" placeholder="Solo números" maxlength="14" required></label>
       <label id="lbl-clave" hidden>Clave <input name="clave" type="password" autocomplete="current-password"></label>
+      <div id="caja-pin" class="caja-pin" hidden>
+        <p class="suave" id="pin-ayuda"></p>
+        <label><span id="pin-titulo">PIN</span> <input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" class="pin"></label>
+        <label id="lbl-pin2" hidden>Repite tu PIN <input name="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" class="pin"></label>
+        <p class="suave" id="pin-olvido" hidden>¿Olvidaste tu PIN? Pide a Gestión Humana que lo restablezca.</p>
+      </div>
       <div class="error-msg" id="err" hidden></div>
       <button class="btn" type="submit">Entrar</button>
       <button class="btn btn-sec" type="button" id="otra" hidden>Usar otra cédula</button>
@@ -69,7 +75,11 @@ function vistaLogin() {
       </div>
     </div>`;
   const f = app.querySelector('#f'), err = app.querySelector('#err'), lblClave = app.querySelector('#lbl-clave'), otra = app.querySelector('#otra');
-  let pideClave = false;
+  const cajaPin = app.querySelector('#caja-pin');
+  let pideClave = false, pidePin = '';   // pidePin: '' | 'entrar' | 'crear'
+  const soloNumeros = (el) => el.addEventListener('input', () => { el.value = el.value.replace(/\D/g, '').slice(0, 4); });
+  soloNumeros(f.pin); soloNumeros(f.pin2);
+  const entro = (d) => { sesion.guardar({ token: d.token, rol: 'TRABAJADOR', nombre: d.nombre, genero: d.genero || '' }); precargarTrabajador(); arrancar(); };
   f.cedula.focus();
   otra.addEventListener('click', () => vistaLogin());
   f.addEventListener('submit', async (e) => {
@@ -84,8 +94,28 @@ function vistaLogin() {
         if (r.data.esJefe && !r.data.tokenTrabajador) precargar('equipoVacaciones');   // si es empleado, su equipo va en «Mi cuenta» (ya precargado)
         return arrancar();
       }
-      const r = await llamar('login', { cedula: f.cedula.value, token: '' });
-      if (!r.ok) return errorEn(err, r.message);
+      if (pidePin === 'crear') {
+        if (!/^\d{4}$/.test(f.pin.value)) return errorEn(err, 'El PIN debe tener 4 números.');
+        const r = await llamar('crearPin', { cedula: f.cedula.value, pin: f.pin.value, confirmacion: f.pin2.value, token: '' });
+        if (!r.ok) { f.pin.value = ''; f.pin2.value = ''; f.pin.focus(); return errorEn(err, r.message); }
+        return entro(r.data);
+      }
+      if (pidePin === 'entrar' && !/^\d{4}$/.test(f.pin.value)) return errorEn(err, 'Escribe tu PIN de 4 números.');
+      const r = await llamar('login', { cedula: f.cedula.value, pin: pidePin ? f.pin.value : '', token: '' });
+      if (!r.ok) { if (pidePin) { f.pin.value = ''; f.pin.focus(); } return errorEn(err, r.message); }
+      if (r.data.requierePin) {              // colaborador: PIN de 4 números (la primera vez lo crea)
+        pidePin = r.data.crearPin ? 'crear' : 'entrar';
+        f.cedula.readOnly = true; cajaPin.hidden = false; otra.hidden = false;
+        app.querySelector('#pin-titulo').textContent = r.data.crearPin ? 'Crea tu PIN de 4 números' : 'PIN';
+        app.querySelector('#lbl-pin2').hidden = !r.data.crearPin;
+        app.querySelector('#pin-olvido').hidden = r.data.crearPin;
+        app.querySelector('#pin-ayuda').textContent = r.data.crearPin
+          ? 'Es tu primera vez: crea un PIN de 4 números. Lo usarás cada vez que entres; no lo compartas con nadie.'
+          : 'Escribe tu PIN de 4 números.';
+        f.querySelector('button[type=submit]').textContent = r.data.crearPin ? 'Crear PIN y entrar' : 'Entrar';
+        f.pin.focus();
+        return;
+      }
       if (r.data.requiereClave) {            // la cédula es de Recursos Humanos: pide la clave
         pideClave = true; f.cedula.readOnly = true; lblClave.hidden = false; otra.hidden = false; f.clave.required = true; f.clave.focus();
         return;
@@ -1105,7 +1135,8 @@ async function panelEmpleados(panel) {
           <p class="suave">Jefe directo: <b>${e.jefeNombre ? esc(e.jefeNombre) : 'sin asignar'}</b></p></div>
           ${e.estado === 'Inactivo' ? '<span class="chip chip-neutro">Inactivo</span>' : e.fueraNomina ? '<span class="chip chip-austral">Fuera de nómina</span>' : e.revisarCedula ? '<span class="chip chip-espera">Revisar cédula</span>' : ''}</div>
         <div class="fila"><button class="btn btn-sec btn-chico" data-jefe="${esc(e.clave)}" data-nombre="${esc(e.nombre)}">${e.jefe ? 'Cambiar jefe' : 'Asignar jefe'}</button>
-          ${e.fueraNomina && e.estado !== 'Inactivo' ? `<button class="btn btn-sec btn-chico" data-editar-fn="${esc(e.clave)}">Editar</button><button class="btn btn-sec btn-chico" data-desactivar-fn="${esc(e.clave)}">Desactivar</button>` : ''}</div>
+          ${e.fueraNomina && e.estado !== 'Inactivo' ? `<button class="btn btn-sec btn-chico" data-editar-fn="${esc(e.clave)}">Editar</button><button class="btn btn-sec btn-chico" data-desactivar-fn="${esc(e.clave)}">Desactivar</button>` : ''}
+          ${e.estado !== 'Inactivo' ? `<button class="btn btn-sec btn-chico" data-pin="${esc(e.clave)}" data-nombre="${esc(e.nombre)}">Restablecer PIN</button>` : ''}</div>
         <label>Empresa del fideicomiso
           <select data-emp="${esc(e.clave)}"><option value="" ${e.empresaFideicomiso ? '' : 'selected'}>Automática (${esc(e.empresaDetalle)})</option>
             <option value="PCA" ${e.empresaFideicomiso === 'PCA' ? 'selected' : ''}>PCA</option><option value="AIV" ${e.empresaFideicomiso === 'AIV' ? 'selected' : ''}>AIV</option></select></label>
@@ -1115,6 +1146,11 @@ async function panelEmpleados(panel) {
       if (!r.ok) return r;
       if (r.data.omitidos.length) return { ok: false, message: 'Esa persona no puede ser jefe de este empleado (sería su propio jefe).' };
       toast(jefe ? 'Jefe asignado.' : 'Jefe quitado.'); refrescar(); return r;
+    })));
+    caja.querySelectorAll('[data-pin]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+      if (!confirm(`¿Restablecer el PIN de ${b.dataset.nombre}? La próxima vez que entre creará uno nuevo.`)) return;
+      const x = await llamar('restablecerPin', { clave: b.dataset.pin });
+      toast(x.ok ? `Listo: ${b.dataset.nombre} creará un PIN nuevo al entrar.` : x.message);
     })));
     caja.querySelectorAll('[data-editar-fn]').forEach((b) => b.addEventListener('click', () => formularioFueraNomina(empleados.find((x) => x.clave === b.dataset.editarFn), refrescar)));
     caja.querySelectorAll('[data-desactivar-fn]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
