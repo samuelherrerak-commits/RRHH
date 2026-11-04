@@ -45,7 +45,7 @@ Apps Script no puede firmar ni cifrar las notificaciones push de los navegadores
 
 #### Configuración (una vez por sitio: pruebas y real)
 1. Crear cuenta en **onesignal.com** → *New App* → plataforma **Web**. Terminar el asistente de **Web configuration** (Custom Code) hasta **Finish**: así queda activado también **Safari**, necesario para los iPhone (sin Safari, OneSignal no les envía).
-2. *Site URL*: `https://cac-pruebas.onrender.com` (pruebas) o `https://cac.onrender.com` (real). Integración **Custom Code**.
+2. *Site URL*: `https://cac-pruebas.onrender.com` (pruebas) o `https://cads.onrender.com` (real). Integración **Custom Code**.
 3. No hace falta subir archivos: el CAC usa su propio `sw.js` (en la raíz) también para OneSignal.
 4. Copiar el **App ID** en `web/config.js` (`ONESIGNAL_PRUEBAS` o `ONESIGNAL_REAL`).
 5. En la hoja: menú **RRHH → «3 · Notificaciones al celular»**: App ID, **REST API Key** (empieza con `os_v2_app_`; OneSignal la muestra una sola vez al crearla) y la dirección del sitio.
