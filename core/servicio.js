@@ -19,6 +19,7 @@
   var Vacaciones = isNode ? require('./vacaciones.js') : dependencia(raiz, 'Vacaciones');
   var Aportes = isNode ? require('./aportes.js') : dependencia(raiz, 'Aportes');
   var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
+  var Planificacion = isNode ? require('./planificacion.js') : dependencia(raiz, 'Planificacion');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
@@ -579,6 +580,7 @@
       jefe: s.jefe, jefeNombre: jefe.nombre || '', motivoRechazo: s.motivoRechazo || '', nomina: s.nomina || '',
       // constancia de aprobación (solo cuando RRHH la registró)
       registrada: s.registrada || 0, numeroConstancia: s.numeroConstancia || '', pendientesDespues: s.pendientesDespues || null,
+      planificada: s.planificada || '',   // 'SI' / 'NO' frente a la planificación aprobada ('' si no tenía)
     };
   }
 
@@ -625,7 +627,9 @@
       tieneJefe: !!jefe, reglas: reglasVac(repo.parametros()),
     });
     if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+    var planVigente = planAprobadoDe(repo, c.clave, datos.inicio);
     var sol = {
+      planificada: planVigente ? (Planificacion.enPlan({ inicio: datos.inicio, culminacion: v.calculo.culminacion }, planVigente.bloques, feriados) ? 'SI' : 'NO') : '',
       id: repo.nuevoIdVac(), clave: c.clave, inicio: datos.inicio, culminacion: v.calculo.culminacion, reintegro: v.calculo.reintegro,
       dias: Number(datos.dias), condicion: v.calculo.condicion, imputacion: v.calculo.imputacion, estado: 'PENDIENTE_JEFE',
       jefe: emp.jefe, creada: ctx.ahora(), actualizada: ctx.ahora(), decididaJefePor: '', registradaPor: '', nomina: '', motivoRechazo: '',
@@ -1069,6 +1073,192 @@
     return ok({ avisadas: claves.length });
   }
 
+  /* ---------- Vacaciones: panel de días pendientes (RRHH) ---------- */
+
+  /** Datos de ubicación de un empleado para filtrar: empresa, departamento y localidad (la «Organización» del Detalle). */
+  function ubicacion(e) {
+    return { empresa: Empleados.empresaFideicomiso(e), departamento: e.departamento || 'Sin departamento', localidad: e.organizacion || 'Sin localidad' };
+  }
+
+  /** Días pendientes por período de todos los empleados activos (el filtro por empresa, departamento o localidad se hace en la pantalla). */
+  function panelSaldosVacaciones(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var periodos = {};
+    var filas = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }).map(function (e) {
+      var c = contextoVac(repo, ctx, e);
+      var pp = c.saldo.porPeriodo.filter(function (p) { return p.pendientes > 0; });
+      pp.forEach(function (p) { periodos[p.periodo] = true; });
+      return Object.assign({ clave: c.clave, nombre: e.nombre, sinFechaIngreso: !e.fechaIngreso,
+        porPeriodo: pp.map(function (p) { return { periodo: p.periodo, pendientes: p.pendientes }; }), total: c.saldo.total }, ubicacion(e));
+    }).sort(function (a, b) { return b.total - a.total || (a.nombre < b.nombre ? -1 : 1); });
+    return ok({ filas: filas, periodos: Object.keys(periodos).sort(), hoy: hoyCaracas(ctx) });
+  }
+
+  /* ---------- Planificación anual de vacaciones ---------- */
+
+  function vistaCiclo(c, hoy) {
+    return { id: c.id, nombre: c.nombre, desde: c.desde, hasta: c.hasta, abre: c.abre, cierra: c.cierra,
+      abierta: c.abre <= hoy && hoy <= c.cierra, vigente: c.desde <= hoy && hoy <= c.hasta };
+  }
+
+  /** La planificación en curso para el colaborador: la abierta para cargar o, si no, la vigente (la más reciente). */
+  function cicloActual(repo, hoy) {
+    var lista = repo.vacCiclos().sort(function (a, b) { return a.abre < b.abre ? 1 : -1; });
+    return lista.filter(function (c) { return c.abre <= hoy && hoy <= c.cierra; })[0]
+      || lista.filter(function (c) { return c.abre <= hoy && hoy <= c.hasta; })[0] || null;
+  }
+
+  /** Plan aprobado que cubre esa fecha (para marcar si una solicitud está dentro de lo planificado). */
+  function planAprobadoDe(repo, clave, fecha) {
+    if (!repo.vacCiclos) return null;
+    var ciclo = repo.vacCiclos().filter(function (c) { return c.desde <= fecha && fecha <= c.hasta; })[0];
+    var plan = ciclo && repo.vacPlan(ciclo.id, clave);
+    return plan && plan.estado === 'APROBADA' ? plan : null;
+  }
+
+  function requeridosDe(repo, ctx, emp, ciclo) {
+    var c = contextoVac(repo, ctx, emp);
+    return Planificacion.requeridos(c.saldo.total, Vacaciones.deObjeto(emp.fechaIngreso), repo.vacPeriodosDe(c.clave), c.hoy, ciclo.desde, ciclo.hasta);
+  }
+
+  function vistaPlan(p) {
+    return p ? { id: p.id, estado: p.estado, bloques: p.bloques, requeridos: p.requeridos, planificados: p.planificados,
+      enviada: p.enviada || 0, decidida: p.decidida || 0, motivo: p.motivo || '', jefe: p.jefe || '' } : null;
+  }
+
+  /** RRHH abre (o corrige) una planificación: nombre, período a planificar y fechas de apertura y cierre. */
+  function guardarPlanificacionVac(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var c = { id: datos && datos.id || '', nombre: String(datos && datos.nombre || '').trim(), desde: String(datos && datos.desde || ''), hasta: String(datos && datos.hasta || ''),
+      abre: String(datos && datos.abre || ''), cierra: String(datos && datos.cierra || '') };
+    var v = Planificacion.validarCiclo(c);
+    if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+    var previa = c.id ? repo.vacCiclos().filter(function (x) { return x.id === c.id; })[0] : null;
+    if (c.id && !previa) return err('NO_ENCONTRADO', 'No encontramos esa planificación.');
+    if (!previa) c.id = repo.nuevoIdCiclo();
+    var cruzada = repo.vacCiclos().filter(function (x) { return x.id !== c.id && !(c.hasta < x.desde || c.desde > x.hasta); })[0];
+    if (cruzada) return err('VALIDACION', 'Ese período se cruza con «' + cruzada.nombre + '».');
+    repo.guardarVacCiclo(Object.assign(previa || {}, c, { por: s.clave, actualizada: ctx.ahora(), creada: previa ? previa.creada : ctx.ahora() }));
+    repo.log('PLAN_VAC_CICLO', s.clave, c.id + ' · ' + c.nombre);
+    if (!previa) notificar(repo, ctx, '*', { tipo: 'PLAN_VAC_ABIERTA', ruta: 'vacaciones', titulo: 'Carga tu planificación de vacaciones',
+      texto: c.nombre + ': del ' + fechaCorta(c.desde) + ' al ' + fechaCorta(c.hasta) + '. Tienes hasta el ' + fechaCorta(c.cierra) + ' para enviarla a tu jefe.' });
+    return ok(vistaCiclo(c, hoyCaracas(ctx)));
+  }
+
+  function listarPlanificacionesVac(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var hoy = hoyCaracas(ctx);
+    return ok(repo.vacCiclos().sort(function (a, b) { return a.desde < b.desde ? 1 : -1; }).map(function (c) { return vistaCiclo(c, hoy); }));
+  }
+
+  /** Lo que ve el colaborador: la planificación en curso, cuántos días debe planificar y su plan. */
+  function miPlanificacion(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var hoy = hoyCaracas(ctx), ciclo = cicloActual(repo, hoy);
+    if (!ciclo) return ok({ ciclo: null });
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+    var plan = repo.vacPlan(ciclo.id, s.clave), vc = vistaCiclo(ciclo, hoy);
+    var req = plan && (plan.estado === 'APROBADA' || plan.estado === 'ENVIADA') ? { total: plan.requeridos } : requeridosDe(repo, ctx, emp, ciclo);
+    var editable = (!plan || plan.estado === 'BORRADOR' || plan.estado === 'RECHAZADA') && (vc.abierta || (plan && plan.estado === 'RECHAZADA'));
+    var cump = plan && plan.estado === 'APROBADA' ? Planificacion.cumplimiento(plan.bloques, repo.vacSolicitudesDe(s.clave), ciclo, repo.feriados(), hoy) : null;
+    return ok({ ciclo: vc, requeridos: req.total, pendientes: req.pendientes, nuevos: req.nuevos || [], plan: vistaPlan(plan), editable: editable,
+      tieneJefe: !!jefeActivo(repo, emp.jefe), feriados: repo.feriados(), cumplimiento: cump });
+  }
+
+  /** El colaborador guarda su plan (borrador) o lo envía a su jefe. */
+  function guardarMiPlanificacion(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var hoy = hoyCaracas(ctx), ciclo = cicloActual(repo, hoy);
+    if (!ciclo) return err('VALIDACION', 'No hay una planificación de vacaciones abierta.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+    var plan = repo.vacPlan(ciclo.id, s.clave), vc = vistaCiclo(ciclo, hoy);
+    if (plan && (plan.estado === 'ENVIADA' || plan.estado === 'APROBADA')) return err('TRANSICION', plan.estado === 'ENVIADA' ? 'Tu planificación ya está con tu jefe.' : 'Tu planificación ya fue aprobada.');
+    if (!vc.abierta && !(plan && plan.estado === 'RECHAZADA')) return err('VALIDACION', 'La carga de la planificación cerró el ' + fechaCorta(ciclo.cierra) + '.');
+    var enviar = !!(datos && datos.enviar), jefe = jefeActivo(repo, emp.jefe);
+    if (enviar && !jefe) return err('VALIDACION', 'No tienes jefe directo asignado. Comunícate con Gestión Humana.');
+    var req = requeridosDe(repo, ctx, emp, ciclo), feriados = repo.feriados();
+    var v = Planificacion.validarPlan((datos && datos.bloques) || [], ciclo, req, feriados, enviar);
+    if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+    plan = Object.assign(plan || { id: repo.nuevoIdPlan(), ciclo: ciclo.id, clave: s.clave }, {
+      bloques: v.bloques, requeridos: req.total, planificados: v.total, estado: enviar ? 'ENVIADA' : 'BORRADOR',
+      enviada: enviar ? ctx.ahora() : 0, motivo: enviar ? '' : (plan && plan.motivo) || '', jefe: emp.jefe || '', actualizada: ctx.ahora(),
+    });
+    repo.guardarVacPlan(plan);
+    repo.log(enviar ? 'PLAN_VAC_ENVIADO' : 'PLAN_VAC_BORRADOR', s.clave, plan.id + ' · ' + v.total + ' días');
+    if (enviar) notificar(repo, ctx, [emp.jefe], { tipo: 'PLAN_VAC_POR_APROBAR', ruta: 'equipo', titulo: 'Planificación de vacaciones por aprobar',
+      texto: emp.nombre + ' envió su planificación (' + v.total + ' días).' });
+    return ok(vistaPlan(plan));
+  }
+
+  /** Bandeja del jefe: planificaciones de su equipo (por aprobar y el estado de cada persona). */
+  function equipoPlanificacion(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var hoy = hoyCaracas(ctx), ciclo = cicloActual(repo, hoy);
+    if (!ciclo) return ok({ ciclo: null, pendientes: [], equipo: [] });
+    var mias = clavesDeJefe(s);
+    var equipo = repo.todosEmpleados().filter(function (e) { return mias.indexOf(e.jefe) !== -1 && e.estado !== 'Inactivo'; });
+    var planes = {}; repo.vacPlanes(ciclo.id).forEach(function (p) { planes[p.clave] = p; });
+    var filas = equipo.map(function (e) {
+      var k = Empleados.claveCedula(e), p = planes[k];
+      return { clave: k, nombre: e.nombre, estado: p ? p.estado : 'SIN_CARGAR', plan: vistaPlan(p) };
+    }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+    return ok({ ciclo: vistaCiclo(ciclo, hoy), pendientes: filas.filter(function (f) { return f.estado === 'ENVIADA'; }), equipo: filas });
+  }
+
+  function decidirPlanificacion(repo, ctx, token, id, aprobar, motivo) {
+    var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var plan = repo.vacPlanPorId(id);
+    if (!plan || clavesDeJefe(s).indexOf(plan.jefe) === -1) return err('NO_ENCONTRADO', 'Esa planificación no es de tu equipo.');
+    if (plan.estado !== 'ENVIADA') return err('TRANSICION', 'Esa planificación ya no está pendiente.');
+    if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo para que la corrija.');
+    Object.assign(plan, { estado: aprobar ? 'APROBADA' : 'RECHAZADA', decidida: ctx.ahora(), decididaPor: s.clave, motivo: aprobar ? '' : String(motivo).trim(), actualizada: ctx.ahora() });
+    repo.guardarVacPlan(plan);
+    repo.log(aprobar ? 'PLAN_VAC_APROBADO' : 'PLAN_VAC_RECHAZADO', s.clave, plan.id);
+    notificar(repo, ctx, [plan.clave], aprobar
+      ? { tipo: 'PLAN_VAC_APROBADA', ruta: 'vacaciones', titulo: 'Tu jefe aprobó tu planificación de vacaciones', texto: plan.planificados + ' días planificados.' }
+      : { tipo: 'PLAN_VAC_RECHAZADA', ruta: 'vacaciones', titulo: 'Tu jefe pidió corregir tu planificación', texto: 'Motivo: ' + plan.motivo });
+    return ok(vistaPlan(plan));
+  }
+
+  /** RRHH: cada empleado activo con el estado de su plan y su cumplimiento (planificado contra disfrutado). */
+  function panelPlanificacionVac(repo, ctx, token, cicloId) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var hoy = hoyCaracas(ctx), ciclos = repo.vacCiclos();
+    var ciclo = ciclos.filter(function (c) { return c.id === cicloId; })[0] || cicloActual(repo, hoy) || ciclos[0];
+    if (!ciclo) return ok({ ciclo: null, filas: [], meses: [] });
+    var planes = {}; repo.vacPlanes(ciclo.id).forEach(function (p) { planes[p.clave] = p; });
+    var feriados = repo.feriados(), nombres = nombresPorClave(repo);
+    var filas = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }).map(function (e) {
+      var k = Empleados.claveCedula(e), p = planes[k];
+      var cump = Planificacion.cumplimiento(p && p.estado === 'APROBADA' ? p.bloques : [], repo.vacSolicitudesDe(k), ciclo, feriados, hoy);
+      return Object.assign({ clave: k, nombre: e.nombre, jefeNombre: e.jefe && nombres[e.jefe] ? nombres[e.jefe].nombre : '',
+        estado: p ? p.estado : 'SIN_CARGAR', requeridos: p ? p.requeridos : null, cumplimiento: cump }, ubicacion(e));
+    }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+    return ok({ ciclo: vistaCiclo(ciclo, hoy), filas: filas, meses: Planificacion.meses(ciclo.desde, ciclo.hasta), hoy: hoy });
+  }
+
+  /** RRHH: aviso a quienes aún no han enviado su planificación. */
+  function recordarPlanificacionVac(repo, ctx, token, cicloId) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var ciclo = repo.vacCiclos().filter(function (c) { return c.id === cicloId; })[0];
+    if (!ciclo) return err('NO_ENCONTRADO', 'No encontramos esa planificación.');
+    var listos = {}; repo.vacPlanes(ciclo.id).forEach(function (p) { if (p.estado === 'ENVIADA' || p.estado === 'APROBADA') listos[p.clave] = true; });
+    var faltan = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero && !listos[Empleados.claveCedula(e)]; })
+      .map(function (e) { return Empleados.claveCedula(e); });
+    if (faltan.length) notificar(repo, ctx, faltan, { tipo: 'PLAN_VAC_RECORDATORIO', ruta: 'vacaciones', titulo: 'Falta tu planificación de vacaciones',
+      texto: ciclo.nombre + ': envíala a tu jefe antes del ' + fechaCorta(ciclo.cierra) + '.' });
+    repo.log('PLAN_VAC_RECORDATORIO', s.clave, ciclo.id + ' · ' + faltan.length);
+    return ok({ avisados: faltan.length });
+  }
+
   /* ---------- Recibos de pago ---------- */
 
   var MAX_PDF_RECIBO = 3 * 1024 * 1024;   // base64 de una hoja: sobra con 3 MB
@@ -1228,6 +1418,9 @@
 
   var api = {
     iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
+    panelSaldosVacaciones: panelSaldosVacaciones, guardarPlanificacionVac: guardarPlanificacionVac, listarPlanificacionesVac: listarPlanificacionesVac,
+    miPlanificacion: miPlanificacion, guardarMiPlanificacion: guardarMiPlanificacion, equipoPlanificacion: equipoPlanificacion,
+    decidirPlanificacion: decidirPlanificacion, panelPlanificacionVac: panelPlanificacionVac, recordarPlanificacionVac: recordarPlanificacionVac,
     misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisoDePrueba: avisoDePrueba, registrarDispositivo: registrarDispositivo, avisosDiarios: avisosDiarios, idPush: idPush,
     asignarRecibos: asignarRecibos, crearLoteRecibos: crearLoteRecibos, subirRecibos: subirRecibos, publicarLote: publicarLote, eliminarLote: eliminarLote,
     listarLotes: listarLotes, detalleLote: detalleLote, verReciboRRHH: verReciboRRHH, misRecibos: misRecibos, verRecibo: verRecibo, confirmarRecibo: confirmarRecibo,

@@ -291,3 +291,38 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 .barra > span { display: block; height: 100%; background: var(--ok); }
 .detalle-lote:empty { display: none; }
 .detalle-lote { display: grid; gap: var(--s3); }
+
+/* ---- Paneles de vacaciones (RRHH) ---- */
+.filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--s3); }
+.filtros select, .filtros input { min-height: 42px; font-size: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); }
+.tile { border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); display: grid; gap: 2px; background: #fff; }
+.tile b { font-size: 26px; line-height: 1.1; color: var(--carbon); font-variant-numeric: tabular-nums; }
+.tile span { font-size: 13px; color: var(--tinta-2); }
+.tile small { font-size: 12px; color: var(--tinta-3); }
+.barras-h { display: grid; gap: var(--s2); }
+.barra-h { display: grid; grid-template-columns: minmax(120px, 1.2fr) 2fr auto; gap: var(--s3); align-items: center; font-size: 14px; }
+.bh-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bh-barra { height: 10px; border-radius: 999px; background: var(--linea-suave); overflow: hidden; }
+.bh-barra > span { display: block; height: 100%; background: #0B5CD5; border-radius: 0 4px 4px 0; }
+.bh-valor { color: var(--tinta-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bh-valor b { color: var(--carbon); }
+@media (max-width: 640px) { .barra-h { grid-template-columns: minmax(0, 1fr) auto; } .bh-barra { grid-column: 1 / -1; grid-row: 2; } }
+.tabla-saldos td.num, .tabla-saldos th.num { text-align: right; }
+.leyenda { display: flex; gap: var(--s4); font-size: 13px; color: var(--tinta-2); }
+.leyenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.leyenda .lp, .gm-p { background: #0B5CD5; }
+.leyenda .lr, .gm-r { background: #D97706; }
+.graf-mes { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 6px; align-items: end; height: 190px; border-bottom: 1px solid var(--linea); padding-top: var(--s2); }
+.gm-col { display: grid; grid-template-rows: 1fr auto; height: 100%; gap: 4px; outline-offset: 2px; }
+.gm-col:hover .gm-barras, .gm-col:focus .gm-barras { background: var(--linea-suave); border-radius: 6px 6px 0 0; }
+.gm-barras { display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 100%; }
+.gm-barras span { width: 42%; max-width: 16px; border-radius: 4px 4px 0 0; min-height: 0; }
+.gm-mes { font-size: 11px; color: var(--tinta-3); text-align: center; white-space: nowrap; }
+details summary { cursor: pointer; color: var(--tinta-2); font-size: 14px; }
+/* ---- Planificación del colaborador ---- */
+.bloques { display: grid; gap: var(--s3); }
+.bloque { display: grid; grid-template-columns: 28px minmax(0, 1fr) 120px; gap: var(--s2) var(--s3); align-items: end; border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s3); }
+.bloque-n { width: 28px; height: 28px; border-radius: 50%; background: var(--marca); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; align-self: center; }
+.bloque-fin { grid-column: 2 / -1; font-size: 13px; }
+.bloque .btn-link { grid-column: 2 / -1; justify-self: start; }

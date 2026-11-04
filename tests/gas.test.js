@@ -407,3 +407,52 @@ test('OneSignal: REST API Key con formato equivocado o rechazada (401) se explic
   e.onesignalResponde(() => ({ codigo: 401, json: { errors: ['Access denied.'] } }));
   assert.match(e.llamar({ action: 'registrarDispositivo', token: admin, ...disp }).message, /no aceptó la REST API Key/);
 });
+
+test('feriados de Venezuela 2026-2030: se agregan los que falten sin duplicar ni borrar los de RRHH', () => {
+  const e = crearEntorno();
+  e.ejecutar('configurarInicial');
+  const fechas = () => e.hojas.FERIADOS.filas.slice(1).map((f) => f[0]).filter(Boolean);
+  assert.equal(fechas().length, 14 * 4 + 13);                    // 2030: Viernes Santo cae el 19 de abril
+  for (const f of ['2027-02-08', '2027-03-26', '2028-02-29', '2029-03-29', '2030-04-19', '2030-12-31']) assert.ok(fechas().includes(f), f);
+  e.hojas.FERIADOS.appendRow(['2027-06-15', 'Día puente de la empresa']);
+  e.ejecutar('configurarInicial');                               // repetir no duplica y respeta lo agregado
+  assert.equal(fechas().length, 14 * 4 + 13 + 1);
+});
+
+test('planificación sobre las hojas: abrir, cargar, aprobar y panel de RRHH (las hojas se crean solas)', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  delete e.hojas.VAC_CICLOS; delete e.hojas.VAC_PLANES;          // hoja de una versión anterior
+  // Ana entró hace 400 días: tiene 15 pendientes y cumple su 2.º año (16 días) dentro del período
+  const hoy = new Date(), iso = (d) => d.toISOString().slice(0, 10), mas = (n) => iso(new Date(hoy.getTime() + n * 864e5));
+  const ingreso = new Date(hoy.getTime() - 400 * 864e5), ingresoAna = iso(ingreso).split('-').reverse().join('/');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', departamento: 'Recursos Humanos', puesto: 'Asistente', estado: 'Active', fechaInicio: '12/11/2020', salarioMensual: 1 },
+    { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'SUCURSAL EL BOSQUE', departamento: 'Ventas', puesto: 'Vendedora', estado: 'Active', fechaInicio: ingresoAna, salarioMensual: 1 },
+  ] });
+  e.llamar({ action: 'asignarJefe', token: admin, claves: ['V11111111'], jefe: 'V30580323' });
+  const c = e.llamar({ action: 'guardarPlanificacionVac', token: admin, nombre: 'Vacaciones de prueba', desde: mas(-5), hasta: mas(430), abre: mas(-1), cierra: mas(20) });
+  assert.equal(c.ok, true, c.message);
+  const ana = e.llamar({ action: 'login', cedula: '11111111' }).data.token;
+  const mia = e.llamar({ action: 'miPlanificacion', token: ana }).data;
+  assert.equal(mia.editable, true);
+  assert.ok(mia.requeridos > 0);
+  const sem = (d) => { const x = new Date(d); while ([0, 6].includes(x.getUTCDay()) || e.hojas.FERIADOS.filas.some((f) => f[0] === iso(x))) x.setUTCDate(x.getUTCDate() + 1); return iso(x); };
+  assert.equal(mia.requeridos, 31);
+  // todo en un bloque cuando ya tenga todos los días (después de su aniversario)
+  const bloques = [{ inicio: sem(new Date(hoy.getTime() + 340 * 864e5)), dias: 31 }];
+  const env = e.llamar({ action: 'guardarMiPlanificacion', token: ana, bloques, enviar: true });
+  assert.equal(env.ok, true, env.message);
+  const samuel = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data;
+  const eq = e.llamar({ action: 'equipoPlanificacion', token: samuel.token }).data;
+  assert.equal(eq.pendientes.length, 1);
+  assert.equal(e.llamar({ action: 'decidirPlanificacion', token: samuel.token, id: env.data.id, aprobar: true }).data.estado, 'APROBADA');
+  const plan = e.llamar({ action: 'miPlanificacion', token: ana }).data.plan;
+  assert.equal(plan.bloques[0].dias, mia.requeridos);              // los bloques se guardan y se leen como lista
+  const panel = e.llamar({ action: 'panelPlanificacionVac', token: admin, ciclo: c.data.id }).data;
+  assert.equal(panel.filas.find((f) => f.nombre === 'ANA PRUEBA').estado, 'APROBADA');
+  assert.equal(panel.filas.find((f) => f.nombre === 'SAMUEL HERRERA').estado, 'SIN_CARGAR');
+  const saldos = e.llamar({ action: 'panelSaldosVacaciones', token: admin }).data;
+  assert.equal(saldos.filas.find((f) => f.nombre === 'ANA PRUEBA').localidad, 'SUCURSAL EL BOSQUE');
+});

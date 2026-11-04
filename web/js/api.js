@@ -57,7 +57,7 @@ async function llamarUnaVez(action, datos) {
  */
 const LECTURAS = new Set(['estadoDeCuenta', 'datosAnticipo', 'listarAperturas', 'estadoAporte', 'prepararAporte', 'archivoAporte', 'candidatosCancelacion', 'listarCancelaciones', 'misConstancias', 'verificarConstancia', 'datosVacaciones', 'equipoVacaciones', 'bandejaAnticipos',
   'bandejaVacaciones', 'listarEmpleados', 'listarConstancias', 'listarUsuariosJefes', 'saldoVacacionesEmpleado',
-  'misNotificaciones', 'misRecibos', 'listarLotes', 'detalleLote']);
+  'misNotificaciones', 'misRecibos', 'listarLotes', 'detalleLote', 'panelSaldosVacaciones', 'listarPlanificacionesVac', 'panelPlanificacionVac', 'miPlanificacion', 'equipoPlanificacion']);
 const memoria = new Map();
 const VIGENCIA_MS = 60000;
 

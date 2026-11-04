@@ -66,6 +66,36 @@
     return deDia(d);
   }
 
+  /* ---------- Feriados nacionales de Venezuela ---------- */
+
+  function dosDigitos(n) { return ('0' + n).slice(-2); }
+
+  /** Domingo de Pascua (calendario gregoriano, algoritmo de Meeus/Jones/Butcher). */
+  function pascua(y) {
+    var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    var g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    var l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    return y + '-' + dosDigitos(Math.floor((h + l - 7 * m + 114) / 31)) + '-' + dosDigitos(((h + l - 7 * m + 114) % 31) + 1);
+  }
+
+  /**
+   * Feriados nacionales de Venezuela de un año (los que usa la empresa: incluye 24 y 31 de diciembre).
+   * Fijos más Carnaval (lunes y martes, 48 y 47 días antes de Pascua) y Jueves y Viernes Santo.
+   * Si dos caen el mismo día, quedan en una sola fecha con los dos motivos. Devuelve [[fecha, motivo]] en orden.
+   */
+  function feriadosVenezuela(y) {
+    var p = pascua(y), mov = function (n) { return sumarDiasTxt(p, n); };
+    var lista = [
+      [y + '-01-01', 'Año Nuevo'], [mov(-48), 'Lunes de Carnaval'], [mov(-47), 'Martes de Carnaval'], [mov(-3), 'Jueves Santo'],
+      [mov(-2), 'Viernes Santo'], [y + '-04-19', 'Declaración de la Independencia'], [y + '-05-01', 'Día del Trabajador'],
+      [y + '-06-24', 'Batalla de Carabobo'], [y + '-07-05', 'Día de la Independencia'], [y + '-07-24', 'Natalicio del Libertador'],
+      [y + '-10-12', 'Día de la Resistencia Indígena'], [y + '-12-24', 'Víspera de Navidad'], [y + '-12-25', 'Navidad'], [y + '-12-31', 'Fin de Año'],
+    ];
+    var porFecha = {};
+    lista.forEach(function (f) { porFecha[f[0]] = porFecha[f[0]] ? porFecha[f[0]] + ' y ' + f[1] : f[1]; });
+    return Object.keys(porFecha).sort().map(function (k) { return [k, porFecha[k]]; });
+  }
+
   /* ---------- Períodos y saldo ---------- */
 
   /** Días que corresponden al cumplir `anios` de servicio: 15 + (años − 1), tope 30. */
@@ -239,7 +269,7 @@
     contarHabiles: contarHabiles, culminacion: culminacion, siguienteHabil: siguienteHabil,
     diasPorAnios: diasPorAnios, periodosDeEmpleado: periodosDeEmpleado, saldo: saldo, imputar: imputar, condicion: condicion,
     validarSolicitud: validarSolicitud, mapearCierre: mapearCierre,
-    serialExcel: serialExcel, numeroConstancia: numeroConstancia, pendientesTras: pendientesTras,
+    serialExcel: serialExcel, numeroConstancia: numeroConstancia, pendientesTras: pendientesTras, pascua: pascua, feriadosVenezuela: feriadosVenezuela,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Vacaciones = api;
