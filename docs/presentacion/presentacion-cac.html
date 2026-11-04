@@ -114,6 +114,19 @@
   .consejos { display: grid; gap: 14px; }
   .consejo { background: rgb(255 255 255 / .07); border: 1px solid rgb(255 255 255 / .12); border-radius: 14px; padding: 18px 22px; font-size: 16px; line-height: 1.45; color: rgb(255 255 255 / .8); }
   .consejo b { color: #fff; display: block; font-size: 17px; margin-bottom: 2px; }
+  .antes li, .ahora li { font-size: 16px !important; }
+  .antes ul, .ahora ul { gap: 8px !important; }
+  .antes, .ahora { padding: 20px 26px !important; }
+  .antes .x, .ahora .v { width: 24px !important; height: 24px !important; font-size: 13px !important; }
+  .datos .dato { padding: 14px 22px !important; }
+  .datos .dato b { font-size: 22px !important; }
+  .preguntas { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; align-content: start; }
+  .pregunta { background: #fff; border: 1px solid var(--linea); border-radius: 16px; padding: 20px 24px; }
+  .pregunta b { display: block; font-size: 18px; font-weight: 600; color: var(--marca); margin-bottom: 4px; }
+  .pregunta p { font-size: 15px; line-height: 1.45; color: var(--tinta-2); }
+  .cuerpo-final { display: grid !important; grid-template-columns: 1fr !important; gap: 26px !important; justify-items: start; align-content: center; max-width: 900px; }
+  .cuerpo-final h2 { font-size: 60px !important; }
+  .cuerpo-final .enlace, .cuerpo-final .nota { margin-top: 0 !important; }
 </style>
 </head>
 <body>
@@ -128,56 +141,22 @@
   </div>
   <div class="der">
     <span class="etiqueta">Nuevo · Gestión Humana</span>
-    <h1>Tus solicitudes de Gestión Humana, ahora en un solo lugar</h1>
-    <p>Conoce el CAC: qué puedes hacer, cómo entrar y cómo funciona cada solicitud, paso a paso.</p>
+    <h1>Tus solicitudes de Gestión Humana, en un solo lugar y a un clic</h1>
+    <p>Qué puedes hacer y cómo funciona, paso a paso.</p>
   </div>
 </section>
 
-<!-- 2 · Qué es -->
-<section class="lamina" style="grid-template-rows:auto auto 1fr">
-  <div class="cab">
-    <div><h2>¿Qué es el CAC?</h2><p class="sub">El Centro de Atención al Colaborador de Gestión Humana: una página donde haces tus trámites tú mismo, a la hora que te quede mejor.</p></div>
-    <span class="num"><span class="logo">CAC</span>02</span>
-  </div>
-  <div class="grid2">
-    <div class="tarjeta antes">
-      <div class="titulo-col">Antes</div>
-      <ul>
-        <li><span class="x">×</span>Pedir por correo, mensaje o en papel</li>
-        <li><span class="x">×</span>Esperar firmas y respuestas</li>
-        <li><span class="x">×</span>Preguntar «¿en qué va mi solicitud?»</li>
-        <li><span class="x">×</span>Calcular a mano días y fechas</li>
-      </ul>
-    </div>
-    <div class="tarjeta ahora">
-      <div class="titulo-col">Ahora, con el CAC</div>
-      <ul>
-        <li><span class="v">✓</span>Lo solicitas tú, en minutos</li>
-        <li><span class="v">✓</span>Documentos en PDF, firmados al instante</li>
-        <li><span class="v">✓</span>Ves el estado de cada solicitud</li>
-        <li><span class="v">✓</span>El sistema calcula días, fechas y reglas</li>
-      </ul>
-    </div>
-  </div>
-  <div class="datos">
-    <div class="dato"><b>3 solicitudes</b><span>Constancia de trabajo, vacaciones y anticipos del fideicomiso</span></div>
-    <div class="dato"><b>Cuando quieras</b><span>Disponible a cualquier hora, desde la computadora o el celular</span></div>
-    <div class="dato"><b>Sin contraseña</b><span>Entras solo con tu número de cédula</span></div>
-  </div>
-  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
-</section>
-
-<!-- 3 · Cómo entrar -->
+<!-- 2 · Cómo ingresar -->
 <section class="lamina">
   <div class="cab">
-    <div><h2>Cómo entrar</h2><p class="sub">Solo con tu cédula. Sin contraseña: nada que recordar, nada que recuperar.</p></div>
-    <span class="num"><span class="logo">CAC</span>03</span>
+    <div><h2>Cómo ingresar</h2><p class="sub">Solo con tu cédula. Sin contraseña: nada que recordar, nada que recuperar.</p></div>
+    <span class="num"><span class="logo">CAC</span>02</span>
   </div>
   <div class="disp">
     <div class="tarjeta recomendado">
       <span class="sello">Recomendado</span>
       <div class="icono i-gris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></div>
-      <h3>Desde la computadora</h3>
+      <h3>Ingresa desde tu computadora</h3>
       <p>Pantalla más amplia: ves tus fechas, tus días y tus documentos con más comodidad.</p>
       <div class="mini-entrada">
         <div class="n"><b>C</b>entro<br><b>A</b>tención<br><b>C</b>olaborador</div>
@@ -185,22 +164,63 @@
       </div>
     </div>
     <div class="pasos">
-      <div class="tarjeta" style="padding:24px">
-        <div class="icono i-azul"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></div>
-        <h3>¿Sin computadora a mano?</h3>
-        <p>Abre el mismo enlace en tu celular. Funciona igual.</p>
+      <div class="paso"><b class="n">1</b><div><h4>Abre el enlace del CAC en tu computadora</h4><p>El que te compartió Gestión Humana.</p></div></div>
+      <div class="paso"><b class="n">2</b><div><h4>Escribe tu cédula y haz clic en <span class="btn">Entrar</span></h4><p>Solo números, sin puntos ni letras.</p></div></div>
+      <div class="paso"><b class="n">3</b><div><h4>Guárdalo en favoritos</h4><p>Haz clic en la estrella ☆ junto a la dirección (o Ctrl + D). La próxima vez lo abres a un clic.</p></div></div>
+      <div class="tarjeta" style="padding:22px">
+        <div class="icono i-oro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></div>
+        <h3>Márcalo como favorito</h3>
+        <p>Quedará en la barra de favoritos de tu navegador, siempre a mano.</p>
       </div>
-      <div class="paso"><b class="n">1</b><div><h4>Abre el enlace del CAC</h4><p>El que te compartió Gestión Humana.</p></div></div>
-      <div class="paso"><b class="n">2</b><div><h4>Escribe tu cédula y toca <span class="btn">Entrar</span></h4><p>Solo números, sin puntos ni letras.</p></div></div>
     </div>
   </div>
   <div class="pie"><span>Tu cédula es tu llave: cada entrada queda registrada. Usa siempre la tuya.</span><span>Gestión Humana</span></div>
 </section>
 
+<!-- 3 · Qué es -->
+<section class="lamina" style="grid-template-rows:auto auto 1fr">
+  <div class="cab">
+    <div><h2>¿Qué es el CAC?</h2><p class="sub">El Centro de Atención al Colaborador de Gestión Humana: una página donde haces tus trámites tú mismo, a la hora que te quede mejor.</p></div>
+    <span class="num"><span class="logo">CAC</span>03</span>
+  </div>
+  <div class="grid2">
+    <div class="tarjeta antes">
+      <div class="titulo-col">Antes</div>
+      <ul>
+        <li><span class="x">×</span>Pedir por correo, mensaje o en papel</li>
+        <li><span class="x">×</span>Ir a la oficina a buscar una constancia</li>
+        <li><span class="x">×</span>Esperar firmas y respuestas</li>
+        <li><span class="x">×</span>Llenar formatos de vacaciones a mano</li>
+        <li><span class="x">×</span>Preguntar cuántos días te quedan</li>
+        <li><span class="x">×</span>Preguntar «¿en qué va mi solicitud?»</li>
+        <li><span class="x">×</span>Contar a mano días hábiles y feriados</li>
+      </ul>
+    </div>
+    <div class="tarjeta ahora">
+      <div class="titulo-col">Ahora, con el CAC</div>
+      <ul>
+        <li><span class="v">✓</span>Lo solicitas tú, a un clic</li>
+        <li><span class="v">✓</span>Tu constancia sale al instante</li>
+        <li><span class="v">✓</span>Documentos en PDF, ya firmados</li>
+        <li><span class="v">✓</span>Pides y apruebas vacaciones en el CAC</li>
+        <li><span class="v">✓</span>Ves tus días pendientes por período</li>
+        <li><span class="v">✓</span>Ves el estado de cada solicitud</li>
+        <li><span class="v">✓</span>El sistema calcula días, feriados y reintegro</li>
+      </ul>
+    </div>
+  </div>
+  <div class="datos">
+    <div class="dato"><b>3 solicitudes</b><span>Constancia de trabajo, vacaciones y anticipos del fideicomiso</span></div>
+    <div class="dato"><b>Cuando quieras</b><span>Disponible a cualquier hora, desde tu computadora</span></div>
+    <div class="dato"><b>Sin contraseña</b><span>Entras solo con tu número de cédula</span></div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
 <!-- 4 · Inicio -->
 <section class="lamina" style="grid-template-rows:auto auto 1fr">
   <div class="cab">
-    <div><h2>Lo que encuentras al entrar</h2><p class="sub">Un saludo con tu nombre y tres tarjetas. Toca la que necesites y el sistema te guía.</p></div>
+    <div><h2>Lo que encuentras al ingresar</h2><p class="sub">Un saludo con tu nombre y tres tarjetas. Haz clic en la que necesites y el sistema te guía.</p></div>
     <span class="num"><span class="logo">CAC</span>04</span>
   </div>
   <div class="grid4">
@@ -222,8 +242,8 @@
     </div>
   </div>
   <div class="grid2">
-    <div class="regla r-azul"><b>Instálalo como app</b>El CAC te lo sugerirá: en la computadora queda en tu escritorio y en el celular, en tu pantalla de inicio. Así lo abres con un toque.</div>
-    <div class="regla r-gris"><b>Al terminar, toca «Salir»</b>Sobre todo si usas una computadora compartida. Tu sesión se cierra sola después de unas horas.</div>
+    <div class="regla r-azul"><b>Guárdalo en favoritos</b>Haz clic en la estrella ☆ de tu navegador (o Ctrl + D) y ábrelo siempre a un clic.</div>
+    <div class="regla r-gris"><b>Al terminar, haz clic en «Salir»</b>Sobre todo si usas una computadora compartida. Tu sesión se cierra sola después de unas horas.</div>
   </div>
   <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
 </section>
@@ -236,9 +256,9 @@
   </div>
   <div class="grid2">
     <div class="pasos">
-      <div class="paso"><b class="n">1</b><div><h4>Entra con tu cédula</h4><p>En la computadora o en el celular.</p></div></div>
-      <div class="paso"><b class="n">2</b><div><h4>Toca la tarjeta «Constancia de trabajo»</h4><p>Desde el inicio.</p></div></div>
-      <div class="paso"><b class="n">3</b><div><h4>Toca <span class="btn">Generar constancia de trabajo</span></h4><p>Se descarga en PDF, firmada y lista para imprimir o enviar.</p></div></div>
+      <div class="paso"><b class="n">1</b><div><h4>Ingresa con tu cédula</h4><p>Desde tu computadora.</p></div></div>
+      <div class="paso"><b class="n">2</b><div><h4>Haz clic en la tarjeta «Constancia de trabajo»</h4><p>Desde el inicio.</p></div></div>
+      <div class="paso"><b class="n">3</b><div><h4>Haz clic en <span class="btn">Generar constancia de trabajo</span></h4><p>Se descarga en PDF, firmada y lista para imprimir o enviar.</p></div></div>
       <div class="paso"><b class="n">4</b><div><h4>Revisa tus datos</h4><p>Si algo no está bien, avisa a Gestión Humana antes de entregarla.</p></div></div>
     </div>
     <div class="reglas">
@@ -261,7 +281,7 @@
       <div class="paso"><b class="n">1</b><div><h4>Revisa tus días pendientes</h4><p>Y el detalle en «Mis días por período».</p></div></div>
       <div class="paso"><b class="n">2</b><div><h4>Elige la fecha de inicio</h4><p>Entre 15 y 20 días después de hoy, en día hábil. El sistema te muestra el rango.</p></div></div>
       <div class="paso"><b class="n">3</b><div><h4>Escribe los días hábiles</h4><p>Sin fines de semana ni feriados. Verás tu último día y tu reintegro.</p></div></div>
-      <div class="paso"><b class="n">4</b><div><h4>Toca <span class="btn">Enviar a mi jefe</span></h4><p>Los días quedan apartados. Puedes cancelar mientras esté con tu jefe.</p></div></div>
+      <div class="paso"><b class="n">4</b><div><h4>Haz clic en <span class="btn">Enviar a mi jefe</span></h4><p>Los días quedan apartados. Puedes cancelar mientras esté con tu jefe.</p></div></div>
     </div>
     <div class="reglas">
       <div class="tarjeta" style="padding:22px">
@@ -285,9 +305,9 @@
   <div class="grid2" style="grid-template-columns:1.1fr 1fr">
     <div class="pasos">
       <div class="paso"><b class="n">1</b><div><h4>Revisa tu disponible en tu banco</h4><p>El CAC no muestra tu saldo del fideicomiso.</p></div></div>
-      <div class="paso"><b class="n">2</b><div><h4>Entra y toca la tarjeta «Fideicomiso»</h4><p>Si está cerrada, verás la fecha de la próxima apertura.</p></div></div>
+      <div class="paso"><b class="n">2</b><div><h4>Ingresa y haz clic en la tarjeta «Fideicomiso»</h4><p>Si está cerrada, verás la fecha de la próxima apertura.</p></div></div>
       <div class="paso"><b class="n">3</b><div><h4>Escribe el monto y el motivo</h4><p>Vivienda, salud, educación u otro (con explicación).</p></div></div>
-      <div class="paso"><b class="n">4</b><div><h4>Confirma y toca <span class="btn">Enviar solicitud</span></h4><p>Marcas que revisaste tu disponible y lo envías bajo tu responsabilidad.</p></div></div>
+      <div class="paso"><b class="n">4</b><div><h4>Confirma y haz clic en <span class="btn">Enviar solicitud</span></h4><p>Marcas que revisaste tu disponible y lo envías bajo tu responsabilidad.</p></div></div>
     </div>
     <div class="reglas">
       <div class="tarjeta" style="padding:22px">
@@ -302,21 +322,30 @@
   <div class="pie"><span>Tu historial de anticipos está siempre en «Mis solicitudes».</span><span>Gestión Humana</span></div>
 </section>
 
-<!-- 8 · Cierre -->
+<!-- 8 · Preguntas -->
+<section class="lamina" style="grid-template-rows:auto 1fr">
+  <div class="cab">
+    <div><h2>Preguntas</h2><p class="sub">En caso de duda o modificación, contacta a Gestión Humana.</p></div>
+    <span class="num"><span class="logo">CAC</span>08</span>
+  </div>
+  <div class="preguntas">
+    <div class="pregunta"><b>¿No te encuentra la cédula?</b><p>Escríbela solo con números, sin puntos ni letras. Si sigue sin funcionar, avisa a Gestión Humana.</p></div>
+    <div class="pregunta"><b>¿Tus días de vacaciones no coinciden?</b><p>Consúltalo con Gestión Humana antes de solicitar, para revisar tu saldo.</p></div>
+    <div class="pregunta"><b>¿No tienes jefe directo asignado?</b><p>Gestión Humana lo registra para que puedas pedir tus vacaciones.</p></div>
+    <div class="pregunta"><b>¿Algún dato de tu constancia está mal?</b><p>No la entregues: avisa a Gestión Humana para corregirlo y anular la anterior.</p></div>
+    <div class="pregunta"><b>¿Cambió tu cargo y necesitas otra constancia?</b><p>Gestión Humana actualiza tus datos y anula la vigente para que generes una nueva.</p></div>
+    <div class="pregunta"><b>¿Usas una computadora compartida?</b><p>Al terminar, haz clic en «Salir» para cerrar tu sesión.</p></div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 9 · Cierre -->
 <section class="lamina oscura cierre">
-  <div class="cuerpo">
-    <div>
-      <div class="num" style="color:rgb(255 255 255 / .5)"><span class="logo" style="background:#fff;color:var(--marca)">CAC</span>Entra hoy</div>
-      <h2 style="margin-top:22px">Menos papeles, menos esperas y tus solicitudes siempre a la vista.</h2>
-      <span class="enlace">cac.onrender.com</span>
-      <p class="nota">De preferencia en tu computadora. Si no la tienes a mano, en tu celular.</p>
-    </div>
-    <div class="consejos">
-      <div class="consejo"><b>¿No te encuentra la cédula?</b>Escríbela solo con números. Si sigue sin funcionar, avisa a Gestión Humana.</div>
-      <div class="consejo"><b>¿Tus días no coinciden?</b>Consúltalo con Gestión Humana antes de solicitar.</div>
-      <div class="consejo"><b>¿No tienes jefe asignado?</b>Gestión Humana lo registra para que puedas pedir tus vacaciones.</div>
-      <div class="consejo"><b>Al terminar, toca «Salir»</b>Sobre todo si usas una computadora compartida.</div>
-    </div>
+  <div class="cuerpo cuerpo-final">
+    <div class="num" style="color:rgb(255 255 255 / .5)"><span class="logo" style="background:#fff;color:var(--marca)">CAC</span>Ingresa hoy</div>
+    <h2>Menos papeles, menos tiempo de espera y a un clic.</h2>
+    <span class="enlace">cac.onrender.com</span>
+    <p class="nota">Ingresa desde tu computadora y guárdalo en favoritos.</p>
   </div>
   <div class="pie"><span>Prosein · Austral · Mil Cerámicas</span><span>Gestión Humana</span></div>
 </section>
