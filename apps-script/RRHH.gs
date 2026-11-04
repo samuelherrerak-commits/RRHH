@@ -2259,7 +2259,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-02.3';
+var VERSION = '2026-11-04.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
 
@@ -2389,7 +2389,7 @@ var LECTURAS = {
 
 function doPost(e) {
   var lock = LockService.getScriptLock(), bloqueado = false;
-  memo_ = {}; constanciasCache = null;   // en Google cada petición empieza de cero; así también en el simulador
+  memo_ = {}; constanciasCache = null; ingresosEmpleados_ = null;   // en Google cada petición empieza de cero; así también en el simulador
   try {
     var d = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!LECTURAS[d.action]) {
@@ -2610,12 +2610,28 @@ function vacSolicitud_(f) {
   };
 }
 
+/**
+ * Fecha de ingreso guardada en la constancia, siempre como «dd/mm/aaaa». Si Sheets la convirtió en fecha (filas
+ * guardadas antes de dejar la columna como texto), se toma la del empleado: así no se cuela un cambio de día y mes.
+ */
+var ingresosEmpleados_ = null;
+function fechaIngresoConstancia_(f) {
+  var t = texto_(f.fechaIngreso).trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(t)) return t;
+  if (!ingresosEmpleados_) {
+    ingresosEmpleados_ = {};
+    leer_('EMPLEADOS').forEach(function (e) { var x = empleado_(e); if (x.fechaIngreso) ingresosEmpleados_[x.cedulaLetra + x.cedulaNumero] = fechaTexto_(x.fechaIngreso); });
+  }
+  if (ingresosEmpleados_[texto_(f.clave)]) return ingresosEmpleados_[texto_(f.clave)];
+  return f.fechaIngreso instanceof Date ? Utilities.formatDate(f.fechaIngreso, 'America/Caracas', 'dd/MM/yyyy') : t;
+}
+
 var constanciasCache = null;
 function constancias_() {
   return constanciasCache || (constanciasCache = leer_('CONSTANCIAS').map(function (f) {
     return {
       _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), nombre: texto_(f.nombre), cedula: texto_(f.cedula), empresa: texto_(f.empresa),
-      cargo: texto_(f.cargo), organizacion: texto_(f.organizacion), fechaIngreso: texto_(f.fechaIngreso), salario: Number(f.salario),
+      cargo: texto_(f.cargo), organizacion: texto_(f.organizacion), fechaIngreso: fechaIngresoConstancia_(f), salario: Number(f.salario),
       emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor),
     };
   }));
@@ -2671,7 +2687,12 @@ function crearRepo_() {
     constanciasDe: function (clave) { return constancias_().filter(function (c) { return c.clave === clave; }); },
     constanciaPorId: function (id) { return constancias_().filter(function (c) { return c.id === id; })[0] || null; },
     todasConstancias: function () { return constancias_(); },
-    guardarConstancia: function (c) { escribirFila_('CONSTANCIAS', c); constanciasCache = null; },
+    guardarConstancia: function (c) {
+      // la fecha de ingreso como texto: si no, Sheets la convierte en fecha (y puede cambiar día por mes)
+      var h = hoja_('CONSTANCIAS'), col = HOJAS.CONSTANCIAS.indexOf('fechaIngreso') + 1;
+      h.getRange(c._fila || h.getLastRow() + 1, col).setNumberFormat('@');
+      escribirFila_('CONSTANCIAS', c); constanciasCache = null;
+    },
     /** Código largo y aleatorio: va dentro del QR y no se puede adivinar. */
     nuevoIdConstancia: function () { return Utilities.getUuid().replace(/-/g, '').slice(0, 16).toUpperCase(); },
     todosEmpleados: function () { return leer_('EMPLEADOS').map(empleado_); },
