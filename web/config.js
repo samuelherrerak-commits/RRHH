@@ -6,7 +6,7 @@ const URL_REAL = 'https://script.google.com/macros/s/AKfycbyToJaIpHkLQVvdmOYg9d0
 const URL_PRUEBAS = 'https://script.google.com/macros/s/AKfycbwgpfdS8-Y7MXXMyWI4RIgaHfCdpqeF7jOdsJ_fHCFYvcuyzF9KbPo3tfTQYkGXXW3w/exec';   // Apps Script de pruebas (copia de la hoja)
 // Notificaciones al celular: App ID de OneSignal de cada sitio (cada sitio tiene su propia app en OneSignal). Vacío = apagadas.
 const ONESIGNAL_REAL = '';
-const ONESIGNAL_PRUEBAS = '';
+const ONESIGNAL_PRUEBAS = '97b880ba-f53c-4cb8-88f3-9c4cf9fc186f';   // app «Cac» en OneSignal (cac-pruebas.onrender.com)
 
 export const CONFIG = {
   PRUEBAS,
