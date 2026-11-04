@@ -995,8 +995,18 @@
     repo.agregarNotificaciones(lista.map(function (c) {
       return { id: repo.nuevoIdNotificacion(), clave: c, tipo: n.tipo, titulo: n.titulo, texto: n.texto || '', ruta: n.ruta || '', creada: ahora };
     }));
-    try { if (repo.enviarPush) repo.enviarPush(destinos === '*' ? '*' : lista.map(function (c) { return idPush(ctx, c); }), n.titulo, n.texto || '', n.ruta || ''); }
-    catch (e) { /* sin celular: queda en la campanita */ }
+    try { if (repo.enviarPush) return repo.enviarPush(destinos === '*' ? '*' : lista.map(function (c) { return idPush(ctx, c); }), n.titulo, n.texto || '', n.ruta || ''); }
+    catch (e) { return { estado: 'ERROR', detalle: String(e && e.message || e) }; }
+    return { estado: 'SIN_CONFIGURAR' };
+  }
+
+  /** Cualquier persona se envía a sí misma un aviso de prueba: dice si el celular lo recibirá y, si no, por qué. */
+  function avisoDePrueba(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var clave = s.rol === 'TRABAJADOR' ? s.clave : 'V' + digitos(s.clave);
+    var r = notificar(repo, ctx, [clave], { tipo: 'PRUEBA', ruta: '', titulo: 'Aviso de prueba del CAC', texto: 'Si ves esto en tu celular, los avisos funcionan.' });
+    return ok({ push: r || { estado: 'SIN_CONFIGURAR' } });
   }
 
   /** La última constancia de una persona, si venció (y no fue anulada ni reemplazada). */
@@ -1200,7 +1210,7 @@
 
   var api = {
     iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
-    misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisosDiarios: avisosDiarios, idPush: idPush,
+    misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisoDePrueba: avisoDePrueba, avisosDiarios: avisosDiarios, idPush: idPush,
     asignarRecibos: asignarRecibos, crearLoteRecibos: crearLoteRecibos, subirRecibos: subirRecibos, publicarLote: publicarLote, eliminarLote: eliminarLote,
     listarLotes: listarLotes, detalleLote: detalleLote, verReciboRRHH: verReciboRRHH, misRecibos: misRecibos, verRecibo: verRecibo, confirmarRecibo: confirmarRecibo,
     miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,

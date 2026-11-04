@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-04.2';
+var VERSION = '2026-11-04.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Servicio'];
 
@@ -88,6 +88,7 @@ var RUTAS_TRABAJADOR = {
   solicitarAnticipo: function (repo, ctx, d) { return Servicio.solicitarAnticipo(repo, ctx, d.token, d); },
   cancelarAnticipo: function (repo, ctx, d) { return Servicio.cancelarAnticipo(repo, ctx, d.token, d.id); },
   misNotificaciones: function (repo, ctx, d) { return Servicio.misNotificaciones(repo, ctx, d.token); },
+  avisoDePrueba: function (repo, ctx, d) { return Servicio.avisoDePrueba(repo, ctx, d.token); },
   marcarNotificacionesLeidas: function (repo, ctx, d) { return Servicio.marcarNotificacionesLeidas(repo, ctx, d.token); },
   misRecibos: function (repo, ctx, d) { return Servicio.misRecibos(repo, ctx, d.token); },
   verRecibo: function (repo, ctx, d) { return Servicio.verRecibo(repo, ctx, d.token, d.id); },
@@ -665,7 +666,8 @@ function carpetaRecibos_() {
 function enviarPush_(destinos, titulo, texto, ruta) {
   var props = PropertiesService.getScriptProperties();
   var appId = props.getProperty('ONESIGNAL_APP_ID'), clave = props.getProperty('ONESIGNAL_API_KEY');
-  if (!appId || !clave || !destinos || !destinos.length) return false;
+  if (!appId || !clave) return { estado: 'SIN_CONFIGURAR' };
+  if (!destinos || !destinos.length) return { estado: 'SIN_DESTINATARIOS' };
   var sitio = props.getProperty('CAC_URL') || '';
   var cuerpo = { app_id: appId, target_channel: 'push', headings: { en: titulo, es: titulo }, contents: { en: texto || titulo, es: texto || titulo } };
   if (sitio) cuerpo.url = sitio.replace(/\/?$/, '/') + (ruta ? '#/' + ruta : '');
@@ -676,9 +678,16 @@ function enviarPush_(destinos, titulo, texto, ruta) {
       method: 'post', contentType: 'application/json', muteHttpExceptions: true,
       headers: { Authorization: 'Key ' + clave }, payload: JSON.stringify(cuerpo),
     });
-    if (r.getResponseCode() >= 300) registrarError_(new Error('OneSignal ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 300)));
-    return r.getResponseCode() < 300;
-  } catch (e) { registrarError_(e); return false; }
+    var texto = r.getContentText(), j = {};
+    try { j = JSON.parse(texto); } catch (x) { /* no es JSON */ }
+    if (r.getResponseCode() >= 300) {
+      registrarError_(new Error('OneSignal ' + r.getResponseCode() + ': ' + texto.slice(0, 300)));
+      return { estado: 'ERROR', detalle: 'HTTP ' + r.getResponseCode() + ' · ' + String((j.errors && j.errors.join ? j.errors.join(' ') : texto)).slice(0, 200) };
+    }
+    // 200 sin id: nadie de los destinatarios tiene los avisos activos en un dispositivo
+    if (!j.id) return { estado: 'SIN_DESTINATARIOS', detalle: String(j.errors && j.errors.join ? j.errors.join(' ') : '').slice(0, 200) };
+    return { estado: 'ENVIADO', id: j.id };
+  } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
 }
 
 /** Tarea diaria (la instala «Configurar hojas»): avisa al celular las constancias que vencieron desde la última vez. */

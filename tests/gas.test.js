@@ -338,3 +338,17 @@ test('constancia: la fecha de ingreso sale bien aunque Sheets la haya convertido
   h.filas[1][col] = new Date(2025, 4, 3);
   assert.equal(e.llamar({ action: 'misConstancias', token: ana }).data[0].fechaIngreso, '05/03/2025');
 });
+
+test('aviso de prueba: dice si falta configurar OneSignal, si el dispositivo no está suscrito o si se envió', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_CONFIGURAR');
+  e.props.ONESIGNAL_APP_ID = 'app-1'; e.props.ONESIGNAL_API_KEY = 'clave-1';
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'ENVIADO');
+  assert.equal(e.pedidos.at(-1).cuerpo.include_aliases.external_id[0], e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.pushId);
+  e.onesignalResponde({ id: '', errors: ['All included players are not subscribed'] });
+  const r = e.llamar({ action: 'avisoDePrueba', token: admin }).data.push;
+  assert.equal(r.estado, 'SIN_DESTINATARIOS');
+  assert.match(r.detalle, /not subscribed/);
+});

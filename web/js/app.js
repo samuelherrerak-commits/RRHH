@@ -3,7 +3,7 @@ import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
-import { vincular, desvincular, estadoPush, activarPush, esIphone, registrarServiceWorker } from './push.js';
+import { vincular, desvincular, estadoPush, activarPush, esIphone, registrarServiceWorker, suscritoEnOneSignal } from './push.js';
 
 const URL_BASE = location.origin + location.pathname;
 
@@ -1299,7 +1299,32 @@ function pintarEstadoPush(caja, pushId, compacto = false) {
   if (!caja) return;
   const e = estadoPush();
   if (e === 'no') { caja.innerHTML = ''; return; }
-  if (e === 'activo') { caja.innerHTML = compacto ? '<p class="suave">✓ Avisos activos en este dispositivo.</p>' : ''; return; }
+  if (e === 'ios-viejo') { caja.innerHTML = '<p class="suave">Para recibir avisos, tu iPhone necesita <b>iOS 16.4 o superior</b> (Ajustes → General → Actualización de software).</p>'; return; }
+  if (e === 'activo') {
+    if (!compacto) { caja.innerHTML = ''; return; }
+    caja.innerHTML = '<p class="suave">✓ Avisos activos en este dispositivo.</p><div class="fila"><button type="button" class="btn-link" id="btn-prueba">Enviar un aviso de prueba</button></div>';
+    suscritoEnOneSignal().then((si) => {   // permiso dado pero sin registro en OneSignal: ofrecer terminar
+      if (si || !caja.isConnected) return;
+      caja.querySelector('p').textContent = 'Diste permiso, pero falta terminar de registrar este dispositivo.';
+      caja.querySelector('p').insertAdjacentHTML('afterend', '<div class="fila"><button type="button" class="btn btn-chico" id="btn-push">Terminar de activar avisos</button></div>');
+      caja.querySelector('#btn-push').addEventListener('click', (ev) => {
+        const pedido = activarPush(pushId);
+        conBoton(ev.currentTarget, async () => { try { await pedido; } catch { /* nada */ } pintarEstadoPush(caja, pushId, compacto); });
+      });
+    });
+    caja.querySelector('#btn-prueba').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
+      const r = await llamar('avisoDePrueba', { token: (sesion.leer() || {}).token });
+      if (!r.ok) return toast(r.message);
+      const p = r.data.push || {};
+      toast({
+        ENVIADO: 'Aviso de prueba enviado: debe llegarte en unos segundos.',
+        SIN_DESTINATARIOS: 'OneSignal no tiene este dispositivo registrado. Cierra el CAC, ábrelo de nuevo y toca «Terminar de activar avisos».',
+        SIN_CONFIGURAR: 'Falta configurar OneSignal en la hoja (menú RRHH → «3 · Notificaciones al celular»).',
+      }[p.estado] || `OneSignal respondió con un error: ${p.detalle || 'desconocido'}`);
+      actualizarCampana();
+    }));
+    return;
+  }
   if (e === 'bloqueado') {
     caja.innerHTML = compacto ? (esIphone()
       ? '<p class="suave">Los avisos están bloqueados. Actívalos en <b>Ajustes → Notificaciones → CAC</b>.</p>'

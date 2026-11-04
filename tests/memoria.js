@@ -64,7 +64,7 @@ function crearRepo(empleadosFilas) {
     notificacionesRecientes: () => st.notificaciones.map((n) => ({ ...n })),
     notificacionesLeidasHasta: (d) => st.lecturas[d] || 0,
     marcarNotificacionesLeidas: (d, t) => { st.lecturas[d] = t; },
-    enviarPush: (destinos, titulo, texto, ruta) => { st.pushes.push({ destinos, titulo, texto, ruta }); },
+    enviarPush: (destinos, titulo, texto, ruta) => { st.pushes.push({ destinos, titulo, texto, ruta }); return { estado: 'ENVIADO', id: 'P' + st.pushes.length }; },
     nuevoIdLote: () => 'LOT' + (++st.seq),
     nuevoIdRecibo: () => 'REC' + (++st.seq),
     guardarLote: (l) => { st.lotes[l.id] = { ...l }; },

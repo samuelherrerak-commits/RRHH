@@ -53,10 +53,11 @@ export async function desvincular() {
   try { const OS = await listo; await OS.logout(); } catch { /* nada */ }
 }
 
-/** 'activo' | 'bloqueado' | 'pendiente' | 'instalar' (iPhone sin instalar) | 'no' (no disponible). */
+/** 'activo' | 'bloqueado' | 'pendiente' | 'instalar' (iPhone sin instalar) | 'ios-viejo' | 'no' (no disponible). */
 export function estadoPush() {
   if (!CONFIG.ONESIGNAL_APP_ID) return 'no';
   if (esIphone() && !instalada()) return 'instalar';
+  if (esIphone() && !('PushManager' in window)) return 'ios-viejo';   // los avisos llegaron con iOS 16.4
   if (!pushDisponible()) return 'no';
   if (Notification.permission === 'granted') return 'activo';
   if (Notification.permission === 'denied') return 'bloqueado';
@@ -76,4 +77,9 @@ export function activarPush(pushId) {
     try { await OS.User.PushSubscription.optIn(); } catch { /* ya estaba */ }
     return estadoPush();
   });
+}
+
+/** ¿Este dispositivo quedó registrado en OneSignal? (el permiso puede estar dado y la suscripción no). */
+export async function suscritoEnOneSignal() {
+  try { const OS = await cargar(); return !!OS.User.PushSubscription.optedIn; } catch { return false; }
 }
