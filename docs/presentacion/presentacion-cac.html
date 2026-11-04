@@ -132,6 +132,16 @@
   .qr { margin: 0; display: grid; gap: 12px; justify-items: center; }
   .qr svg { width: 240px; height: 240px; border-radius: 16px; }
   .qr figcaption { font-size: 14px; color: rgb(255 255 255 / .6); }
+  .que-es { display: grid; gap: 34px; align-content: center; }
+  .frase { font-size: 34px; line-height: 1.3; color: var(--marca); font-weight: 500; max-width: 1000px; }
+  .frase b { font-weight: 700; }
+  .datos-grandes .dato { padding: 26px 28px !important; }
+  .datos-grandes .dato b { font-size: 30px !important; }
+  .datos-grandes .dato span { font-size: 16px !important; }
+  .antes-ahora .antes li, .antes-ahora .ahora li { font-size: 20px !important; }
+  .antes-ahora ul { gap: 16px !important; }
+  .antes-ahora .antes, .antes-ahora .ahora { padding: 30px 34px !important; }
+  .antes-ahora .x, .antes-ahora .v { width: 28px !important; height: 28px !important; font-size: 15px !important; }
 </style>
 </head>
 <body>
@@ -151,11 +161,63 @@
   </div>
 </section>
 
-<!-- 2 · Cómo ingresar -->
+<!-- 2 · Qué es -->
+<section class="lamina" style="grid-template-rows:auto 1fr auto">
+  <div class="cab">
+    <div><h2>¿Qué es el CAC?</h2><p class="sub">El Centro de Atención al Colaborador de Gestión Humana: una página donde haces tus trámites tú mismo, a la hora que te quede mejor.</p></div>
+    <span class="num"><span class="logo">CAC</span>02</span>
+  </div>
+  <div class="que-es">
+    <p class="frase">Tus solicitudes de Gestión Humana, <b>en un solo lugar y a un clic</b>, para todos los colaboradores de Prosein, Austral y Mil Cerámicas.</p>
+  <div class="datos datos-grandes">
+    <div class="dato"><b>3 solicitudes</b><span>Constancia de trabajo, vacaciones y anticipos del fideicomiso</span></div>
+    <div class="dato"><b>Cuando quieras</b><span>Disponible a cualquier hora, desde tu computadora</span></div>
+    <div class="dato"><b>Sin contraseña</b><span>Entras solo con tu número de cédula</span></div>
+  </div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 3 · Antes y ahora -->
+<section class="lamina" style="grid-template-rows:auto 1fr">
+  <div class="cab">
+    <div><h2>Antes y ahora</h2><p class="sub">Lo que cambia para ti con el CAC.</p></div>
+    <span class="num"><span class="logo">CAC</span>03</span>
+  </div>
+  <div class="grid2 antes-ahora">
+    <div class="tarjeta antes">
+      <div class="titulo-col">Antes</div>
+      <ul>
+        <li><span class="x">×</span>Pedir por correo, mensaje o en papel</li>
+        <li><span class="x">×</span>Ir a la oficina a buscar una constancia</li>
+        <li><span class="x">×</span>Esperar firmas y respuestas</li>
+        <li><span class="x">×</span>Llenar formatos de vacaciones a mano</li>
+        <li><span class="x">×</span>Preguntar cuántos días te quedan</li>
+        <li><span class="x">×</span>Preguntar «¿en qué va mi solicitud?»</li>
+        <li><span class="x">×</span>Contar a mano días hábiles y feriados</li>
+      </ul>
+    </div>
+    <div class="tarjeta ahora">
+      <div class="titulo-col">Ahora, con el CAC</div>
+      <ul>
+        <li><span class="v">✓</span>Lo solicitas tú, a un clic</li>
+        <li><span class="v">✓</span>Tu constancia sale al instante</li>
+        <li><span class="v">✓</span>Documentos en PDF, ya firmados</li>
+        <li><span class="v">✓</span>Pides y apruebas vacaciones en el CAC</li>
+        <li><span class="v">✓</span>Ves tus días pendientes por período</li>
+        <li><span class="v">✓</span>Ves el estado de cada solicitud</li>
+        <li><span class="v">✓</span>El sistema calcula días, feriados y reintegro</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 4 · Cómo ingresar -->
 <section class="lamina">
   <div class="cab">
     <div><h2>Cómo ingresar</h2><p class="sub">Solo con tu cédula. Sin contraseña: nada que recordar, nada que recuperar.</p></div>
-    <span class="num"><span class="logo">CAC</span>02</span>
+    <span class="num"><span class="logo">CAC</span>04</span>
   </div>
   <div class="disp">
     <div class="tarjeta recomendado">
@@ -182,51 +244,11 @@
   <div class="pie"><span>Tu cédula es tu llave: cada entrada queda registrada. Usa siempre la tuya.</span><span>Gestión Humana</span></div>
 </section>
 
-<!-- 3 · Qué es -->
-<section class="lamina" style="grid-template-rows:auto auto 1fr">
-  <div class="cab">
-    <div><h2>¿Qué es el CAC?</h2><p class="sub">El Centro de Atención al Colaborador de Gestión Humana: una página donde haces tus trámites tú mismo, a la hora que te quede mejor.</p></div>
-    <span class="num"><span class="logo">CAC</span>03</span>
-  </div>
-  <div class="grid2">
-    <div class="tarjeta antes">
-      <div class="titulo-col">Antes</div>
-      <ul>
-        <li><span class="x">×</span>Pedir por correo, mensaje o en papel</li>
-        <li><span class="x">×</span>Ir a la oficina a buscar una constancia</li>
-        <li><span class="x">×</span>Esperar firmas y respuestas</li>
-        <li><span class="x">×</span>Llenar formatos de vacaciones a mano</li>
-        <li><span class="x">×</span>Preguntar cuántos días te quedan</li>
-        <li><span class="x">×</span>Preguntar «¿en qué va mi solicitud?»</li>
-        <li><span class="x">×</span>Contar a mano días hábiles y feriados</li>
-      </ul>
-    </div>
-    <div class="tarjeta ahora">
-      <div class="titulo-col">Ahora, con el CAC</div>
-      <ul>
-        <li><span class="v">✓</span>Lo solicitas tú, a un clic</li>
-        <li><span class="v">✓</span>Tu constancia sale al instante</li>
-        <li><span class="v">✓</span>Documentos en PDF, ya firmados</li>
-        <li><span class="v">✓</span>Pides y apruebas vacaciones en el CAC</li>
-        <li><span class="v">✓</span>Ves tus días pendientes por período</li>
-        <li><span class="v">✓</span>Ves el estado de cada solicitud</li>
-        <li><span class="v">✓</span>El sistema calcula días, feriados y reintegro</li>
-      </ul>
-    </div>
-  </div>
-  <div class="datos">
-    <div class="dato"><b>3 solicitudes</b><span>Constancia de trabajo, vacaciones y anticipos del fideicomiso</span></div>
-    <div class="dato"><b>Cuando quieras</b><span>Disponible a cualquier hora, desde tu computadora</span></div>
-    <div class="dato"><b>Sin contraseña</b><span>Entras solo con tu número de cédula</span></div>
-  </div>
-  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
-</section>
-
-<!-- 4 · Inicio -->
+<!-- 5 · Inicio -->
 <section class="lamina" style="grid-template-rows:auto auto 1fr">
   <div class="cab">
     <div><h2>Lo que encuentras al ingresar</h2><p class="sub">Un saludo con tu nombre y tres tarjetas. Haz clic en la que necesites y el sistema te guía.</p></div>
-    <span class="num"><span class="logo">CAC</span>04</span>
+    <span class="num"><span class="logo">CAC</span>05</span>
   </div>
   <div class="grid4">
     <div class="tarjeta">
@@ -253,11 +275,11 @@
   <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
 </section>
 
-<!-- 5 · Constancia -->
+<!-- 6 · Constancia -->
 <section class="lamina">
   <div class="cab">
     <div><h2>Constancia de trabajo</h2><p class="sub">Lista en menos de un minuto, con tu cargo, la empresa, tu fecha de ingreso y tu remuneración mensual.</p></div>
-    <span class="num"><span class="logo">CAC</span>05</span>
+    <span class="num"><span class="logo">CAC</span>06</span>
   </div>
   <div class="grid2">
     <div class="pasos">
@@ -275,11 +297,11 @@
   <div class="pie"><span>¿Cambió tu cargo y necesitas una antes de que venza? Gestión Humana puede anular la anterior.</span><span>Gestión Humana</span></div>
 </section>
 
-<!-- 6 · Vacaciones -->
+<!-- 7 · Vacaciones -->
 <section class="lamina">
   <div class="cab">
     <div><h2>Vacaciones</h2><p class="sub">Ves tus días pendientes por período, eliges fechas y tu jefe directo aprueba desde el CAC.</p></div>
-    <span class="num"><span class="logo">CAC</span>06</span>
+    <span class="num"><span class="logo">CAC</span>07</span>
   </div>
   <div class="grid2" style="grid-template-columns:1.1fr 1fr">
     <div class="pasos">
@@ -301,11 +323,11 @@
   <div class="pie"><span>Jefes: aprueban o rechazan (con motivo) en «Mi equipo». Debes tener jefe directo asignado para solicitar.</span><span>Gestión Humana</span></div>
 </section>
 
-<!-- 7 · Fideicomiso -->
+<!-- 8 · Fideicomiso -->
 <section class="lamina">
   <div class="cab">
     <div><h2>Fideicomiso: anticipos</h2><p class="sub">Gestión Humana abre la solicitud una vez por trimestre, con fecha de inicio y fecha final. Solo en esas fechas puedes enviarla.</p></div>
-    <span class="num"><span class="logo">CAC</span>07</span>
+    <span class="num"><span class="logo">CAC</span>08</span>
   </div>
   <div class="grid2" style="grid-template-columns:1.1fr 1fr">
     <div class="pasos">
@@ -327,11 +349,11 @@
   <div class="pie"><span>Tu historial de anticipos está siempre en «Mis solicitudes».</span><span>Gestión Humana</span></div>
 </section>
 
-<!-- 8 · Preguntas -->
+<!-- 9 · Preguntas -->
 <section class="lamina" style="grid-template-rows:auto 1fr">
   <div class="cab">
     <div><h2>Preguntas</h2><p class="sub">En caso de duda o modificación, contacta a Gestión Humana.</p></div>
-    <span class="num"><span class="logo">CAC</span>08</span>
+    <span class="num"><span class="logo">CAC</span>09</span>
   </div>
   <div class="preguntas">
     <div class="pregunta"><b>¿No te encuentra la cédula?</b><p>Escríbela solo con números, sin puntos ni letras. Si sigue sin funcionar, avisa a Gestión Humana.</p></div>
@@ -344,7 +366,7 @@
   <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
 </section>
 
-<!-- 9 · Cierre -->
+<!-- 10 · Cierre -->
 <section class="lamina oscura cierre">
   <div class="final-dos">
     <div class="cuerpo cuerpo-final">
