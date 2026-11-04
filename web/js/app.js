@@ -1309,7 +1309,10 @@ function pintarEstadoPush(caja, pushId, compacto = false) {
       caja.querySelector('p').insertAdjacentHTML('afterend', '<div class="fila"><button type="button" class="btn btn-chico" id="btn-push">Terminar de activar avisos</button></div>');
       caja.querySelector('#btn-push').addEventListener('click', (ev) => {
         const pedido = activarPush(pushId);
-        conBoton(ev.currentTarget, async () => { try { await pedido; } catch { /* nada */ } pintarEstadoPush(caja, pushId, compacto); });
+        conBoton(ev.currentTarget, async () => {
+          try { await pedido; toast('Listo: este dispositivo quedó registrado.'); } catch (ex) { toast(`No se pudo activar los avisos: ${ex && ex.message ? ex.message : ex}`); }
+          pintarEstadoPush(caja, pushId, compacto);
+        });
       });
     });
     caja.querySelector('#btn-prueba').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
@@ -1339,7 +1342,7 @@ function pintarEstadoPush(caja, pushId, compacto = false) {
     try {
       const r = await pedido;
       toast(r === 'activo' ? 'Listo: te avisaremos en este dispositivo.' : r === 'bloqueado' ? 'No diste permiso: los avisos quedan solo en la campanita.' : 'No se activaron los avisos.');
-    } catch { toast('No se pudo activar los avisos. Intenta de nuevo.'); }
+    } catch (ex) { toast(`No se pudo activar los avisos: ${ex && ex.message ? ex.message : ex}`); }
     pintarEstadoPush(caja, pushId, compacto);
     const tarjeta = document.getElementById('aviso-push');
     if (tarjeta && tarjeta !== caja) pintarAvisoPush(tarjeta);

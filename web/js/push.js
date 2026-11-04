@@ -3,6 +3,11 @@
 import { CONFIG } from '../config.js';
 
 const URL_SDK = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+// OneSignal registra el service worker como «sw.js?appId=…&sdkVersion=…». El CAC lo registra igual desde que se abre:
+// así, al tocar «Activar», ya está activo (Safari en iPhone falla si se cambia justo al suscribirse).
+const SDK_VERSION = '160700';
+const urlSw = () => `sw.js?appId=${CONFIG.ONESIGNAL_APP_ID}&sdkVersion=${SDK_VERSION}`;
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 let listo = null;
 
 export const pushDisponible = () => !!CONFIG.ONESIGNAL_APP_ID && 'serviceWorker' in navigator && 'Notification' in window && 'PushManager' in window;
@@ -30,14 +35,25 @@ function cargar() {
 }
 
 /**
- * Registra el service worker del sitio (sw.js, que también trae lo de OneSignal) solo si aún no hay uno:
- * al activar los avisos, OneSignal lo registra con su propia dirección (sw.js?appId=…) y desde ahí se respeta,
- * para que no se reemplacen el uno al otro en cada visita. También deja OneSignal cargado para el botón.
+ * Registra el service worker del sitio (sw.js trae también lo de OneSignal). Con avisos al celular usa la misma
+ * dirección que OneSignal; si no, la normal y solo si aún no hay uno. También deja OneSignal cargado para el botón.
  */
 export async function registrarServiceWorker() {
-  const ya = await navigator.serviceWorker.getRegistration('/');
-  const reg = ya || await navigator.serviceWorker.register('sw.js');
-  if (pushDisponible()) cargar().catch(() => { /* sin avisos al celular */ });
+  if (!pushDisponible()) {
+    const ya = await navigator.serviceWorker.getRegistration('/');
+    return ya || navigator.serviceWorker.register('sw.js');
+  }
+  const reg = await navigator.serviceWorker.register(urlSw(), { scope: '/' });
+  cargar().catch(() => { /* sin avisos al celular */ });
+  return reg;
+}
+
+/** Espera a que el service worker de OneSignal esté activo (hasta 15 s). */
+async function swActivo() {
+  let reg = await navigator.serviceWorker.getRegistration('/');
+  if (!reg || !(reg.active && reg.active.scriptURL.includes('appId='))) reg = await navigator.serviceWorker.register(urlSw(), { scope: '/' });
+  for (let i = 0; i < 30 && !(reg.active && reg.active.scriptURL.includes('appId=')); i++) await espera(500);
+  if (!reg.active) throw new Error('el servicio de avisos del CAC no terminó de instalarse; cierra el CAC y ábrelo de nuevo');
   return reg;
 }
 
@@ -67,19 +83,27 @@ export function estadoPush() {
 /**
  * Pide el permiso. Debe llamarse directo desde el toque del botón: el iPhone solo muestra la ventana de
  * «Permitir» si se pide en ese mismo instante, sin esperar antes a que cargue nada.
+ * Después registra el dispositivo en OneSignal y espera a que OneSignal lo confirme.
  */
 export function activarPush(pushId) {
   const pedido = Notification.requestPermission();
   return pedido.then(async () => {
     if (Notification.permission !== 'granted') return estadoPush();
+    await swActivo();
     const OS = await cargar();
     if (pushId) await OS.login(pushId);
-    try { await OS.User.PushSubscription.optIn(); } catch { /* ya estaba */ }
+    if (!OS.User.PushSubscription.optedIn || !OS.User.PushSubscription.id) await OS.User.PushSubscription.optIn();
+    for (let i = 0; i < 30 && !OS.User.PushSubscription.id; i++) await espera(500);
+    if (!OS.User.PushSubscription.id) {
+      const reg = await navigator.serviceWorker.getRegistration('/');
+      const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription().catch(() => null) : null;
+      throw new Error(sub ? 'OneSignal no confirmó el registro de este dispositivo' : 'el teléfono no entregó la suscripción de avisos');
+    }
     return estadoPush();
   });
 }
 
 /** ¿Este dispositivo quedó registrado en OneSignal? (el permiso puede estar dado y la suscripción no). */
 export async function suscritoEnOneSignal() {
-  try { const OS = await cargar(); return !!OS.User.PushSubscription.optedIn; } catch { return false; }
+  try { const OS = await cargar(); return !!(OS.User.PushSubscription.optedIn && OS.User.PushSubscription.id); } catch { return false; }
 }
