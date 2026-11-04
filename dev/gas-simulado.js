@@ -71,7 +71,7 @@ function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'ut
       createFolder: (n) => carpeta(n), getFolderById: (id) => { if (!drive.carpetas[id]) throw new Error('no existe'); return drive.carpetas[id]; },
       getFileById: (id) => { const f = drive.archivos[id]; if (!f) throw new Error('no existe'); return f; },
     },
-    UrlFetchApp: { fetch: (url, op) => { pedidos.push({ url, ...op, cuerpo: JSON.parse(op.payload) }); return { getResponseCode: () => 200, getContentText: () => JSON.stringify(respuestaOneSignal) }; } },
+    UrlFetchApp: { fetch: (url, op) => { pedidos.push({ url, ...op, cuerpo: JSON.parse(op.payload) }); const r = typeof respuestaOneSignal === 'function' ? respuestaOneSignal(url) : { codigo: 200, json: respuestaOneSignal }; return { getResponseCode: () => r.codigo, getContentText: () => JSON.stringify(r.json) }; } },
     ScriptApp: { getProjectTriggers: () => tareas.slice(), newTrigger: (fn) => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create: () => tareas.push({ getHandlerFunction: () => fn }) }) }) }) }) },
   };
   // Apps Script real: asignar a `globalThis`/`this` desde dentro de un módulo no basta para crear los globales.

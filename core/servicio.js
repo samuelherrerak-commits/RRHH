@@ -1000,6 +1000,24 @@
     return { estado: 'SIN_CONFIGURAR' };
   }
 
+  /**
+   * Registra en OneSignal la suscripción de avisos de este dispositivo (endpoint y llaves que entrega el navegador).
+   * Se hace desde el servidor con la clave de OneSignal: no depende de la librería de OneSignal en el teléfono.
+   */
+  function registrarDispositivo(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var d = { endpoint: String(datos && datos.endpoint || ''), p256dh: String(datos && datos.p256dh || ''), auth: String(datos && datos.auth || '') };
+    if (!/^https:\/\/[^\s]{10,1000}$/.test(d.endpoint) || !/^[\w-]{20,200}$/.test(d.p256dh) || !/^[\w-]{8,100}$/.test(d.auth)) {
+      return err('VALIDACION', 'El dispositivo no entregó una suscripción de avisos válida.');
+    }
+    if (!repo.registrarSuscripcionPush) return err('SIN_CONFIGURAR', 'Los avisos al celular no están disponibles.');
+    var r = repo.registrarSuscripcionPush(idPush(ctx, s.clave), d) || {};
+    if (r.estado !== 'REGISTRADO') return err(r.estado || 'ERROR', r.detalle || 'OneSignal no registró el dispositivo.');
+    repo.log('AVISOS_DISPOSITIVO', s.clave, r.tipo || '');
+    return ok({ estado: 'REGISTRADO', tipo: r.tipo || '' });
+  }
+
   /** Cualquier persona se envía a sí misma un aviso de prueba: dice si el celular lo recibirá y, si no, por qué. */
   function avisoDePrueba(repo, ctx, token) {
     var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
@@ -1210,7 +1228,7 @@
 
   var api = {
     iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
-    misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisoDePrueba: avisoDePrueba, avisosDiarios: avisosDiarios, idPush: idPush,
+    misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisoDePrueba: avisoDePrueba, registrarDispositivo: registrarDispositivo, avisosDiarios: avisosDiarios, idPush: idPush,
     asignarRecibos: asignarRecibos, crearLoteRecibos: crearLoteRecibos, subirRecibos: subirRecibos, publicarLote: publicarLote, eliminarLote: eliminarLote,
     listarLotes: listarLotes, detalleLote: detalleLote, verReciboRRHH: verReciboRRHH, misRecibos: misRecibos, verRecibo: verRecibo, confirmarRecibo: confirmarRecibo,
     miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,

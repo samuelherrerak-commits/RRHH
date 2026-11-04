@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-04.3';
+var VERSION = '2026-11-05.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Servicio'];
 
@@ -89,6 +89,7 @@ var RUTAS_TRABAJADOR = {
   cancelarAnticipo: function (repo, ctx, d) { return Servicio.cancelarAnticipo(repo, ctx, d.token, d.id); },
   misNotificaciones: function (repo, ctx, d) { return Servicio.misNotificaciones(repo, ctx, d.token); },
   avisoDePrueba: function (repo, ctx, d) { return Servicio.avisoDePrueba(repo, ctx, d.token); },
+  registrarDispositivo: function (repo, ctx, d) { return Servicio.registrarDispositivo(repo, ctx, d.token, d); },
   marcarNotificacionesLeidas: function (repo, ctx, d) { return Servicio.marcarNotificacionesLeidas(repo, ctx, d.token); },
   misRecibos: function (repo, ctx, d) { return Servicio.misRecibos(repo, ctx, d.token); },
   verRecibo: function (repo, ctx, d) { return Servicio.verRecibo(repo, ctx, d.token, d.id); },
@@ -589,6 +590,7 @@ function crearRepo_() {
       escribirFila_('NOTIF_LECTURAS', { _fila: f ? f._fila : 0, clave: d, hasta: t });
     },
     enviarPush: enviarPush_,
+    registrarSuscripcionPush: registrarSuscripcionPush_,
 
     /* ---- Recibos de pago ---- */
     nuevoIdLote: function () { return 'LOT-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
@@ -663,12 +665,57 @@ function carpetaRecibos_() {
  * Notificación al celular con OneSignal (si está configurado en el menú RRHH). destinos: identificadores de
  * notificación (no cédulas) o '*' para todos los que activaron los avisos. Si falla, no interrumpe nada.
  */
-function enviarPush_(destinos, titulo, texto, ruta) {
+/** Datos de OneSignal guardados en la hoja, limpios (sin espacios ni comillas). Sin ellos o mal escritos: { error }. */
+function configOneSignal_() {
   var props = PropertiesService.getScriptProperties();
-  var appId = props.getProperty('ONESIGNAL_APP_ID'), clave = props.getProperty('ONESIGNAL_API_KEY');
-  if (!appId || !clave) return { estado: 'SIN_CONFIGURAR' };
+  var appId = String(props.getProperty('ONESIGNAL_APP_ID') || '').replace(/[\s'"]/g, '');
+  var clave = String(props.getProperty('ONESIGNAL_API_KEY') || '').replace(/[\s'"]/g, '');
+  if (!appId || !clave) return { error: 'Falta configurar OneSignal en la hoja (menú RRHH → «3 · Notificaciones al celular»).' };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appId)) {
+    return { error: 'El App ID de OneSignal guardado en la hoja no es válido (debe verse como 97b880ba-f53c-4cb8-…). Vuelve a ponerlo en el menú RRHH → «3».' };
+  }
+  return { appId: appId, clave: clave, sitio: props.getProperty('CAC_URL') || '' };
+}
+
+function pedirOneSignal_(cfg, ruta, cuerpo) {
+  var r = UrlFetchApp.fetch('https://api.onesignal.com' + ruta, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Key ' + cfg.clave }, payload: JSON.stringify(cuerpo),
+  });
+  var texto = r.getContentText(), j = {};
+  try { j = JSON.parse(texto); } catch (x) { /* no es JSON */ }
+  return { codigo: r.getResponseCode(), json: j, texto: texto };
+}
+function errorOneSignal_(r) {
+  var e = r.json && r.json.errors;
+  var txt = e && e.join ? e.map(function (x) { return typeof x === 'string' ? x : (x.title || JSON.stringify(x)); }).join(' ') : r.texto;
+  return 'HTTP ' + r.codigo + ' · ' + String(txt).slice(0, 200);
+}
+
+/**
+ * Registra en OneSignal la suscripción de avisos de un dispositivo (la crea el navegador con la clave pública de la app).
+ * externalId: identificador de la persona (no es su cédula). El tipo sale del servicio de avisos del dispositivo.
+ */
+function registrarSuscripcionPush_(externalId, d) {
+  var cfg = configOneSignal_();
+  if (cfg.error) return { estado: 'SIN_CONFIGURAR', detalle: cfg.error };
+  var host = String(d.endpoint).replace(/^https:\/\/([^/]+).*$/, '$1');
+  var tipo = /push\.apple\.com$/.test(host) ? 'SafariPush' : /mozilla\.com$/.test(host) ? 'FirefoxPush' : 'ChromePush';
+  var sub = { type: tipo, token: d.endpoint, enabled: true, notification_types: 1, web_auth: d.auth, web_p256: d.p256dh };
+  try {
+    var r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users', { identity: { external_id: externalId }, subscriptions: [sub] });
+    if (r.codigo === 409) r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users/by/external_id/' + encodeURIComponent(externalId) + '/subscriptions', { subscription: sub });
+    if (r.codigo >= 300) { registrarError_(new Error('OneSignal suscripción ' + errorOneSignal_(r))); return { estado: 'ERROR', detalle: errorOneSignal_(r) }; }
+    return { estado: 'REGISTRADO', tipo: tipo };
+  } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
+}
+
+function enviarPush_(destinos, titulo, texto, ruta) {
+  var cfg = configOneSignal_();
+  if (cfg.error) return { estado: 'SIN_CONFIGURAR', detalle: cfg.error };
+  var appId = cfg.appId, clave = cfg.clave;
   if (!destinos || !destinos.length) return { estado: 'SIN_DESTINATARIOS' };
-  var sitio = props.getProperty('CAC_URL') || '';
+  var sitio = cfg.sitio;
   var cuerpo = { app_id: appId, target_channel: 'push', headings: { en: titulo, es: titulo }, contents: { en: texto || titulo, es: texto || titulo } };
   if (sitio) cuerpo.url = sitio.replace(/\/?$/, '/') + (ruta ? '#/' + ruta : '');
   if (destinos === '*') cuerpo.included_segments = ['Total Subscriptions'];

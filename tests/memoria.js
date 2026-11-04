@@ -65,6 +65,7 @@ function crearRepo(empleadosFilas) {
     notificacionesLeidasHasta: (d) => st.lecturas[d] || 0,
     marcarNotificacionesLeidas: (d, t) => { st.lecturas[d] = t; },
     enviarPush: (destinos, titulo, texto, ruta) => { st.pushes.push({ destinos, titulo, texto, ruta }); return { estado: 'ENVIADO', id: 'P' + st.pushes.length }; },
+    registrarSuscripcionPush: (id, d) => { st.dispositivos = (st.dispositivos || []).concat([{ id, ...d }]); return { estado: 'REGISTRADO', tipo: /apple/.test(d.endpoint) ? 'SafariPush' : 'ChromePush' }; },
     nuevoIdLote: () => 'LOT' + (++st.seq),
     nuevoIdRecibo: () => 'REC' + (++st.seq),
     guardarLote: (l) => { st.lotes[l.id] = { ...l }; },

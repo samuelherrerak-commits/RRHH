@@ -34,7 +34,7 @@ async function arrancar() {
   const s = sesion.leer();
   btnSalir.hidden = !s;
   campana.hidden = !s;
-  if (s) { setTimeout(actualizarCampana, primeraVez ? 5000 : 0); primeraVez = false; if (!vinculado) { vinculado = true; vincular(s.pushId); } }
+  if (s) { setTimeout(actualizarCampana, primeraVez ? 5000 : 0); primeraVez = false; if (!vinculado) { vinculado = true; vincular(s.pushId, registrarDispositivo); } }
   document.body.classList.toggle('en-entrada', !s);
   document.getElementById('usuario').textContent = s && s.nombre ? primerNombre(s.nombre) + (s.rol !== 'TRABAJADOR' ? ' · Gestión Humana' : '') : '';
   if (s) setTimeout(sugerirInstalacion, 1200);   // después de entrar, sin tapar lo primero que se ve
@@ -44,6 +44,8 @@ async function arrancar() {
 }
 btnSalir.addEventListener('click', () => { desvincular(); vinculado = false; cerrarAvisos(); sesion.borrar(); olvidar(); history.replaceState(null, '', location.pathname); arrancar(); });
 let vinculado = false;
+/** El servidor registra en OneSignal la suscripción de avisos de este dispositivo. */
+const registrarDispositivo = (d) => llamar('registrarDispositivo', { token: (sesion.leer() || {}).token, ...d });
 let primeraVez = true;   // al entrar, la campanita espera a que termine la precarga (menos peticiones a la vez)   // este dispositivo ya quedó asociado a la persona para los avisos al celular
 window.addEventListener('hashchange', () => arrancar());
 
@@ -1303,12 +1305,12 @@ function pintarEstadoPush(caja, pushId, compacto = false) {
   if (e === 'activo') {
     if (!compacto) { caja.innerHTML = ''; return; }
     caja.innerHTML = '<p class="suave">✓ Avisos activos en este dispositivo.</p><div class="fila"><button type="button" class="btn-link" id="btn-prueba">Enviar un aviso de prueba</button></div>';
-    suscritoEnOneSignal().then((si) => {   // permiso dado pero sin registro en OneSignal: ofrecer terminar
+    suscritoEnOneSignal(pushId).then((si) => {   // permiso dado pero sin registro en OneSignal: ofrecer terminar
       if (si || !caja.isConnected) return;
       caja.querySelector('p').textContent = 'Diste permiso, pero falta terminar de registrar este dispositivo.';
       caja.querySelector('p').insertAdjacentHTML('afterend', '<div class="fila"><button type="button" class="btn btn-chico" id="btn-push">Terminar de activar avisos</button></div>');
       caja.querySelector('#btn-push').addEventListener('click', (ev) => {
-        const pedido = activarPush(pushId);
+        const pedido = activarPush(pushId, registrarDispositivo);
         conBoton(ev.currentTarget, async () => {
           try { await pedido; toast('Listo: este dispositivo quedó registrado.'); } catch (ex) { toast(`No se pudo activar los avisos: ${ex && ex.message ? ex.message : ex}`); }
           pintarEstadoPush(caja, pushId, compacto);
@@ -1322,7 +1324,7 @@ function pintarEstadoPush(caja, pushId, compacto = false) {
       toast({
         ENVIADO: 'Aviso de prueba enviado: debe llegarte en unos segundos.',
         SIN_DESTINATARIOS: 'OneSignal no tiene este dispositivo registrado. Cierra el CAC, ábrelo de nuevo y toca «Terminar de activar avisos».',
-        SIN_CONFIGURAR: 'Falta configurar OneSignal en la hoja (menú RRHH → «3 · Notificaciones al celular»).',
+        SIN_CONFIGURAR: p.detalle || 'Falta configurar OneSignal en la hoja (menú RRHH → «3 · Notificaciones al celular»).',
       }[p.estado] || `OneSignal respondió con un error: ${p.detalle || 'desconocido'}`);
       actualizarCampana();
     }));
@@ -1337,7 +1339,7 @@ function pintarEstadoPush(caja, pushId, compacto = false) {
   if (e === 'instalar') { caja.innerHTML = '<p class="suave">En iPhone, para recibir avisos primero instala el CAC: toca <b>Compartir</b> y luego <b>«Agregar a pantalla de inicio»</b>, y ábrelo desde ese ícono.</p>'; return; }
   caja.innerHTML = `<div class="fila"><button type="button" class="btn btn-chico" id="btn-push">${icono('campana')} Activar avisos en este dispositivo</button></div>`;
   caja.querySelector('#btn-push').addEventListener('click', (ev) => {
-    const pedido = activarPush(pushId);   // primero, en el mismo toque (requisito del iPhone)
+    const pedido = activarPush(pushId, registrarDispositivo);   // primero, en el mismo toque (requisito del iPhone)
     conBoton(ev.currentTarget, async () => {
     try {
       const r = await pedido;

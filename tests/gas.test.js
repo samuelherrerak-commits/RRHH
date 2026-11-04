@@ -279,7 +279,7 @@ test('recibos de pago y avisos sobre las hojas: Drive, campanita y OneSignal', (
   const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
   e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
   assert.equal(e.tareas.length, 1);                                   // tarea diaria de avisos instalada
-  e.props.ONESIGNAL_APP_ID = 'app-1'; e.props.ONESIGNAL_API_KEY = 'clave-1'; e.props.CAC_URL = 'https://cac-pruebas.onrender.com';
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'clave-1'; e.props.CAC_URL = 'https://cac-pruebas.onrender.com';
   const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
   e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
     { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', puesto: 'Vendedora', estado: 'Active', fechaInicio: '05/03/2025', salarioMensual: 100 },
@@ -344,11 +344,35 @@ test('aviso de prueba: dice si falta configurar OneSignal, si el dispositivo no 
   e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
   const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
   assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_CONFIGURAR');
-  e.props.ONESIGNAL_APP_ID = 'app-1'; e.props.ONESIGNAL_API_KEY = 'clave-1';
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'clave-1';
   assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'ENVIADO');
   assert.equal(e.pedidos.at(-1).cuerpo.include_aliases.external_id[0], e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.pushId);
   e.onesignalResponde({ id: '', errors: ['All included players are not subscribed'] });
   const r = e.llamar({ action: 'avisoDePrueba', token: admin }).data.push;
   assert.equal(r.estado, 'SIN_DESTINATARIOS');
   assert.match(r.detalle, /not subscribed/);
+});
+
+test('registrar el dispositivo en OneSignal desde el servidor (iPhone = SafariPush) y App ID mal escrito', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const ses = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data;
+  const disp = { endpoint: 'https://web.push.apple.com/QGx1Zm9vYmFyYmF6cXV4', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).code, 'SIN_CONFIGURAR');
+  e.props.ONESIGNAL_APP_ID = 'cac pruebas'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_x';
+  assert.match(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).message, /App ID de OneSignal .* no es válido/);
+  assert.match(e.llamar({ action: 'avisoDePrueba', token: ses.token }).data.push.detalle, /no es válido/);
+  e.props.ONESIGNAL_APP_ID = ' "97b880ba-f53c-4cb8-88f3-9c4cf9fc186f" ';   // con espacios y comillas: se limpia
+  const r = e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.data.tipo, 'SafariPush');
+  const pedido = e.pedidos.at(-1);
+  assert.equal(pedido.url, 'https://api.onesignal.com/apps/97b880ba-f53c-4cb8-88f3-9c4cf9fc186f/users');
+  assert.equal(pedido.cuerpo.identity.external_id, ses.pushId);
+  assert.deepEqual(pedido.cuerpo.subscriptions[0], { type: 'SafariPush', token: disp.endpoint, enabled: true, notification_types: 1, web_auth: disp.auth, web_p256: disp.p256dh });
+  // si la persona ya existe en OneSignal (409), se agrega la suscripción a esa persona
+  e.onesignalResponde((url) => (/\/users$/.test(url) ? { codigo: 409, json: { errors: ['exists'] } } : { codigo: 201, json: { subscription: { id: 's1' } } }));
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).ok, true);
+  assert.match(e.pedidos.at(-1).url, /\/users\/by\/external_id\/[0-9a-f]{32}\/subscriptions$/);
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, endpoint: 'http://x', p256dh: 'a', auth: 'b' }).code, 'VALIDACION');
 });

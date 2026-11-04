@@ -48,7 +48,9 @@ Apps Script no puede firmar ni cifrar las notificaciones push de los navegadores
 2. *Site URL*: `https://cac-pruebas.onrender.com` (pruebas) o `https://cac.onrender.com` (real). Integración **Custom Code**.
 3. No hace falta subir archivos: el CAC usa su propio `sw.js` (en la raíz) también para OneSignal.
 4. Copiar el **App ID** en `web/config.js` (`ONESIGNAL_PRUEBAS` o `ONESIGNAL_REAL`).
-5. En la hoja: menú **RRHH → «3 · Notificaciones al celular»**: App ID, **REST API Key** (*Settings → Keys & IDs*) y la dirección del sitio.
+5. En la hoja: menú **RRHH → «3 · Notificaciones al celular»**: App ID, **REST API Key** (empieza con `os_v2_app_`; OneSignal la muestra una sola vez al crearla) y la dirección del sitio.
+
+El teléfono no usa la librería de OneSignal (falla en Safari del iPhone): se suscribe con la clave pública de la app y el Apps Script lo registra en OneSignal con la REST API Key. En la campanita, «Enviar un aviso de prueba» dice si todo funciona o qué falta.
 
 Una tarea diaria (7 a. m., la instala «Configurar hojas») avisa al celular las constancias vencidas.
 
