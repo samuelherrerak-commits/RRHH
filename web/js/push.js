@@ -97,7 +97,7 @@ export function activarPush(pushId) {
     if (!OS.User.PushSubscription.id) {
       const reg = await navigator.serviceWorker.getRegistration('/');
       const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription().catch(() => null) : null;
-      throw new Error(sub ? 'OneSignal no confirmó el registro de este dispositivo' : 'el teléfono no entregó la suscripción de avisos');
+      throw new Error(sub ? 'OneSignal no confirmó el registro de este dispositivo' : 'este dispositivo no entregó la suscripción de avisos (revisa que el CAC esté abierto desde el ícono de inicio)');
     }
     return estadoPush();
   });
