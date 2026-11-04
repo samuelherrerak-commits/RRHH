@@ -323,3 +323,18 @@ test('recibos de pago y avisos sobre las hojas: Drive, campanita y OneSignal', (
   assert.equal(Object.values(e.drive.archivos).filter((a) => a.papelera).length, 1);
   assert.equal(e.llamar({ action: 'listarLotes', token: admin }).data.length, 1);
 });
+
+test('constancia: la fecha de ingreso sale bien aunque Sheets la haya convertido en fecha', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', puesto: 'Aprendiz', estado: 'Active', fechaInicio: '05/03/2025', salarioMensual: 130 },
+  ] });
+  const ana = e.llamar({ action: 'login', cedula: '11111111' }).data.token;
+  assert.equal(e.llamar({ action: 'emitirConstancia', token: ana }).data.fechaIngreso, '05/03/2025');
+  // Lo que hacía Google Sheets: la celda «05/03/2025» pasaba a ser una fecha (y en configuración inglesa, ¡3 de mayo!)
+  const h = e.hojas.CONSTANCIAS, col = h.filas[0].indexOf('fechaIngreso');
+  h.filas[1][col] = new Date(2025, 4, 3);
+  assert.equal(e.llamar({ action: 'misConstancias', token: ana }).data[0].fechaIngreso, '05/03/2025');
+});

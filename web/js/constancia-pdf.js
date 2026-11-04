@@ -63,7 +63,13 @@ function dibujarQr(doc, texto, x, y, lado) {
   for (let f = 0; f < n; f++) for (let c = 0; c < n; c++) if (qr.isDark(f, c)) doc.rect(x + (c + 4) * m, y + (f + 4) * m, m + 0.2, m + 0.2, 'F');
 }
 
-const parteFecha = (txt) => { const [d, m, y] = txt.split('/').map(Number); return { d, m, y }; };
+/** «dd/mm/aaaa» o «aaaa-mm-dd» → { d, m, y } (acepta las dos por si la fecha llega en otro formato). */
+const parteFecha = (txt) => {
+  const t = String(txt || '').trim(), iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (iso) return { d: +iso[3], m: +iso[2], y: +iso[1] };
+  const [d, m, y] = t.split('/').map(Number);
+  return { d, m, y };
+};
 
 /** c = constancia tal como la devuelve la API. Devuelve { blob, nombreArchivo }. */
 export async function construirConstanciaPdf(c, urlBase) {
