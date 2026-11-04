@@ -2627,7 +2627,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-05.1';
+var VERSION = '2026-11-05.2';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Servicio'];
 
@@ -3322,7 +3322,10 @@ function registrarSuscripcionPush_(externalId, d) {
   if (cfg.error) return { estado: 'SIN_CONFIGURAR', detalle: cfg.error };
   var host = String(d.endpoint).replace(/^https:\/\/([^/]+).*$/, '$1');
   var tipo = /push\.apple\.com$/.test(host) ? 'SafariPush' : /mozilla\.com$/.test(host) ? 'FirefoxPush' : 'ChromePush';
-  var sub = { type: tipo, token: d.endpoint, enabled: true, notification_types: 1, web_auth: d.auth, web_p256: d.p256dh };
+  // OneSignal guarda las llaves en base64 estándar (con + / =); el navegador las entrega en base64url. Si no se
+  // convierten, la suscripción queda creada pero OneSignal no le puede enviar (0 destinatarios).
+  var b64 = function (x) { x = String(x || '').replace(/-/g, '+').replace(/_/g, '/'); return x + '===='.slice(0, (4 - x.length % 4) % 4); };
+  var sub = { type: tipo, token: d.endpoint, enabled: true, notification_types: 1, web_auth: b64(d.auth), web_p256: b64(d.p256dh), sdk: '160700' };
   try {
     var r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users', { identity: { external_id: externalId }, subscriptions: [sub] });
     if (r.codigo === 409) r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users/by/external_id/' + encodeURIComponent(externalId) + '/subscriptions', { subscription: sub });

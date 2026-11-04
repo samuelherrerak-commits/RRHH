@@ -369,7 +369,9 @@ test('registrar el dispositivo en OneSignal desde el servidor (iPhone = SafariPu
   const pedido = e.pedidos.at(-1);
   assert.equal(pedido.url, 'https://api.onesignal.com/apps/97b880ba-f53c-4cb8-88f3-9c4cf9fc186f/users');
   assert.equal(pedido.cuerpo.identity.external_id, ses.pushId);
-  assert.deepEqual(pedido.cuerpo.subscriptions[0], { type: 'SafariPush', token: disp.endpoint, enabled: true, notification_types: 1, web_auth: disp.auth, web_p256: disp.p256dh });
+  // llaves en base64 estándar con relleno (como las guarda OneSignal): base64url sin «=» deja la suscripción sin poder recibir
+  assert.deepEqual(pedido.cuerpo.subscriptions[0], { type: 'SafariPush', token: disp.endpoint, enabled: true, notification_types: 1,
+    web_auth: 'k8JV6sjdbhAi+n7Y', web_p256: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM=', sdk: '160700' });
   // si la persona ya existe en OneSignal (409), se agrega la suscripción a esa persona
   e.onesignalResponde((url) => (/\/users$/.test(url) ? { codigo: 409, json: { errors: ['exists'] } } : { codigo: 201, json: { subscription: { id: 's1' } } }));
   assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).ok, true);
