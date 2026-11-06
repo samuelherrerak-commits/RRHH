@@ -32,7 +32,8 @@ test('validación de la solicitud', () => {
   assert.equal(P.validarSolicitudAnticipo({ monto: 1200, motivo: 'Salud' }, resumen, emp).ok, false);
   assert.equal(P.validarSolicitudAnticipo({ monto: -5, motivo: 'Salud' }, resumen, emp).ok, false);
   assert.equal(P.validarSolicitudAnticipo({ monto: 10, motivo: 'Viaje' }, resumen, emp).ok, false);
-  assert.equal(P.validarSolicitudAnticipo({ monto: 10, motivo: 'Otro' }, resumen, emp).ok, false);
+  assert.equal(P.validarSolicitudAnticipo({ monto: 10, motivo: 'Otro' }, resumen, emp).ok, false);   // «Otro» ya no es un motivo
+  assert.deepEqual(P.PARAMETROS.motivos, ['Vivienda', 'Salud', 'Educación']);
   assert.equal(P.validarSolicitudAnticipo({ monto: 10, motivo: 'Salud' }, resumen, { estado: 'Inactivo' }).ok, false);
 });
 

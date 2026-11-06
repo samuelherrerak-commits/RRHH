@@ -493,8 +493,7 @@ async function seccionFideicomiso(cont) {
       <p class="advertencia">Envías el monto <b>bajo tu responsabilidad</b>. Si es <b>mayor a tu disponible</b>, el banco rechazará la solicitud y podrás hacer una nueva en la próxima apertura${prox ? ` (${rango(prox)})` : ''}. Solo se acepta una solicitud por apertura.</p>
       <form id="fant" class="form-vac" novalidate>
         <label>Monto a solicitar (Bs.) <input name="monto" inputmode="decimal" placeholder="0,00" autocomplete="off"></label>
-        <label>Motivo <select name="motivo"><option value="">Elige el motivo</option>${motivos.map((m) => `<option>${esc(m)}</option>`).join('')}</select></label>
-        <label id="lbl-det" hidden>Explica el motivo <textarea name="detalle" maxlength="300"></textarea></label>
+        <label>Motivo <select name="motivo"><option value="">Elige el motivo</option>${motivos.filter((m) => m !== 'Otro').map((m) => `<option>${esc(m)}</option>`).join('')}</select></label>
         <label class="acepto"><input type="checkbox" name="acepta"> <span>Revisé mi disponible en el banco y envío este monto bajo mi responsabilidad. Si supera mi disponible, el banco rechazará la solicitud.</span></label>
         <div class="error-msg" id="err-ant" hidden></div>
         <div><button class="btn" type="submit">Enviar solicitud</button></div>
@@ -513,17 +512,15 @@ async function seccionFideicomiso(cont) {
   const f = cont.querySelector('#fant');
   if (f) {
     const err = cont.querySelector('#err-ant');
-    f.motivo.addEventListener('change', () => { cont.querySelector('#lbl-det').hidden = f.motivo.value !== 'Otro'; });
     f.addEventListener('submit', async (e) => {
       e.preventDefault(); errorEn(err, '');
       const monto = leerMonto(f.monto.value);
       if (!(monto > 0)) return errorEn(err, 'Escribe el monto que quieres solicitar.');
       if (!f.motivo.value) return errorEn(err, 'Elige el motivo.');
-      if (f.motivo.value === 'Otro' && !f.detalle.value.trim()) return errorEn(err, 'Explica el motivo.');
       if (!f.acepta.checked) return errorEn(err, 'Marca la casilla para confirmar que revisaste tu disponible en el banco.');
       if (!confirm(`¿Enviar la solicitud de anticipo por ${bs(monto)}? Solo puedes enviar una por apertura.`)) return;
       await conBoton(f.querySelector('button[type=submit]'), async () => {
-        const x = await llamar('solicitarAnticipo', { monto, motivo: f.motivo.value, detalle: f.detalle.value, acepta: true, ...conToken() });
+        const x = await llamar('solicitarAnticipo', { monto, motivo: f.motivo.value, acepta: true, ...conToken() });
         if (!x.ok) return errorEn(err, x.message);
         toast('Solicitud enviada. Gestión Humana la enviará al banco.'); vistaCuenta(cuenta.cont, cuenta.token, 'fideicomiso');
       });

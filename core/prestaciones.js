@@ -12,7 +12,7 @@
 
   var PARAMETROS = {
     porcentajeAnticipoMax: 0.75,      // editable en PARAMETROS
-    motivos: ['Vivienda', 'Salud', 'Educación', 'Otro'],
+    motivos: ['Vivienda', 'Salud', 'Educación'],
   };
 
   /** Ciclo de vida de un cierre trimestral por empresa. */
@@ -68,7 +68,6 @@
     if (!isFinite(monto) || monto <= 0) e.push('El monto debe ser mayor a cero.');
     else if (monto > resumen.disponible) e.push('El monto supera lo disponible (' + resumen.disponible.toFixed(2) + ').');
     if (p.motivos.indexOf(sol.motivo) === -1) e.push('Motivo no válido.');
-    if (sol.motivo === 'Otro' && !String(sol.detalle || '').trim()) e.push('Explica el motivo.');
     return { ok: e.length === 0, errores: e };
   }
 
@@ -124,7 +123,6 @@
     var monto = Number(sol.monto);
     if (!isFinite(monto) || monto <= 0) e.push('Escribe el monto que quieres solicitar.');
     if (p.motivos.indexOf(sol.motivo) === -1) e.push('Elige el motivo.');
-    if (sol.motivo === 'Otro' && !String(sol.detalle || '').trim()) e.push('Explica el motivo.');
     if (sol.acepta !== true) e.push('Debes confirmar que revisaste tu disponible en el banco y que envías el monto bajo tu responsabilidad.');
     var ya = (c.previas || []).filter(function (a) { return a.ventana === c.activa.clave && a.estado !== 'CANCELADA'; })[0];
     if (ya) e.unshift('Ya enviaste tu solicitud del ' + etiquetaVentana(c.activa.clave) + '. ' + luego);
