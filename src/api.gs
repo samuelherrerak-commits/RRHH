@@ -6,9 +6,9 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-06.5';
+var VERSION = '2026-11-09.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -18,6 +18,7 @@ function modulosCargados_() {
     Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
     Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
     Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
+    Omega: typeof Omega !== 'undefined' && !!Omega,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -46,6 +47,9 @@ var HOJAS = {
   PUSH_DISPOSITIVOS: ['pushId', 'suscripcion', 'tipo', 'creado'],
   RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   PINES: ['clave', 'sal', 'hash', 'creado'],
+  OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
+  OMEGA_PERIODOS: ['mes', 'tasa1', 'tasa2', 'comision', 'iva', 'retencion', 'cestaticket', 'ajustes', 'estado1', 'estado2', 'cerrada1', 'cerrada2', 'actualizado', 'por'],
+  OMEGA_PAGOS: ['mes', 'quincena', 'clave', 'nombre', 'empresa', 'dias', 'cestaticket', 'complemento', 'vehiculo', 'bono', 'comisiones', 'totalUSD', 'tasa', 'anticipoBs', 'montoBs', 'cerrada'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -141,6 +145,12 @@ var RUTAS_RRHH = {
   listarPlanificacionesVac: function (repo, ctx, d) { return Servicio.listarPlanificacionesVac(repo, ctx, d.token); },
   panelPlanificacionVac: function (repo, ctx, d) { return Servicio.panelPlanificacionVac(repo, ctx, d.token, d.ciclo); },
   recordarPlanificacionVac: function (repo, ctx, d) { return Servicio.recordarPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  omegaMes: function (repo, ctx, d) { return Servicio.omegaMes(repo, ctx, d.token, d.mes); },
+  omegaGuardarPeriodo: function (repo, ctx, d) { return Servicio.omegaGuardarPeriodo(repo, ctx, d.token, d); },
+  omegaImportarBeneficios: function (repo, ctx, d) { return Servicio.omegaImportarBeneficios(repo, ctx, d.token, d.filas); },
+  omegaEditarBeneficio: function (repo, ctx, d) { return Servicio.omegaEditarBeneficio(repo, ctx, d.token, d.clave, d.montos); },
+  omegaCerrarQuincena: function (repo, ctx, d) { return Servicio.omegaCerrarQuincena(repo, ctx, d.token, d.mes, d.quincena); },
+  omegaReabrirQuincena: function (repo, ctx, d) { return Servicio.omegaReabrirQuincena(repo, ctx, d.token, d.mes, d.quincena); },
   saldoVacacionesEmpleado: function (repo, ctx, d) { return Servicio.saldoVacacionesEmpleado(repo, ctx, d.token, d.clave); },
   listarConstancias: function (repo, ctx, d) { return Servicio.listarConstancias(repo, ctx, d.token); },
   anularConstancia: function (repo, ctx, d) { return Servicio.anularConstancia(repo, ctx, d.token, d.id); },
@@ -167,7 +177,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaMes: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -671,6 +681,54 @@ function crearRepo_() {
       return carpetaRecibos_().createFile(blob).getId();
     },
     leerArchivoRecibo: function (id) { return Utilities.base64Encode(DriveApp.getFileById(id).getBlob().getBytes()); },
+    /* ---- Omega Capital ---- */
+    omegaBeneficios: function () {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      return leer_('OMEGA_BENEFICIOS').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { _fila: f._fila, clave: texto_(f.clave), nombre: texto_(f.nombre), complemento: Number(f.complemento) || 0, vehiculo: Number(f.vehiculo) || 0,
+          bono: Number(f.bono) || 0, comisiones: Number(f.comisiones) || 0, actualizado: Number(f.actualizado) || 0, por: texto_(f.por) };
+      });
+    },
+    reemplazarOmegaBeneficios: function (lista) {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      quitarFilas_('OMEGA_BENEFICIOS', function () { return true; });
+      agregarFilas_('OMEGA_BENEFICIOS', lista);
+    },
+    guardarOmegaBeneficio: function (b) {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      var ya = leer_('OMEGA_BENEFICIOS').filter(function (f) { return texto_(f.clave) === b.clave; })[0];
+      var copia = Object.assign({}, b); delete copia._fila; if (ya) copia._fila = ya._fila;
+      escribirFila_('OMEGA_BENEFICIOS', copia);
+    },
+    omegaPeriodo: function (mes) {
+      asegurarHoja_('OMEGA_PERIODOS');
+      var f = leer_('OMEGA_PERIODOS').filter(function (x) { return texto_(x.mes) === mes; })[0];
+      if (!f) return null;
+      var aj = {}; try { aj = f.ajustes ? JSON.parse(f.ajustes) : {}; } catch (e) { /* vacío */ }
+      var n = function (v) { return v === '' || v == null ? null : Number(v); };
+      return { _fila: f._fila, mes: mes, tasa1: n(f.tasa1), tasa2: n(f.tasa2), comision: n(f.comision), iva: n(f.iva), retencion: n(f.retencion), cestaticket: n(f.cestaticket),
+        ajustes: aj, estado1: texto_(f.estado1) || 'ABIERTA', estado2: texto_(f.estado2) || 'ABIERTA', cerrada1: Number(f.cerrada1) || 0, cerrada2: Number(f.cerrada2) || 0 };
+    },
+    guardarOmegaPeriodo: function (p) {
+      asegurarHoja_('OMEGA_PERIODOS');
+      var copia = Object.assign({}, p, { ajustes: JSON.stringify(p.ajustes || {}) });
+      if (!copia._fila) { var h = hoja_('OMEGA_PERIODOS'); h.getRange(h.getLastRow() + 1, 1).setNumberFormat('@'); }
+      escribirFila_('OMEGA_PERIODOS', copia);
+      p._fila = copia._fila;
+    },
+    omegaPagos: function (mes, q) {
+      asegurarHoja_('OMEGA_PAGOS');
+      return leer_('OMEGA_PAGOS').filter(function (f) { return texto_(f.mes) === mes && Number(f.quincena) === q; }).map(function (f) {
+        var x = { mes: mes, quincena: q, clave: texto_(f.clave), nombre: texto_(f.nombre), empresa: texto_(f.empresa), dias: Number(f.dias) || 0 };
+        ['cestaticket', 'complemento', 'vehiculo', 'bono', 'comisiones', 'totalUSD', 'tasa', 'anticipoBs', 'montoBs', 'cerrada'].forEach(function (k) { x[k] = Number(f[k]) || 0; });
+        return x;
+      });
+    },
+    agregarOmegaPagos: function (lista) { asegurarHoja_('OMEGA_PAGOS'); agregarFilas_('OMEGA_PAGOS', lista); },
+    quitarOmegaPagos: function (mes, q) {
+      asegurarHoja_('OMEGA_PAGOS');
+      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.mes) === mes && Number(f.quincena) === q; });
+    },
     eliminarLote: function (lote, recibos) {
       recibos.forEach(function (r) { try { DriveApp.getFileById(r.archivo).setTrashed(true); } catch (e) { /* ya no estaba */ } });
       var ids = {}; recibos.forEach(function (r) { ids[r.id] = true; });

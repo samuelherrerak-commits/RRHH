@@ -492,3 +492,27 @@ test('PIN de 4 números: crear la primera vez, entrar, bloqueo tras 5 fallos y R
   assert.equal(e.llamar({ action: 'restablecerPin', token: admin, clave: 'V11111111' }).ok, true);
   assert.equal(e.llamar({ action: 'restablecerPin', token: creado.data.token, clave: 'V11111111' }).code, 'SESION');   // solo RRHH
 });
+
+test('Omega Capital sobre las hojas: beneficios, tasas, cierre de quincenas y el mes guardado como texto', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const t = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: t, filas: [
+    { cedula: 'V079246270', nombre: 'ZORAYA PEREZ', organizacion: 'PROSEIN CENTRAL', estado: 'Active', fechaInicio: '08/10/2009' },
+    { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'AUSTRAL IMPORT DE VENEZUELA C.A', estado: 'Active', fechaInicio: '05/03/2025' },
+  ] });
+  const imp = e.llamar({ action: 'omegaImportarBeneficios', token: t, filas: [{ cedula: '7924627', complemento: 200 }] });
+  assert.equal(imp.data.cargados, 1, JSON.stringify(imp));
+  let r = e.llamar({ action: 'omegaGuardarPeriodo', token: t, mes: '2026-11', tasa1: 905, tasa2: 920, ajustes: { V11111111: 15 } });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const z = r.data.lineas.find((l) => l.nombre === 'ZORAYA PEREZ'), a = r.data.lineas.find((l) => l.nombre === 'ANA PRUEBA');
+  assert.equal(z.q1, 108600); assert.equal(a.cestaticket, 20);
+  assert.equal(e.llamar({ action: 'omegaCerrarQuincena', token: t, mes: '2026-11', quincena: 1 }).data.estado1, 'CERRADA');
+  r = e.llamar({ action: 'omegaMes', token: t, mes: '2026-11' });
+  assert.equal(r.data.estado1, 'CERRADA'); assert.equal(r.data.tasa2, 920);
+  assert.equal(r.data.lineas.find((l) => l.nombre === 'ANA PRUEBA').dias, 15);
+  assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[0] === '2026-11').length, 2);
+  assert.equal(e.llamar({ action: 'omegaCerrarQuincena', token: t, mes: '2026-11', quincena: 2 }).data.estado2, 'CERRADA');
+  assert.equal(e.llamar({ action: 'omegaReabrirQuincena', token: t, mes: '2026-11', quincena: 2 }).data.estado2, 'ABIERTA');
+  assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[1] === '2').length, 0);
+});

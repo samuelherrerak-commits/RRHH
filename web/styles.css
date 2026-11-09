@@ -329,3 +329,10 @@ details summary { cursor: pointer; color: var(--tinta-2); font-size: 14px; }
 /* ---- PIN de entrada ---- */
 .caja-pin { display: grid; gap: var(--s3); }
 input.pin { letter-spacing: .6em; font-size: 22px; text-align: center; max-width: 220px; }
+/* Omega Capital */
+.tabla-omega td, .tabla-omega th { white-space: nowrap; font-size: 13px; }
+.tabla-omega td:first-child { white-space: normal; min-width: 220px; }
+.tabla-omega .dias-om { width: 56px; min-height: 34px; padding: 4px 8px; text-align: right; font-size: 14px; }
+.tabla-omega .dias-om.ajustado { border-color: var(--espera); background: var(--espera-velo); }
+.tabla-omega tr.inactivo td { color: var(--tinta-3); }
+tr.fila-total td { border-top: 2px solid var(--linea); }

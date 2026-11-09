@@ -88,6 +88,14 @@ function crearRepo(empleadosFilas) {
     guardarArchivoRecibo: (nombre, b64) => { const id = 'F' + (++st.seq); st.archivos[id] = { nombre, b64 }; return id; },
     leerArchivoRecibo: (id) => (st.archivos[id] ? st.archivos[id].b64 : ''),
     eliminarLote: (lote, recibos) => { recibos.forEach((r) => { delete st.archivos[r.archivo]; delete st.recibos[r.id]; }); delete st.lotes[lote.id]; },
+    omegaBeneficios: () => Object.values(st.omegaBenef || {}).map((b) => ({ ...b })),
+    reemplazarOmegaBeneficios: (lista) => { st.omegaBenef = {}; lista.forEach((b) => { st.omegaBenef[b.clave] = { ...b }; }); },
+    guardarOmegaBeneficio: (b) => { st.omegaBenef = st.omegaBenef || {}; st.omegaBenef[b.clave] = { ...b }; },
+    omegaPeriodo: (mes) => (st.omegaPer && st.omegaPer[mes] ? JSON.parse(JSON.stringify(st.omegaPer[mes])) : null),
+    guardarOmegaPeriodo: (p) => { st.omegaPer = st.omegaPer || {}; st.omegaPer[p.mes] = JSON.parse(JSON.stringify(p)); },
+    omegaPagos: (mes, q) => (st.omegaPagos || []).filter((x) => x.mes === mes && x.quincena === q).map((x) => ({ ...x })),
+    agregarOmegaPagos: (lista) => { st.omegaPagos = (st.omegaPagos || []).concat(lista.map((x) => ({ ...x }))); },
+    quitarOmegaPagos: (mes, q) => { st.omegaPagos = (st.omegaPagos || []).filter((x) => !(x.mes === mes && x.quincena === q)); },
   };
 }
 

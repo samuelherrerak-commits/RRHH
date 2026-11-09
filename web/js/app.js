@@ -548,7 +548,7 @@ async function vistaRRHH() {
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Omega Capital'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel" class="contenido"></div></div>`;
@@ -556,6 +556,7 @@ async function vistaRRHH() {
   const panel = app.querySelector('#panel');
   if (pestana === 'fideicomiso') return panelFideicomiso(panel);
   if (pestana === 'recibos') return panelRecibos(panel);
+  if (pestana === 'omega') return panelOmega(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'vacaciones') return panelVacaciones(panel);
@@ -1955,3 +1956,212 @@ async function pintarDetalleLote(caja, id, filtro = 'todos') {
 if (CONFIG.PRUEBAS) document.body.insertAdjacentHTML('afterbegin', `<div class="franja-pruebas">Sitio de PRUEBAS${CONFIG.API_URL ? '' : ' · falta la URL del Apps Script de pruebas en config.js'}</div>`);
 iniciarInstalacion(registrarServiceWorker);
 arrancar();
+
+/* ---------- RRHH: Omega Capital (cestaticket, complemento de alimentación y otros beneficios en $) ---------- */
+
+const usd = (n) => '$' + (Number(n) || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pct = (x) => (Number(x) * 100).toLocaleString('es-VE', { maximumFractionDigits: 2 }) + ' %';
+const NOMBRE_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const etiquetaMes = (m) => `${NOMBRE_MES[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+let omegaEstado = { mes: '', empresa: '', buscar: '', soloBenef: false, datos: null };
+
+async function panelOmega(panel) {
+  if (!omegaEstado.mes) { const h = new Date(Date.now() - 4 * 3600e3); omegaEstado.mes = h.toISOString().slice(0, 7); }
+  panel.innerHTML = `<section class="tarjeta"><h2>Omega Capital</h2>${esqueleto(2)}</section>`;
+  const r = await llamar('omegaMes', { mes: omegaEstado.mes });
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } panel.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  omegaEstado.datos = r.data;
+  pintarOmega(panel);
+}
+
+function pintarOmega(panel) {
+  const d = omegaEstado.datos, p = d.parametros, c1 = d.estado1 === 'CERRADA', c2 = d.estado2 === 'CERRADA';
+  const chipQ = (cerrada, cuando) => cerrada ? `<span class="chip chip-ok">Cerrada${cuando ? ' · ' + esc(fechaHora(cuando)) : ''}</span>` : '<span class="chip chip-espera">Abierta</span>';
+  const empresas = Object.keys(d.totales.q1).filter((k) => k !== 'TODAS');
+  const filaTot = (q, campo, titulo, fuerte) => `<tr${fuerte ? ' class="fila-total"' : ''}><td>${titulo}</td>${[...empresas, 'TODAS'].map((e) => `<td class="num">${fuerte ? '<b>' : ''}${bs(d.totales[q][e][campo])}${fuerte ? '</b>' : ''}</td>`).join('')}</tr>`;
+  const tablaTot = (q, titulo, tasa) => `<div><h3>${titulo} <span class="suave">· tasa ${tasa ? 'Bs. ' + tasa.toLocaleString('es-VE') : 'sin definir'}</span></h3>
+    <div class="tabla-caja"><table><thead><tr><th></th>${empresas.map((e) => `<th class="num">${esc(e)} (${d.totales[q][e].personas})</th>`).join('')}<th class="num">Total (${d.totales[q].TODAS.personas})</th></tr></thead><tbody>
+      ${filaTot(q, 'subtotal', 'Monto a los colaboradores')}${filaTot(q, 'comision', `Comisión Omega (${pct(p.comision)})`)}${filaTot(q, 'iva', `IVA de la comisión (${pct(p.iva)})`)}
+      ${filaTot(q, 'retencion', `Retención del IVA (${pct(p.retencion)})`)}${filaTot(q, 'totalPagar', 'Total a pagar a Omega', true)}</tbody></table></div></div>`;
+  const q = omegaEstado.buscar ? omegaEstado.buscar.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase() : '';
+  const lineas = d.lineas.filter((l) => (!omegaEstado.empresa || l.empresa === omegaEstado.empresa) && (!omegaEstado.soloBenef || l.conBeneficio)
+    && (!q || l.nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().includes(q) || l.clave.includes(q)));
+  const conceptos = d.conceptos;
+  panel.innerHTML = `
+    <section class="tarjeta">
+      <div><h2>Omega Capital · ${esc(etiquetaMes(d.mes))}</h2>
+        <p class="suave">Cestaticket ($${p.cestaticket} al mes por ley, proporcional a quien ingresa en el mes) y los beneficios en $ de cada persona. 1.ª quincena: anticipo del 50 % a la tasa estimada de la 1Q. 2.ª quincena: 100 % a la tasa de la 2Q menos lo anticipado.</p></div>
+      <form id="fom" class="form-vac" novalidate>
+        <div class="fila">
+          <label class="grow">Mes <input type="month" name="mes" value="${esc(d.mes)}"></label>
+          <label class="grow">Tasa estimada 1Q (Bs. por $) <input name="tasa1" inputmode="decimal" value="${d.tasa1 || ''}" ${c1 ? 'disabled' : ''} placeholder="0,00"></label>
+          <label class="grow">Tasa estimada 2Q (Bs. por $) <input name="tasa2" inputmode="decimal" value="${d.tasa2 || ''}" ${c2 ? 'disabled' : ''} placeholder="0,00"></label>
+        </div>
+        <details><summary class="suave">Porcentajes y monto del cestaticket</summary>
+          <div class="fila">
+            <label class="grow">Cestaticket ($ al mes) <input name="cestaticket" inputmode="decimal" value="${p.cestaticket}" ${c1 ? 'disabled' : ''}></label>
+            <label class="grow">Comisión Omega (%) <input name="comision" inputmode="decimal" value="${(p.comision * 100).toString().replace('.', ',')}"></label>
+            <label class="grow">IVA (%) <input name="iva" inputmode="decimal" value="${(p.iva * 100).toString().replace('.', ',')}"></label>
+            <label class="grow">Retención del IVA (%) <input name="retencion" inputmode="decimal" value="${(p.retencion * 100).toString().replace('.', ',')}"></label>
+          </div></details>
+        <div class="error-msg" id="err-om" hidden></div>
+        <div class="fila"><button class="btn" type="submit">Guardar y calcular</button></div>
+      </form>
+      <div class="tiles">
+        <div class="tile"><b>${d.lineas.length}</b><span>personas</span><small>${d.beneficiosCargados} con beneficios cargados</small></div>
+        <div class="tile"><b>${usd(d.totalUSD)}</b><span>total del mes en $</span></div>
+        <div class="tile"><b>${bs(d.totales.q1.TODAS.totalPagar)}</b><span>1.ª quincena a Omega</span><small>${chipQ(c1, d.cerrada1)}</small></div>
+        <div class="tile"><b>${bs(d.totales.q2.TODAS.totalPagar)}</b><span>2.ª quincena a Omega</span><small>${chipQ(c2, d.cerrada2)}</small></div>
+      </div>
+      <div class="fila">
+        ${c1 ? (c2 ? '' : '<button class="btn btn-sec btn-chico" data-reabrir="1">Reabrir 1.ª quincena</button>') : '<button class="btn btn-chico" data-cerrar="1">Cerrar 1.ª quincena</button>'}
+        ${c2 ? '<button class="btn btn-sec btn-chico" data-reabrir="2">Reabrir 2.ª quincena</button>' : c1 ? '<button class="btn btn-chico" data-cerrar="2">Cerrar 2.ª quincena</button>' : ''}
+        <button class="btn btn-sec btn-chico" data-excel="1">Descargar Excel 1Q</button>
+        <button class="btn btn-sec btn-chico" data-excel="2">Descargar Excel 2Q</button>
+      </div>
+      ${d.beneficiosSinEmpleado.length ? `<p class="aviso">Con beneficio cargado pero no están activos en Empleados (no se les calcula): ${d.beneficiosSinEmpleado.map(esc).join(', ')}.</p>` : ''}
+    </section>
+    <section class="tarjeta">
+      <div><h2>Beneficios en $ por persona</h2><p class="suave">Sube el Excel de complemento de alimentación (columnas «Cédula», «Monto de complemento de alimentación aprobado» y, si las trae, «Ayuda de vehículo», «Bono especial» y «Comisiones garantizadas»). Reemplaza la lista completa. El cestaticket no hace falta: se calcula para todos.</p></div>
+      <div class="fila"><label class="grow">Excel <input type="file" id="arch-om" accept=".xlsx,.xls,.csv"></label><label class="grow" id="lbl-hoja-om" hidden>Hoja <select id="hoja-om"></select></label></div>
+      <div id="previa-om"></div>
+    </section>
+    <section class="tarjeta">
+      <div class="fila">
+        <label class="grow">Buscar <input id="q-om" value="${esc(omegaEstado.buscar)}" placeholder="Nombre o cédula"></label>
+        <label>Empresa <select id="emp-om"><option value="">Todas</option>${empresas.map((e) => `<option${e === omegaEstado.empresa ? ' selected' : ''}>${esc(e)}</option>`).join('')}</select></label>
+        <label class="acepto"><input type="checkbox" id="benef-om"${omegaEstado.soloBenef ? ' checked' : ''}> <span>Solo con beneficios en $</span></label>
+      </div>
+      <p class="suave">${lineas.length} personas. Los días de cestaticket se pueden cambiar (por ejemplo, un egreso): escribe los días y sal del campo; déjalo vacío para volver al cálculo automático.</p>
+      <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th>Emp.</th><th class="num">Días</th>${conceptos.map((k) => `<th class="num">${esc(k.nombre)}</th>`).join('')}<th class="num">Total $</th><th class="num">1Q Bs.</th><th class="num">2Q Bs.</th><th></th></tr></thead>
+      <tbody>${lineas.map((l) => `<tr${l.inactivo ? ' class="inactivo"' : ''}>
+        <td><b>${esc(l.nombre)}</b><br><span class="suave">${esc(l.clave)}${l.ingreso ? ' · ingresó ' + esc(l.ingreso) : ''}${l.inactivo ? ' · ya no está activo' : ''}${l.sinAnticipo ? ' · sin anticipo (ingresó tras el 15)' : ''}</span></td>
+        <td>${esc(l.empresa)}</td>
+        <td class="num"><input class="dias-om${l.ajustado ? ' ajustado' : ''}" data-dias="${esc(l.clave)}" value="${l.dias}" inputmode="numeric" ${c2 ? 'disabled' : ''} aria-label="Días de cestaticket"></td>
+        ${conceptos.map((k) => `<td class="num">${l[k.id] ? usd(l[k.id]) : '<span class="suave">—</span>'}</td>`).join('')}
+        <td class="num"><b>${usd(l.totalUSD)}</b></td><td class="num">${bs(l.q1)}</td><td class="num">${bs(l.q2)}</td>
+        <td>${c2 ? '' : `<button class="btn btn-sec btn-chico" data-editar-om="${esc(l.clave)}">Editar $</button>`}</td></tr>`).join('') || '<tr><td colspan="12" class="vacio">Nadie coincide con el filtro.</td></tr>'}</tbody></table></div>
+    </section>
+    <section class="tarjeta"><h2>Totales para Omega por empresa</h2>${tablaTot('q1', '1.ª quincena', d.tasa1)}${tablaTot('q2', '2.ª quincena', d.tasa2)}</section>`;
+
+  const f = panel.querySelector('#fom'), err = panel.querySelector('#err-om');
+  const num = (v) => (String(v).trim() === '' ? '' : Number(String(v).replace(/\./g, '').replace(',', '.')));
+  const pctNum = (v) => (String(v).trim() === '' ? '' : Number(String(v).replace(',', '.')) / 100);
+  f.mes.addEventListener('change', () => { if (f.mes.value) { omegaEstado.mes = f.mes.value; panelOmega(panel); } });
+  f.addEventListener('submit', (e) => { e.preventDefault(); errorEn(err, ''); conBoton(f.querySelector('button[type=submit]'), async () => {
+    const x = await llamar('omegaGuardarPeriodo', { mes: d.mes, tasa1: c1 ? '' : num(f.tasa1.value), tasa2: c2 ? '' : num(f.tasa2.value), cestaticket: c1 ? '' : num(f.cestaticket.value),
+      comision: pctNum(f.comision.value), iva: pctNum(f.iva.value), retencion: pctNum(f.retencion.value) });
+    if (!x.ok) return errorEn(err, x.message);
+    omegaEstado.datos = x.data; toast('Guardado.'); pintarOmega(panel);
+  }); });
+  panel.querySelectorAll('[data-cerrar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const qn = b.dataset.cerrar;
+    if (!confirm(`¿Cerrar la ${qn}.ª quincena de ${etiquetaMes(d.mes)} por ${bs(d.totales['q' + qn].TODAS.subtotal)} a los colaboradores (${bs(d.totales['q' + qn].TODAS.totalPagar)} a Omega)? Los montos quedarán fijos.`)) return;
+    const x = await llamar('omegaCerrarQuincena', { mes: d.mes, quincena: Number(qn) });
+    if (!x.ok) return toast(x.message);
+    omegaEstado.datos = x.data; toast(`${qn}.ª quincena cerrada.`); pintarOmega(panel);
+  })));
+  panel.querySelectorAll('[data-reabrir]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const qn = b.dataset.reabrir;
+    if (!confirm(`¿Reabrir la ${qn}.ª quincena? Se volverá a calcular con los datos actuales.`)) return;
+    const x = await llamar('omegaReabrirQuincena', { mes: d.mes, quincena: Number(qn) });
+    if (!x.ok) return toast(x.message);
+    omegaEstado.datos = x.data; pintarOmega(panel);
+  })));
+  panel.querySelectorAll('[data-excel]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => excelOmega(d, Number(b.dataset.excel)).catch((ex) => toast(ex.message)))));
+  panel.querySelectorAll('[data-dias]').forEach((i) => i.addEventListener('change', async () => {
+    const v = i.value.trim();
+    if (v !== '' && !(Number(v) >= 0 && Number(v) <= 30)) { toast('Los días van de 0 a 30.'); return; }
+    const x = await llamar('omegaGuardarPeriodo', { mes: d.mes, ajustes: { [i.dataset.dias]: v } });
+    if (!x.ok) return toast(x.message);
+    omegaEstado.datos = x.data; pintarOmega(panel);
+  }));
+  panel.querySelectorAll('[data-editar-om]').forEach((b) => b.addEventListener('click', () => editarBeneficioOmega(panel, d.lineas.find((l) => l.clave === b.dataset.editarOm))));
+  const filtrar = () => { omegaEstado.buscar = panel.querySelector('#q-om').value; omegaEstado.empresa = panel.querySelector('#emp-om').value; omegaEstado.soloBenef = panel.querySelector('#benef-om').checked; pintarOmega(panel); };
+  const qi = panel.querySelector('#q-om'); let tq;
+  qi.addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(() => { filtrar(); const n = panel.querySelector('#q-om'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 350); });
+  panel.querySelector('#emp-om').addEventListener('change', filtrar);
+  panel.querySelector('#benef-om').addEventListener('change', filtrar);
+  activarCargaOmega(panel);
+}
+
+function activarCargaOmega(panel) {
+  const arch = panel.querySelector('#arch-om'), lbl = panel.querySelector('#lbl-hoja-om'), sel = panel.querySelector('#hoja-om'), previa = panel.querySelector('#previa-om');
+  let libro = null;
+  const mostrar = async () => {
+    const XLSX = await cargarXlsx();
+    const m = XLSX.utils.sheet_to_json(libro.Sheets[sel.value], { header: 1, defval: null, raw: true });
+    const r = window.Omega.leerExcelBeneficios(m);
+    if (r.error || !r.filas.length) { previa.innerHTML = `<p class="error-msg">${esc(r.error || 'Esa hoja no trae personas.')}</p>`; return; }
+    const sum = (k) => r.filas.reduce((t, x) => t + x[k], 0);
+    previa.innerHTML = `<p class="aviso">Hoja «${esc(sel.value)}»: <b>${r.filas.length} personas</b>. Complemento ${usd(sum('complemento'))} · vehículo ${usd(sum('vehiculo'))} · bono ${usd(sum('bono'))} · comisiones ${usd(sum('comisiones'))} al mes.
+      ${r.faltan.length ? `<br>Sin columna de: ${r.faltan.join(', ')} (quedan en 0).` : ''}</p>
+      <div class="fila"><button class="btn" id="subir-om">Reemplazar los beneficios con esta hoja</button></div><div id="res-om"></div>`;
+    previa.querySelector('#subir-om').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+      const x = await llamar('omegaImportarBeneficios', { filas: r.filas });
+      const res = previa.querySelector('#res-om');
+      if (!x.ok) { res.innerHTML = `<p class="error-msg">${esc(x.message)}</p>`; return; }
+      toast(`${x.data.cargados} personas con beneficios cargados.`);
+      await panelOmega(panel);
+      if (x.data.noEncontrados.length || x.data.porNombre) {
+        panel.querySelector('#previa-om').innerHTML = `<p class="${x.data.noEncontrados.length ? 'error-msg' : 'aviso'}">Cargados: ${x.data.cargados}${x.data.porNombre ? ` (${x.data.porNombre} por nombre)` : ''}.
+          ${x.data.noEncontrados.length ? `<br><b>${x.data.noEncontrados.length} no están en Empleados</b> y no se cargaron: ${x.data.noEncontrados.map((n) => esc(`${n.nombre || ''} (${n.cedula})`)).join(', ')}.` : ''}</p>`;
+      }
+    }));
+  };
+  arch.addEventListener('change', async () => {
+    previa.innerHTML = ''; if (!arch.files[0]) return;
+    try {
+      libro = await leerLibro(arch.files[0]);
+      const nombres = libro.SheetNames.filter((n) => !/^hoja\d*$/i.test(n));
+      const usar = nombres.length ? nombres : libro.SheetNames;
+      sel.innerHTML = usar.map((n) => `<option>${esc(n)}</option>`).join('');
+      const mesNom = NOMBRE_MES[Number(omegaEstado.mes.slice(5, 7)) - 1].toUpperCase();
+      sel.value = usar.find((n) => n.toUpperCase().includes(mesNom)) || usar[usar.length - 1];
+      lbl.hidden = usar.length < 2;
+      sel.onchange = () => mostrar().catch((ex) => { previa.innerHTML = `<p class="error-msg">${esc(ex.message)}</p>`; });
+      await mostrar();
+    } catch (ex) { previa.innerHTML = `<p class="error-msg">${esc(ex.message || 'No se pudo leer el Excel.')}</p>`; }
+  });
+}
+
+function editarBeneficioOmega(panel, l) {
+  if (!l) return;
+  dlg.innerHTML = `<form id="fbo" novalidate><h2>Beneficios en $ · ${esc(l.nombre)}</h2>
+    <p class="suave">Montos mensuales en dólares. El cestaticket se calcula solo.</p>
+    ${[['complemento', 'Complemento de alimentación'], ['vehiculo', 'Ayuda de vehículo'], ['bono', 'Bono especial'], ['comisiones', 'Comisiones garantizadas']].map(([k, t]) =>
+      `<label>${t} ($) <input name="${k}" inputmode="decimal" value="${l[k] || 0}"></label>`).join('')}
+    <div class="error-msg" id="err" hidden></div>
+    <div class="fila"><button class="btn grow" type="submit">Guardar</button><button class="btn btn-sec" type="button" id="no">Cerrar</button></div></form>`;
+  const f = dlg.querySelector('#fbo'), err = dlg.querySelector('#err');
+  dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(f.querySelector('button[type=submit]'), async () => {
+    const montos = {}; ['complemento', 'vehiculo', 'bono', 'comisiones'].forEach((k) => { montos[k] = f[k].value.replace(',', '.'); });
+    const x = await llamar('omegaEditarBeneficio', { clave: l.clave, montos });
+    if (!x.ok) return errorEn(err, x.message);
+    dlg.close(); toast('Beneficios guardados.'); panelOmega(panel);
+  }); });
+  dlg.showModal();
+}
+
+/** Excel de una quincena: detalle por persona y los totales para Omega por empresa. */
+async function excelOmega(d, q) {
+  const XLSX = await cargarXlsx();
+  const tasa = d['tasa' + q], fila = (l) => {
+    const o = { Empresa: l.empresa, 'Cédula': l.clave, Nombre: l.nombre, 'Días cestaticket': l.dias };
+    d.conceptos.forEach((k) => { o[k.nombre + ' ($)'] = l[k.id]; });
+    o['Total del mes ($)'] = l.totalUSD;
+    if (q === 1) { o['Tasa 1Q'] = tasa; o['A pagar 1Q (Bs.)'] = l.q1; }
+    else { o['Tasa 2Q'] = tasa; o['Total del mes a tasa 2Q (Bs.)'] = Math.round(l.totalUSD * tasa * 100) / 100; o['Anticipado en 1Q (Bs.)'] = l.q1; o['A pagar 2Q (Bs.)'] = l.q2; }
+    return o;
+  };
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(d.lineas.map(fila)), `${q}Q detalle`);
+  const t = d.totales['q' + q], p = d.parametros, emps = Object.keys(t);
+  const filasTot = [['Concepto', ...emps.map((e) => (e === 'TODAS' ? 'Total' : e))],
+    ['Personas', ...emps.map((e) => t[e].personas)], ['Monto a los colaboradores', ...emps.map((e) => t[e].subtotal)],
+    [`Comisión Omega (${pct(p.comision)})`, ...emps.map((e) => t[e].comision)], [`IVA de la comisión (${pct(p.iva)})`, ...emps.map((e) => t[e].iva)],
+    [`Retención del IVA (${pct(p.retencion)})`, ...emps.map((e) => t[e].retencion)], ['Total a pagar a Omega', ...emps.map((e) => t[e].totalPagar)]];
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(filasTot), `${q}Q totales`);
+  XLSX.writeFile(libro, `Omega-Capital-${d.mes}-${q}Q.xlsx`);
+}

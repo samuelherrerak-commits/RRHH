@@ -13,7 +13,7 @@ var ERRORES_CARGA = [];
 var Calculo = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Cálculo del aporte trimestral al fideicomiso.
        Funciones puras: sin hojas, sin DOM, sin fecha del sistema.
@@ -165,7 +165,7 @@ var Calculo = (function () {
 var Empleados = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Base de empleados y cruce del aporte. Funciones puras.
        ========================================================== */
@@ -572,7 +572,7 @@ var Empleados = (function () {
 var Prestaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Módulo 1 · Prestaciones sociales: lo que ve el trabajador y
        las reglas del anticipo. Funciones puras.
@@ -725,7 +725,7 @@ var Prestaciones = (function () {
 var Exportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Archivos para el banco. Funciones puras.
        Diseño NOMINA APORTES: FIDEICOMISO | Cedula (letra) | (número)
@@ -772,7 +772,7 @@ var Exportes = (function () {
 var Constancia = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Constancia de trabajo: textos, monto en letras y vigencia (30 días).
        Funciones puras; las usan el servidor, el navegador (PDF) y las pruebas.
@@ -900,7 +900,7 @@ var Constancia = (function () {
 var Vacaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Vacaciones: días hábiles, períodos, saldo y reglas de la solicitud.
        Funciones puras. Fechas como texto 'AAAA-MM-DD' (sin horas ni zonas).
@@ -1185,7 +1185,7 @@ var Vacaciones = (function () {
 var Aportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Aporte trimestral al fideicomiso: arma la vista previa a partir del Excel (nombre + monto).
        Función pura: recibe empleados, filas, días adicionales forzados y el aporte anterior.
@@ -1293,7 +1293,7 @@ var Aportes = (function () {
 var Recibos = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Recibos de pago: leer cada hoja del PDF de nómina (texto ya extraído),
        proponer el concepto y asignar cada hoja a su colaborador.
@@ -1387,7 +1387,7 @@ var Recibos = (function () {
 var Planificacion = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Planificación anual de vacaciones y su cumplimiento.
        Funciones puras. Fechas como texto 'AAAA-MM-DD'.
@@ -1531,11 +1531,144 @@ var Planificacion = (function () {
   } catch (e) { ERRORES_CARGA.push('Planificacion: ' + (e && e.message)); return undefined; }
 })();
 
+// ===== core/omega.js =====
+var Omega = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Omega Capital: cestaticket y complemento de alimentación (y los otros
+       beneficios en dólares que se pagan por la misma vía).
+       Regla de la empresa, para cada concepto en $:
+         1.ª quincena: anticipo del 50 % del monto del mes × tasa estimada de la 1Q.
+         2.ª quincena: 100 % del monto del mes × tasa estimada de la 2Q − lo anticipado en la 1Q.
+       El cestaticket ($40 por ley) es para todos; quien ingresa en el mes cobra la parte proporcional.
+       Funciones puras: las usan el navegador, Apps Script y las pruebas. Fechas como { y, m, d }.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      var PARAMETROS = { cestaticket: 40, comision: 0.013, iva: 0.16, retencion: 0.75 };
+      /** Conceptos en $ que paga Omega, en el orden en que se muestran. */
+      var CONCEPTOS = [
+        { id: 'cestaticket', nombre: 'Cestaticket' },
+        { id: 'complemento', nombre: 'Complemento de alimentación' },
+        { id: 'vehiculo', nombre: 'Ayuda de vehículo' },
+        { id: 'bono', nombre: 'Bono especial' },
+        { id: 'comisiones', nombre: 'Comisiones garantizadas' },
+      ];
+      var ADICIONALES = ['complemento', 'vehiculo', 'bono', 'comisiones'];
+    
+      function r2(x) { return Math.round((Number(x) || 0) * 100) / 100; }
+      function esMes(m) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(m || '')); }
+    
+      /**
+       * Días del mes que corresponden de cestaticket (mes comercial de 30 días).
+       * Ingresó antes del mes: 30. Ingresó en el mes: del día de ingreso al 30. Ingresó después: 0.
+       */
+      function diasCestaticket(fechaIngreso, mes) {
+        if (!fechaIngreso || !fechaIngreso.y) return 30;
+        var y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7));
+        var ing = fechaIngreso.y * 12 + fechaIngreso.m, act = y * 12 + m;
+        if (ing < act) return 30;
+        if (ing > act) return 0;
+        return Math.max(0, 30 - Math.min(fechaIngreso.d, 30) + 1);
+      }
+    
+      /** ¿Ingresó después de la 1.ª quincena de ese mes? (entonces no recibe anticipo). */
+      function ingresoTrasPrimeraQuincena(fechaIngreso, mes) {
+        if (!fechaIngreso || !fechaIngreso.y) return false;
+        return fechaIngreso.y === Number(mes.slice(0, 4)) && fechaIngreso.m === Number(mes.slice(5, 7)) && fechaIngreso.d > 15;
+      }
+    
+      /**
+       * Montos en $ del mes de una persona.
+       * beneficio: { complemento, vehiculo, bono, comisiones } (o null). ajuste: { dias } para cambiar los días de cestaticket (p. ej. un egreso).
+       */
+      function montosDelMes(fechaIngreso, mes, beneficio, ajuste, parametros) {
+        var p = Object.assign({}, PARAMETROS, parametros || {});
+        var dias = ajuste && ajuste.dias != null && ajuste.dias !== '' ? Math.max(0, Math.min(30, Number(ajuste.dias))) : diasCestaticket(fechaIngreso, mes);
+        var m = { dias: dias, cestaticket: r2(p.cestaticket * dias / 30) };
+        ADICIONALES.forEach(function (k) { m[k] = r2(beneficio && beneficio[k]); });
+        m.totalUSD = r2(CONCEPTOS.reduce(function (t, c) { return t + m[c.id]; }, 0));
+        return m;
+      }
+    
+      /** Bs. de la 1.ª quincena: 50 % del total en $ × tasa de la 1Q (nada si ingresó después del 15). */
+      function primeraQuincena(totalUSD, tasa1, sinAnticipo) {
+        return sinAnticipo ? 0 : r2(totalUSD / 2 * Number(tasa1 || 0));
+      }
+    
+      /** Bs. de la 2.ª quincena: 100 % en $ × tasa de la 2Q − lo pagado en la 1Q. */
+      function segundaQuincena(totalUSD, tasa2, pagado1Q) {
+        return r2(totalUSD * Number(tasa2 || 0) - Number(pagado1Q || 0));
+      }
+    
+      /** Totales de una quincena para Omega: subtotal + comisión + IVA de la comisión − retención del IVA. */
+      function totalesOmega(subtotal, parametros) {
+        var p = Object.assign({}, PARAMETROS, parametros || {});
+        var comision = r2(subtotal * p.comision), iva = r2(comision * p.iva), retencion = r2(iva * p.retencion);
+        return { subtotal: r2(subtotal), comision: comision, iva: iva, retencion: retencion, totalPagar: r2(subtotal + comision + iva - retencion) };
+      }
+    
+      /** Totales por empresa ({ PCA: {...}, AIV: {...}, TODAS: {...} }) de una lista de líneas, sumando el campo indicado. */
+      function totalesPorEmpresa(lineas, campo, parametros) {
+        var suma = {}, total = 0;
+        lineas.forEach(function (l) { suma[l.empresa] = (suma[l.empresa] || 0) + (Number(l[campo]) || 0); total += Number(l[campo]) || 0; });
+        var r = {};
+        Object.keys(suma).sort().forEach(function (e) { r[e] = Object.assign({ personas: lineas.filter(function (l) { return l.empresa === e; }).length }, totalesOmega(suma[e], parametros)); });
+        r.TODAS = Object.assign({ personas: lineas.length }, totalesOmega(total, parametros));
+        return r;
+      }
+    
+      /**
+       * Lee las filas del Excel de beneficios (una fila por persona) con encabezados como los de Gestión Humana:
+       * «Cédula», «Nombre…», «Monto de complemento de alimentación aprobado», «Ayuda de vehículo», «Bono especial», «Comisiones garantizadas».
+       * filas: matriz (primera fila con encabezados en las primeras 5 filas). Devuelve { filas: [{ cedula, nombre, complemento, vehiculo, bono, comisiones }], faltan: [] }.
+       */
+      function leerExcelBeneficios(matriz) {
+        var norm = function (s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); };
+        var REGLAS = {
+          cedula: function (h) { return /^cedula/.test(h); },
+          nombre: function (h) { return /^nombre/.test(h); },
+          complemento: function (h) { return /complemento/.test(h) && !/pagar/.test(h); },
+          vehiculo: function (h) { return /vehiculo/.test(h); },
+          bono: function (h) { return /^bono/.test(h); },
+          comisiones: function (h) { return /comisiones? garantizad/.test(h); },
+        };
+        for (var f = 0; f < Math.min(6, matriz.length); f++) {
+          var cab = (matriz[f] || []).map(norm), col = {};
+          Object.keys(REGLAS).forEach(function (k) { for (var j = 0; j < cab.length; j++) if (col[k] == null && REGLAS[k](cab[j])) col[k] = j; });
+          if (col.cedula == null || col.complemento == null) continue;
+          var monto = function (v) { var n = typeof v === 'number' ? v : Number(String(v == null ? '' : v).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isFinite(n) && n > 0 ? r2(n) : 0; };
+          var filas = [];
+          for (var i = f + 1; i < matriz.length; i++) {
+            var row = matriz[i] || [], ced = String(row[col.cedula] == null ? '' : row[col.cedula]).replace(/\D/g, '');
+            if (ced.length < 5) continue;
+            var o = { cedula: ced, nombre: col.nombre != null ? String(row[col.nombre] || '').trim() : '' };
+            ADICIONALES.forEach(function (k) { o[k] = col[k] != null ? monto(row[col[k]]) : 0; });
+            filas.push(o);
+          }
+          return { filas: filas, faltan: ADICIONALES.filter(function (k) { return col[k] == null; }) };
+        }
+        return { filas: [], faltan: ['cedula', 'complemento'], error: 'No encontré las columnas «Cédula» y «Monto de complemento de alimentación aprobado».' };
+      }
+    
+      var api = { PARAMETROS: PARAMETROS, CONCEPTOS: CONCEPTOS, ADICIONALES: ADICIONALES, esMes: esMes, diasCestaticket: diasCestaticket,
+        ingresoTrasPrimeraQuincena: ingresoTrasPrimeraQuincena, montosDelMes: montosDelMes, primeraQuincena: primeraQuincena,
+        segundaQuincena: segundaQuincena, totalesOmega: totalesOmega, totalesPorEmpresa: totalesPorEmpresa, leerExcelBeneficios: leerExcelBeneficios, r2: r2 };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Omega = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Omega: ' + (e && e.message)); return undefined; }
+})();
+
 // ===== core/servicio.js =====
 var Servicio = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Casos de uso del módulo de prestaciones. No sabe de Sheets:
        recibe un `repo` (hojas en producción, memoria en pruebas) y
@@ -1558,6 +1691,7 @@ var Servicio = (function () {
       var Aportes = isNode ? require('./aportes.js') : dependencia(raiz, 'Aportes');
       var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
       var Planificacion = isNode ? require('./planificacion.js') : dependencia(raiz, 'Planificacion');
+      var Omega = isNode ? require('./omega.js') : dependencia(raiz, 'Omega');
     
       var HORAS_SESION = 8;
       var MAX_FALLOS_CEDULA = 5;
@@ -3014,7 +3148,183 @@ var Servicio = (function () {
         return ok({ id: x.r.id, visto: x.r.visto, conforme: x.r.conforme });
       }
     
+      /* ---------- Omega Capital: cestaticket, complemento de alimentación y otros beneficios en $ ---------- */
+    
+      function periodoOmega(repo, mes) {
+        var p = repo.omegaPeriodo(mes) || {};
+        return {
+          mes: mes, tasa1: Number(p.tasa1) || 0, tasa2: Number(p.tasa2) || 0,
+          comision: p.comision != null && p.comision !== '' ? Number(p.comision) : Omega.PARAMETROS.comision,
+          iva: p.iva != null && p.iva !== '' ? Number(p.iva) : Omega.PARAMETROS.iva,
+          retencion: p.retencion != null && p.retencion !== '' ? Number(p.retencion) : Omega.PARAMETROS.retencion,
+          cestaticket: p.cestaticket != null && p.cestaticket !== '' ? Number(p.cestaticket) : Omega.PARAMETROS.cestaticket,
+          ajustes: p.ajustes || {}, estado1: p.estado1 || 'ABIERTA', estado2: p.estado2 || 'ABIERTA',
+          cerrada1: p.cerrada1 || 0, cerrada2: p.cerrada2 || 0, _fila: p._fila,
+        };
+      }
+    
+      /** Cálculo del mes: una línea por persona activa (y por quien cobró la 1Q aunque ya no esté activo). */
+      function calculoOmega(repo, mes) {
+        var per = periodoOmega(repo, mes), par = { cestaticket: per.cestaticket, comision: per.comision, iva: per.iva, retencion: per.retencion };
+        var benef = {}; repo.omegaBeneficios().forEach(function (b) { benef[b.clave] = b; });
+        var pag1 = {}, pag2 = {};
+        if (per.estado1 === 'CERRADA') repo.omegaPagos(mes, 1).forEach(function (x) { pag1[x.clave] = x; });
+        if (per.estado2 === 'CERRADA') repo.omegaPagos(mes, 2).forEach(function (x) { pag2[x.clave] = x; });
+        var vistos = {}, lineas = [];
+        var agregar = function (e, inactivo) {
+          var clave = Empleados.claveCedula(e);
+          if (vistos[clave]) return; vistos[clave] = true;
+          var fijo = pag2[clave] || null;
+          var m = fijo ? fijo : Omega.montosDelMes(e.fechaIngreso, mes, benef[clave], per.ajustes[clave], par);
+          var sinAnticipo = Omega.ingresoTrasPrimeraQuincena(e.fechaIngreso, mes);
+          var q1 = pag1[clave] ? pag1[clave].montoBs : (per.estado1 === 'CERRADA' ? 0 : Omega.primeraQuincena(m.totalUSD, per.tasa1, sinAnticipo));
+          var q2 = fijo ? fijo.montoBs : Omega.segundaQuincena(m.totalUSD, per.tasa2, q1);
+          var l = { clave: clave, nombre: e.nombre, puesto: e.puesto || '', organizacion: e.organizacion || '', empresa: fijo ? fijo.empresa : Empleados.empresaFideicomiso(e),
+            ingreso: e.fechaIngreso ? ('0' + e.fechaIngreso.d).slice(-2) + '/' + ('0' + e.fechaIngreso.m).slice(-2) + '/' + e.fechaIngreso.y : '',
+            dias: m.dias, ajustado: per.ajustes[clave] != null, totalUSD: m.totalUSD, q1: q1, q2: q2, sinAnticipo: sinAnticipo && !pag1[clave], inactivo: !!inactivo, conBeneficio: !!benef[clave] };
+          Omega.CONCEPTOS.forEach(function (c) { l[c.id] = m[c.id]; });
+          lineas.push(l);
+        };
+        var todos = repo.todosEmpleados(), porClave = {};
+        todos.forEach(function (e) { porClave[Empleados.claveCedula(e)] = e; });
+        todos.filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina; }).forEach(function (e) { agregar(e, false); });
+        Object.keys(pag1).concat(Object.keys(pag2)).forEach(function (k) {
+          if (vistos[k]) return;
+          var x = pag2[k] || pag1[k], e = porClave[k] || { cedulaLetra: k.slice(0, 1), cedulaNumero: k.slice(1), nombre: x.nombre, empresaDetalle: x.empresa };
+          agregar(e, true);
+        });
+        lineas.sort(function (a, b) { return a.empresa === b.empresa ? (a.nombre < b.nombre ? -1 : 1) : (a.empresa < b.empresa ? -1 : 1); });
+        var sinEmpleado = Object.keys(benef).filter(function (k) { return !vistos[k]; }).map(function (k) { return benef[k].nombre || k; });
+        return { per: per, par: par, lineas: lineas, sinEmpleado: sinEmpleado, benef: benef };
+      }
+    
+      function vistaOmega(c) {
+        var p = c.per;
+        return {
+          mes: p.mes, tasa1: p.tasa1, tasa2: p.tasa2, estado1: p.estado1, estado2: p.estado2, cerrada1: p.cerrada1, cerrada2: p.cerrada2,
+          parametros: c.par, conceptos: Omega.CONCEPTOS, lineas: c.lineas,
+          totales: { q1: Omega.totalesPorEmpresa(c.lineas, 'q1', c.par), q2: Omega.totalesPorEmpresa(c.lineas, 'q2', c.par) },
+          totalUSD: Omega.r2(c.lineas.reduce(function (t, l) { return t + l.totalUSD; }, 0)),
+          beneficiosCargados: Object.keys(c.benef).length, beneficiosSinEmpleado: c.sinEmpleado,
+        };
+      }
+    
+      function omegaMes(repo, ctx, token, mes) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        if (!Omega.esMes(mes)) return err('VALIDACION', 'Elige el mes.');
+        return ok(vistaOmega(calculoOmega(repo, mes)));
+      }
+    
+      /** Guarda tasas, porcentajes y los días de cestaticket ajustados a mano (ajustes: { clave: días | null }). */
+      function omegaGuardarPeriodo(repo, ctx, token, d) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        if (!Omega.esMes(d.mes)) return err('VALIDACION', 'Elige el mes.');
+        var per = periodoOmega(repo, d.mes), num = function (v) { return v == null || v === '' ? null : Number(String(v).replace(',', '.')); };
+        var t1 = num(d.tasa1), t2 = num(d.tasa2);
+        if (t1 != null && t1 !== per.tasa1 && per.estado1 === 'CERRADA') return err('CERRADA', 'La 1.ª quincena ya está cerrada: reábrela para cambiar su tasa.');
+        if (t2 != null && t2 !== per.tasa2 && per.estado2 === 'CERRADA') return err('CERRADA', 'La 2.ª quincena ya está cerrada: reábrela para cambiar su tasa.');
+        if ((t1 != null && !(t1 >= 0)) || (t2 != null && !(t2 >= 0))) return err('VALIDACION', 'La tasa debe ser un número.');
+        if (t1 != null) per.tasa1 = t1;
+        if (t2 != null) per.tasa2 = t2;
+        ['comision', 'iva', 'retencion', 'cestaticket'].forEach(function (k) {
+          var v = num(d[k]); if (v != null && v >= 0) per[k] = v;
+        });
+        if (d.ajustes) {
+          if (per.estado2 === 'CERRADA') return err('CERRADA', 'El mes ya está cerrado.');
+          Object.keys(d.ajustes).forEach(function (k) {
+            var v = d.ajustes[k];
+            if (v == null || v === '') delete per.ajustes[k];
+            else { var n = Number(v); if (!(n >= 0 && n <= 30)) return; per.ajustes[k] = { dias: Math.round(n) }; }
+          });
+        }
+        per.actualizado = ctx.ahora(); per.por = s.clave;
+        repo.guardarOmegaPeriodo(per);
+        return omegaMes(repo, ctx, token, d.mes);
+      }
+    
+      /** Reemplaza la lista de beneficios en $ (complemento, vehículo, bono, comisiones) con las filas del Excel. */
+      function omegaImportarBeneficios(repo, ctx, token, filas) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        if (!filas || !filas.length) return err('VALIDACION', 'El archivo no trae personas.');
+        var todos = repo.todosEmpleados(), porNumero = {}, porNombre = {};
+        todos.forEach(function (e) {
+          var n = String(e.cedulaNumero).replace(/^0+/, '');
+          if (!porNumero[n] || porNumero[n].estado === 'Inactivo') porNumero[n] = e;
+          porNombre[e.nombreNorm] = porNombre[e.nombreNorm] === undefined ? e : null;
+        });
+        var lista = [], noEncontrados = [], usados = {}, porNombreN = 0;
+        filas.forEach(function (f) {
+          var c = Empleados.parsearCedula(f.cedula), e = c.numero ? porNumero[c.numero] : null;
+          if (!e) { var d = String(f.cedula).replace(/\D/g, ''); if (d.length === 9) e = porNumero[d.slice(0, 8).replace(/^0+/, '')] || null; }
+          if (!e && f.nombre && porNombre[Empleados.normalizarNombre(f.nombre)]) { e = porNombre[Empleados.normalizarNombre(f.nombre)]; porNombreN++; }
+          if (!e) { noEncontrados.push({ cedula: String(f.cedula), nombre: f.nombre || '' }); return; }
+          var clave = Empleados.claveCedula(e);
+          if (usados[clave]) return; usados[clave] = true;
+          var b = { clave: clave, nombre: e.nombre, actualizado: ctx.ahora(), por: s.clave };
+          Omega.ADICIONALES.forEach(function (k) { b[k] = Omega.r2(Math.max(0, Number(f[k]) || 0)); });
+          lista.push(b);
+        });
+        if (!lista.length) return err('VALIDACION', 'Ninguna cédula del archivo coincide con los empleados cargados.');
+        repo.reemplazarOmegaBeneficios(lista);
+        repo.log('OMEGA_BENEFICIOS', s.clave, lista.length + ' personas');
+        return ok({ cargados: lista.length, porNombre: porNombreN, noEncontrados: noEncontrados });
+      }
+    
+      /** Cambia los montos en $ de una persona (montos: { complemento, vehiculo, bono, comisiones }). */
+      function omegaEditarBeneficio(repo, ctx, token, clave, montos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var e = repo.empleadoPorClave(clave);
+        if (!e) return err('NO_ENCONTRADO', 'No encontramos a esa persona.');
+        var b = repo.omegaBeneficios().filter(function (x) { return x.clave === Empleados.claveCedula(e); })[0] || { clave: Empleados.claveCedula(e) };
+        Omega.ADICIONALES.forEach(function (k) { if (montos && montos[k] != null && montos[k] !== '') b[k] = Omega.r2(Math.max(0, Number(String(montos[k]).replace(',', '.')) || 0)); else if (b[k] == null) b[k] = 0; });
+        b.nombre = e.nombre; b.actualizado = ctx.ahora(); b.por = s.clave;
+        repo.guardarOmegaBeneficio(b);
+        return ok(b);
+      }
+    
+      /** Cierra la 1.ª o 2.ª quincena: congela lo que se paga a cada persona (la 2Q descuenta lo cerrado en la 1Q). */
+      function omegaCerrarQuincena(repo, ctx, token, mes, q) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        q = Number(q);
+        if (!Omega.esMes(mes) || (q !== 1 && q !== 2)) return err('VALIDACION', 'Quincena no válida.');
+        var c = calculoOmega(repo, mes), per = c.per;
+        if (per['estado' + q] === 'CERRADA') return err('CERRADA', 'Esa quincena ya está cerrada.');
+        if (!(per['tasa' + q] > 0)) return err('VALIDACION', 'Escribe la tasa estimada de la ' + q + '.ª quincena.');
+        if (q === 2 && per.estado1 !== 'CERRADA') return err('VALIDACION', 'Primero cierra la 1.ª quincena.');
+        var ahora = ctx.ahora();
+        repo.agregarOmegaPagos(c.lineas.filter(function (l) { return !l.inactivo || q === 2; }).map(function (l) {
+          var x = { mes: mes, quincena: q, clave: l.clave, nombre: l.nombre, empresa: l.empresa, dias: l.dias, totalUSD: l.totalUSD,
+            tasa: per['tasa' + q], montoBs: q === 1 ? l.q1 : l.q2, anticipoBs: q === 2 ? l.q1 : 0, cerrada: ahora };
+          Omega.CONCEPTOS.forEach(function (k) { x[k.id] = l[k.id]; });
+          return x;
+        }));
+        per['estado' + q] = 'CERRADA'; per['cerrada' + q] = ahora; per.actualizado = ahora; per.por = s.clave;
+        repo.guardarOmegaPeriodo(per);
+        repo.log('OMEGA_CIERRE', s.clave, mes + ' · ' + q + 'Q');
+        return omegaMes(repo, ctx, token, mes);
+      }
+    
+      function omegaReabrirQuincena(repo, ctx, token, mes, q) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        q = Number(q);
+        var per = periodoOmega(repo, mes);
+        if (per['estado' + q] !== 'CERRADA') return err('VALIDACION', 'Esa quincena no está cerrada.');
+        if (q === 1 && per.estado2 === 'CERRADA') return err('VALIDACION', 'Reabre primero la 2.ª quincena.');
+        repo.quitarOmegaPagos(mes, q);
+        per['estado' + q] = 'ABIERTA'; per['cerrada' + q] = 0; per.actualizado = ctx.ahora(); per.por = s.clave;
+        repo.guardarOmegaPeriodo(per);
+        repo.log('OMEGA_REABRIR', s.clave, mes + ' · ' + q + 'Q');
+        return omegaMes(repo, ctx, token, mes);
+      }
+    
       var api = {
+        omegaMes: omegaMes, omegaGuardarPeriodo: omegaGuardarPeriodo, omegaImportarBeneficios: omegaImportarBeneficios, omegaEditarBeneficio: omegaEditarBeneficio,
+        omegaCerrarQuincena: omegaCerrarQuincena, omegaReabrirQuincena: omegaReabrirQuincena,
         iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
         panelSaldosVacaciones: panelSaldosVacaciones, guardarPlanificacionVac: guardarPlanificacionVac, listarPlanificacionesVac: listarPlanificacionesVac,
         miPlanificacion: miPlanificacion, guardarMiPlanificacion: guardarMiPlanificacion, equipoPlanificacion: equipoPlanificacion,
@@ -3057,9 +3367,9 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-06.5';
+var VERSION = '2026-11-09.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -3069,6 +3379,7 @@ function modulosCargados_() {
     Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
     Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
     Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
+    Omega: typeof Omega !== 'undefined' && !!Omega,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -3097,6 +3408,9 @@ var HOJAS = {
   PUSH_DISPOSITIVOS: ['pushId', 'suscripcion', 'tipo', 'creado'],
   RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   PINES: ['clave', 'sal', 'hash', 'creado'],
+  OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
+  OMEGA_PERIODOS: ['mes', 'tasa1', 'tasa2', 'comision', 'iva', 'retencion', 'cestaticket', 'ajustes', 'estado1', 'estado2', 'cerrada1', 'cerrada2', 'actualizado', 'por'],
+  OMEGA_PAGOS: ['mes', 'quincena', 'clave', 'nombre', 'empresa', 'dias', 'cestaticket', 'complemento', 'vehiculo', 'bono', 'comisiones', 'totalUSD', 'tasa', 'anticipoBs', 'montoBs', 'cerrada'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -3192,6 +3506,12 @@ var RUTAS_RRHH = {
   listarPlanificacionesVac: function (repo, ctx, d) { return Servicio.listarPlanificacionesVac(repo, ctx, d.token); },
   panelPlanificacionVac: function (repo, ctx, d) { return Servicio.panelPlanificacionVac(repo, ctx, d.token, d.ciclo); },
   recordarPlanificacionVac: function (repo, ctx, d) { return Servicio.recordarPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  omegaMes: function (repo, ctx, d) { return Servicio.omegaMes(repo, ctx, d.token, d.mes); },
+  omegaGuardarPeriodo: function (repo, ctx, d) { return Servicio.omegaGuardarPeriodo(repo, ctx, d.token, d); },
+  omegaImportarBeneficios: function (repo, ctx, d) { return Servicio.omegaImportarBeneficios(repo, ctx, d.token, d.filas); },
+  omegaEditarBeneficio: function (repo, ctx, d) { return Servicio.omegaEditarBeneficio(repo, ctx, d.token, d.clave, d.montos); },
+  omegaCerrarQuincena: function (repo, ctx, d) { return Servicio.omegaCerrarQuincena(repo, ctx, d.token, d.mes, d.quincena); },
+  omegaReabrirQuincena: function (repo, ctx, d) { return Servicio.omegaReabrirQuincena(repo, ctx, d.token, d.mes, d.quincena); },
   saldoVacacionesEmpleado: function (repo, ctx, d) { return Servicio.saldoVacacionesEmpleado(repo, ctx, d.token, d.clave); },
   listarConstancias: function (repo, ctx, d) { return Servicio.listarConstancias(repo, ctx, d.token); },
   anularConstancia: function (repo, ctx, d) { return Servicio.anularConstancia(repo, ctx, d.token, d.id); },
@@ -3218,7 +3538,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaMes: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -3722,6 +4042,54 @@ function crearRepo_() {
       return carpetaRecibos_().createFile(blob).getId();
     },
     leerArchivoRecibo: function (id) { return Utilities.base64Encode(DriveApp.getFileById(id).getBlob().getBytes()); },
+    /* ---- Omega Capital ---- */
+    omegaBeneficios: function () {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      return leer_('OMEGA_BENEFICIOS').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { _fila: f._fila, clave: texto_(f.clave), nombre: texto_(f.nombre), complemento: Number(f.complemento) || 0, vehiculo: Number(f.vehiculo) || 0,
+          bono: Number(f.bono) || 0, comisiones: Number(f.comisiones) || 0, actualizado: Number(f.actualizado) || 0, por: texto_(f.por) };
+      });
+    },
+    reemplazarOmegaBeneficios: function (lista) {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      quitarFilas_('OMEGA_BENEFICIOS', function () { return true; });
+      agregarFilas_('OMEGA_BENEFICIOS', lista);
+    },
+    guardarOmegaBeneficio: function (b) {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      var ya = leer_('OMEGA_BENEFICIOS').filter(function (f) { return texto_(f.clave) === b.clave; })[0];
+      var copia = Object.assign({}, b); delete copia._fila; if (ya) copia._fila = ya._fila;
+      escribirFila_('OMEGA_BENEFICIOS', copia);
+    },
+    omegaPeriodo: function (mes) {
+      asegurarHoja_('OMEGA_PERIODOS');
+      var f = leer_('OMEGA_PERIODOS').filter(function (x) { return texto_(x.mes) === mes; })[0];
+      if (!f) return null;
+      var aj = {}; try { aj = f.ajustes ? JSON.parse(f.ajustes) : {}; } catch (e) { /* vacío */ }
+      var n = function (v) { return v === '' || v == null ? null : Number(v); };
+      return { _fila: f._fila, mes: mes, tasa1: n(f.tasa1), tasa2: n(f.tasa2), comision: n(f.comision), iva: n(f.iva), retencion: n(f.retencion), cestaticket: n(f.cestaticket),
+        ajustes: aj, estado1: texto_(f.estado1) || 'ABIERTA', estado2: texto_(f.estado2) || 'ABIERTA', cerrada1: Number(f.cerrada1) || 0, cerrada2: Number(f.cerrada2) || 0 };
+    },
+    guardarOmegaPeriodo: function (p) {
+      asegurarHoja_('OMEGA_PERIODOS');
+      var copia = Object.assign({}, p, { ajustes: JSON.stringify(p.ajustes || {}) });
+      if (!copia._fila) { var h = hoja_('OMEGA_PERIODOS'); h.getRange(h.getLastRow() + 1, 1).setNumberFormat('@'); }
+      escribirFila_('OMEGA_PERIODOS', copia);
+      p._fila = copia._fila;
+    },
+    omegaPagos: function (mes, q) {
+      asegurarHoja_('OMEGA_PAGOS');
+      return leer_('OMEGA_PAGOS').filter(function (f) { return texto_(f.mes) === mes && Number(f.quincena) === q; }).map(function (f) {
+        var x = { mes: mes, quincena: q, clave: texto_(f.clave), nombre: texto_(f.nombre), empresa: texto_(f.empresa), dias: Number(f.dias) || 0 };
+        ['cestaticket', 'complemento', 'vehiculo', 'bono', 'comisiones', 'totalUSD', 'tasa', 'anticipoBs', 'montoBs', 'cerrada'].forEach(function (k) { x[k] = Number(f[k]) || 0; });
+        return x;
+      });
+    },
+    agregarOmegaPagos: function (lista) { asegurarHoja_('OMEGA_PAGOS'); agregarFilas_('OMEGA_PAGOS', lista); },
+    quitarOmegaPagos: function (mes, q) {
+      asegurarHoja_('OMEGA_PAGOS');
+      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.mes) === mes && Number(f.quincena) === q; });
+    },
     eliminarLote: function (lote, recibos) {
       recibos.forEach(function (r) { try { DriveApp.getFileById(r.archivo).setTrashed(true); } catch (e) { /* ya no estaba */ } });
       var ids = {}; recibos.forEach(function (r) { ids[r.id] = true; });
