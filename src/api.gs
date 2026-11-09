@@ -6,9 +6,9 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-06.4';
+var VERSION = '2026-11-09.2';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -16,7 +16,9 @@ function modulosCargados_() {
     Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
     Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
     Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
-    Aportes: typeof Aportes !== 'undefined' && !!Aportes,
+    Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
+    Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
+    Omega: typeof Omega !== 'undefined' && !!Omega,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -35,9 +37,21 @@ var HOJAS = {
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
   VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
-    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues'],
+    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues', 'planificada'],
+  VAC_CICLOS: ['id', 'nombre', 'desde', 'hasta', 'abre', 'cierra', 'creada', 'por', 'actualizada'],
+  VAC_PLANES: ['id', 'ciclo', 'clave', 'estado', 'bloques', 'requeridos', 'planificados', 'jefe', 'enviada', 'decidida', 'decididaPor', 'motivo', 'actualizada'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
+  NOTIFICACIONES: ['id', 'clave', 'tipo', 'titulo', 'texto', 'ruta', 'creada'],
+  NOTIF_LECTURAS: ['clave', 'hasta'],
+  RECIBOS_LOTES: ['id', 'concepto', 'empresa', 'total', 'estado', 'creado', 'por', 'publicado'],
+  PUSH_DISPOSITIVOS: ['pushId', 'suscripcion', 'tipo', 'creado'],
+  RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   PINES: ['clave', 'sal', 'hash', 'creado'],
+  OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
+  OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
+  OMEGA_CONFIG: ['clave', 'valor'],
+  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada'],
+  OMEGA_PAGOS: ['quincena', 'lote', 'clave', 'cedula', 'nombre', 'usd', 'montoBs', 'anticipoBs', 'dias', 'detalle', 'validado'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -61,14 +75,14 @@ var EMPLEADOS_FUERA_NOMINA_INICIALES = [
   { cedula: 'E810535060', nombre: 'DANILO KOENIG', empresa: 'PCA', fechaIngreso: '09/09/2008' },
 ];
 
-// Feriados nacionales 2026 (lista de RRHH, corregida: 12 de octubre en vez de 10/12; se agregan 5 y 24 de julio).
-var FERIADOS_INICIALES = [
-  ['2026-01-01', 'Año Nuevo'], ['2026-02-16', 'Lunes de Carnaval'], ['2026-02-17', 'Martes de Carnaval'], ['2026-04-02', 'Jueves Santo'],
-  ['2026-04-03', 'Viernes Santo'], ['2026-04-19', 'Declaración de la Independencia'], ['2026-05-01', 'Día del Trabajador'],
-  ['2026-06-24', 'Batalla de Carabobo'], ['2026-07-05', 'Día de la Independencia'], ['2026-07-24', 'Natalicio del Libertador'],
-  ['2026-10-12', 'Día de la Resistencia Indígena'], ['2026-12-24', 'Víspera de Navidad'], ['2026-12-25', 'Navidad'],
-  ['2026-12-31', 'Fin de Año'], ['2027-01-01', 'Año Nuevo'],
-];
+// Feriados nacionales de Venezuela de 2026 a 2030 (Carnaval y Semana Santa se calculan con la fecha de Pascua).
+// La lista 2026 de RRHH quedó igual: 12 de octubre (no 10/12) y con 5 y 24 de julio.
+var FERIADOS_DESDE = 2026, FERIADOS_HASTA = 2030;
+function feriadosIniciales_() {
+  var l = [];
+  for (var y = FERIADOS_DESDE; y <= FERIADOS_HASTA; y++) l = l.concat(Vacaciones.feriadosVenezuela(y));
+  return l;
+}
 
 var RUTAS_TRABAJADOR = {
   datosAnticipo: function (repo, ctx, d) { return Servicio.datosAnticipo(repo, ctx, d.token); },
@@ -85,9 +99,28 @@ var RUTAS_TRABAJADOR = {
   estadoDeCuenta: function (repo, ctx, d) { return Servicio.miEstadoDeCuenta(repo, ctx, d.token); },
   solicitarAnticipo: function (repo, ctx, d) { return Servicio.solicitarAnticipo(repo, ctx, d.token, d); },
   cancelarAnticipo: function (repo, ctx, d) { return Servicio.cancelarAnticipo(repo, ctx, d.token, d.id); },
+  misNotificaciones: function (repo, ctx, d) { return Servicio.misNotificaciones(repo, ctx, d.token); },
+  miPlanificacion: function (repo, ctx, d) { return Servicio.miPlanificacion(repo, ctx, d.token); },
+  guardarMiPlanificacion: function (repo, ctx, d) { return Servicio.guardarMiPlanificacion(repo, ctx, d.token, d); },
+  equipoPlanificacion: function (repo, ctx, d) { return Servicio.equipoPlanificacion(repo, ctx, d.token); },
+  decidirPlanificacion: function (repo, ctx, d) { return Servicio.decidirPlanificacion(repo, ctx, d.token, d.id, !!d.aprobar, d.motivo); },
+  avisoDePrueba: function (repo, ctx, d) { return Servicio.avisoDePrueba(repo, ctx, d.token); },
+  registrarDispositivo: function (repo, ctx, d) { return Servicio.registrarDispositivo(repo, ctx, d.token, d); },
+  marcarNotificacionesLeidas: function (repo, ctx, d) { return Servicio.marcarNotificacionesLeidas(repo, ctx, d.token); },
+  misRecibos: function (repo, ctx, d) { return Servicio.misRecibos(repo, ctx, d.token); },
+  verRecibo: function (repo, ctx, d) { return Servicio.verRecibo(repo, ctx, d.token, d.id); },
+  confirmarRecibo: function (repo, ctx, d) { return Servicio.confirmarRecibo(repo, ctx, d.token, d.id); },
 };
 
 var RUTAS_RRHH = {
+  asignarRecibos: function (repo, ctx, d) { return Servicio.asignarRecibos(repo, ctx, d.token, d.hojas); },
+  crearLoteRecibos: function (repo, ctx, d) { return Servicio.crearLoteRecibos(repo, ctx, d.token, d); },
+  subirRecibos: function (repo, ctx, d) { return Servicio.subirRecibos(repo, ctx, d.token, d); },
+  publicarLote: function (repo, ctx, d) { return Servicio.publicarLote(repo, ctx, d.token, d.id); },
+  eliminarLote: function (repo, ctx, d) { return Servicio.eliminarLote(repo, ctx, d.token, d.id); },
+  listarLotes: function (repo, ctx, d) { return Servicio.listarLotes(repo, ctx, d.token); },
+  detalleLote: function (repo, ctx, d) { return Servicio.detalleLote(repo, ctx, d.token, d.id); },
+  verReciboRRHH: function (repo, ctx, d) { return Servicio.verReciboRRHH(repo, ctx, d.token, d.id); },
   restablecerPin: function (repo, ctx, d) { return Servicio.restablecerPin(repo, ctx, d.token, d.clave); },
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
@@ -109,6 +142,26 @@ var RUTAS_RRHH = {
   registrarVacaciones: function (repo, ctx, d) { return Servicio.registrarVacaciones(repo, ctx, d.token, d.id, d.nomina); },
   rechazarVacacionesRRHH: function (repo, ctx, d) { return Servicio.rechazarVacacionesRRHH(repo, ctx, d.token, d.id, d.motivo); },
   importarCierreVacaciones: function (repo, ctx, d) { return Servicio.importarCierreVacaciones(repo, ctx, d.token, d.personas); },
+  panelSaldosVacaciones: function (repo, ctx, d) { return Servicio.panelSaldosVacaciones(repo, ctx, d.token); },
+  guardarPlanificacionVac: function (repo, ctx, d) { return Servicio.guardarPlanificacionVac(repo, ctx, d.token, d); },
+  listarPlanificacionesVac: function (repo, ctx, d) { return Servicio.listarPlanificacionesVac(repo, ctx, d.token); },
+  panelPlanificacionVac: function (repo, ctx, d) { return Servicio.panelPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  recordarPlanificacionVac: function (repo, ctx, d) { return Servicio.recordarPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  omegaInicio: function (repo, ctx, d) { return Servicio.omegaInicio(repo, ctx, d.token); },
+  omegaGuardarConfig: function (repo, ctx, d) { return Servicio.omegaGuardarConfig(repo, ctx, d.token, d); },
+  omegaTarjetas: function (repo, ctx, d) { return Servicio.omegaTarjetas(repo, ctx, d.token); },
+  omegaMarcarTarjeta: function (repo, ctx, d) { return Servicio.omegaMarcarTarjeta(repo, ctx, d.token, d.claves, !!d.sinTarjeta); },
+  omegaAbrirQuincena: function (repo, ctx, d) { return Servicio.omegaAbrirQuincena(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
+  omegaQuincena: function (repo, ctx, d) { return Servicio.omegaQuincena(repo, ctx, d.token, d.id); },
+  omegaCambiarTasa: function (repo, ctx, d) { return Servicio.omegaCambiarTasa(repo, ctx, d.token, d.id, d.tasa); },
+  omegaEliminarQuincena: function (repo, ctx, d) { return Servicio.omegaEliminarQuincena(repo, ctx, d.token, d.id); },
+  omegaLote: function (repo, ctx, d) { return Servicio.omegaLote(repo, ctx, d.token, d.id, d.lote); },
+  omegaAjustarLinea: function (repo, ctx, d) { return Servicio.omegaAjustarLinea(repo, ctx, d.token, d.id, d.lote, d.clave, d.cambio); },
+  omegaValidarLote: function (repo, ctx, d) { return Servicio.omegaValidarLote(repo, ctx, d.token, d.id, d.lote); },
+  omegaReabrirLote: function (repo, ctx, d) { return Servicio.omegaReabrirLote(repo, ctx, d.token, d.id, d.lote); },
+  omegaImportarBeneficios: function (repo, ctx, d) { return Servicio.omegaImportarBeneficios(repo, ctx, d.token, d.filas); },
+  omegaBeneficios: function (repo, ctx, d) { return Servicio.omegaBeneficios(repo, ctx, d.token); },
+  omegaEditarBeneficio: function (repo, ctx, d) { return Servicio.omegaEditarBeneficio(repo, ctx, d.token, d.clave, d.montos); },
   saldoVacacionesEmpleado: function (repo, ctx, d) { return Servicio.saldoVacacionesEmpleado(repo, ctx, d.token, d.clave); },
   listarConstancias: function (repo, ctx, d) { return Servicio.listarConstancias(repo, ctx, d.token); },
   anularConstancia: function (repo, ctx, d) { return Servicio.anularConstancia(repo, ctx, d.token, d.id); },
@@ -135,6 +188,9 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
+  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
+  subirRecibos: 1,
 };
 
 function doPost(e) {
@@ -356,7 +412,7 @@ function vacSolicitud_(f) {
     reintegro: fechaIso_(f.reintegro), dias: Number(f.dias) || 0, condicion: texto_(f.condicion), imputacion: imp, estado: texto_(f.estado),
     jefe: texto_(f.jefe), creada: Number(f.creada) || 0, actualizada: Number(f.actualizada) || 0, decididaJefePor: texto_(f.decididaJefePor),
     decisionJefe: Number(f.decisionJefe) || 0, registradaPor: texto_(f.registradaPor), registrada: Number(f.registrada) || 0,
-    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo), numeroConstancia: texto_(f.numeroConstancia), pendientesDespues: pend,
+    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo), numeroConstancia: texto_(f.numeroConstancia), pendientesDespues: pend, planificada: texto_(f.planificada),
   };
 }
 
@@ -565,7 +621,370 @@ function crearRepo_() {
     log: function (accion, actor, detalle) {
       hoja_('LOG').appendRow([new Date(), accion, actor, detalle]);
     },
+
+    /* ---- Notificaciones ---- */
+    agregarNotificaciones: function (lista) { agregarFilas_('NOTIFICACIONES', lista); },
+    nuevoIdNotificacion: function () { return 'N-' + Utilities.getUuid().slice(0, 13).toUpperCase(); },
+    /** Solo las últimas 3.000 filas: la campanita muestra los avisos de los últimos 60 días. */
+    notificacionesRecientes: function () {
+      var h = hoja_('NOTIFICACIONES'), ultima = h.getLastRow(), cab = HOJAS.NOTIFICACIONES;
+      if (ultima < 2) return [];
+      var desde = Math.max(2, ultima - 2999);
+      return h.getRange(desde, 1, ultima - desde + 1, cab.length).getValues().map(function (f) {
+        return { id: texto_(f[0]), clave: texto_(f[1]), tipo: texto_(f[2]), titulo: texto_(f[3]), texto: texto_(f[4]), ruta: texto_(f[5]), creada: Number(f[6]) || 0 };
+      });
+    },
+    notificacionesLeidasHasta: function (d) {
+      var f = leer_('NOTIF_LECTURAS').filter(function (x) { return texto_(x.clave) === d; })[0];
+      return f ? Number(f.hasta) || 0 : 0;
+    },
+    marcarNotificacionesLeidas: function (d, t) {
+      var f = leer_('NOTIF_LECTURAS').filter(function (x) { return texto_(x.clave) === d; })[0];
+      if (!f) { var h = hoja_('NOTIF_LECTURAS'); h.getRange(h.getLastRow() + 1, 1).setNumberFormat('@'); }
+      escribirFila_('NOTIF_LECTURAS', { _fila: f ? f._fila : 0, clave: d, hasta: t });
+    },
+    enviarPush: enviarPush_,
+    registrarSuscripcionPush: registrarSuscripcionPush_,
+
+    /* ---- Planificación de vacaciones ---- */
+    vacCiclos: function () {
+      asegurarHoja_('VAC_CICLOS'); asegurarHoja_('VAC_PLANES');   // por si aún no se corrió «Configurar hojas»
+      return leer_('VAC_CICLOS').filter(function (f) { return texto_(f.id); }).map(function (f) {
+        return { _fila: f._fila, id: texto_(f.id), nombre: texto_(f.nombre), desde: fechaIso_(f.desde), hasta: fechaIso_(f.hasta), abre: fechaIso_(f.abre),
+          cierra: fechaIso_(f.cierra), creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+      });
+    },
+    guardarVacCiclo: function (c) {
+      if (!c._fila) { var h = hoja_('VAC_CICLOS'); h.getRange(h.getLastRow() + 1, 1, 1, 6).setNumberFormat('@'); }
+      else hoja_('VAC_CICLOS').getRange(c._fila, 1, 1, 6).setNumberFormat('@');
+      escribirFila_('VAC_CICLOS', c);
+    },
+    nuevoIdCiclo: function () { return 'PVC-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+    vacPlanes: function (ciclo) { return leer_('VAC_PLANES').map(plan_).filter(function (p) { return p.ciclo === ciclo; }); },
+    vacPlan: function (ciclo, clave) { return leer_('VAC_PLANES').map(plan_).filter(function (p) { return p.ciclo === ciclo && p.clave === clave; })[0] || null; },
+    vacPlanPorId: function (id) { return leer_('VAC_PLANES').map(plan_).filter(function (p) { return p.id === id; })[0] || null; },
+    guardarVacPlan: function (p) {
+      var copia = Object.assign({}, p, { bloques: JSON.stringify(p.bloques || []) });
+      if (!copia._fila) { var h = hoja_('VAC_PLANES'); h.getRange(h.getLastRow() + 1, 1, 1, 3).setNumberFormat('@'); }
+      escribirFila_('VAC_PLANES', copia);
+      p._fila = copia._fila;
+    },
+    nuevoIdPlan: function () { return 'PLN-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+
+    /* ---- Recibos de pago ---- */
+    nuevoIdLote: function () { return 'LOT-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+    nuevoIdRecibo: function () { return 'REC-' + Utilities.getUuid().slice(0, 13).toUpperCase(); },
+    lotes: function () { return leer_('RECIBOS_LOTES').map(lote_).filter(function (l) { return l.id; }); },
+    lotePorId: function (id) { return leer_('RECIBOS_LOTES').map(lote_).filter(function (l) { return l.id === id; })[0] || null; },
+    guardarLote: function (l) { escribirFila_('RECIBOS_LOTES', l); },
+    todosRecibos: function () { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.id; }); },
+    recibosDeLote: function (id) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.lote === id; }); },
+    recibosDe: function (clave) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.clave === clave; }); },
+    reciboPorId: function (id) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.id === id; })[0] || null; },
+    agregarRecibos: function (lista) {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(20000);
+      try { agregarFilas_('RECIBOS', lista); } finally { lock.releaseLock(); }
+    },
+    guardarRecibo: function (r) { escribirFila_('RECIBOS', r); },
+    guardarArchivoRecibo: function (nombre, b64) {
+      var blob = Utilities.newBlob(Utilities.base64Decode(b64), 'application/pdf', nombre);
+      return carpetaRecibos_().createFile(blob).getId();
+    },
+    leerArchivoRecibo: function (id) { return Utilities.base64Encode(DriveApp.getFileById(id).getBlob().getBytes()); },
+    /* ---- Omega Capital ---- */
+    omegaBeneficios: function () {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      return leer_('OMEGA_BENEFICIOS').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { _fila: f._fila, clave: texto_(f.clave), nombre: texto_(f.nombre), complemento: Number(f.complemento) || 0, vehiculo: Number(f.vehiculo) || 0,
+          bono: Number(f.bono) || 0, comisiones: Number(f.comisiones) || 0, actualizado: Number(f.actualizado) || 0, por: texto_(f.por) };
+      });
+    },
+    reemplazarOmegaBeneficios: function (lista) {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      quitarFilas_('OMEGA_BENEFICIOS', function () { return true; });
+      agregarFilas_('OMEGA_BENEFICIOS', lista);
+    },
+    guardarOmegaBeneficio: function (b) {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      var ya = leer_('OMEGA_BENEFICIOS').filter(function (f) { return texto_(f.clave) === b.clave; })[0];
+      var copia = Object.assign({}, b); delete copia._fila; if (ya) copia._fila = ya._fila;
+      escribirFila_('OMEGA_BENEFICIOS', copia);
+    },
+    omegaSinTarjeta: function () {
+      asegurarHoja_('OMEGA_SIN_TARJETA');
+      var r = {}; leer_('OMEGA_SIN_TARJETA').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = { nombre: texto_(f.nombre), desde: Number(f.desde) || 0, por: texto_(f.por) }; });
+      return r;
+    },
+    marcarOmegaSinTarjeta: function (clave, nombre, sin, por, cuando) {
+      asegurarHoja_('OMEGA_SIN_TARJETA');
+      var ya = leer_('OMEGA_SIN_TARJETA').filter(function (f) { return texto_(f.clave) === clave; })[0];
+      if (sin && !ya) agregarFilas_('OMEGA_SIN_TARJETA', [{ clave: clave, nombre: nombre, desde: cuando, por: por }]);
+      if (!sin && ya) quitarFilas_('OMEGA_SIN_TARJETA', function (f) { return texto_(f.clave) === clave; });
+    },
+    omegaConfig: function () {
+      asegurarHoja_('OMEGA_CONFIG');
+      var r = {}; leer_('OMEGA_CONFIG').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = f.valor; });
+      return r;
+    },
+    guardarOmegaConfig: function (c) {
+      asegurarHoja_('OMEGA_CONFIG');
+      var filas = leer_('OMEGA_CONFIG');
+      Object.keys(c).forEach(function (k) {
+        var ya = filas.filter(function (f) { return texto_(f.clave) === k; })[0];
+        escribirFila_('OMEGA_CONFIG', { _fila: ya ? ya._fila : undefined, clave: k, valor: c[k] });
+      });
+    },
+    omegaQuincenas: function () { asegurarHoja_('OMEGA_QUINCENAS'); return leer_('OMEGA_QUINCENAS').filter(function (f) { return texto_(f.id); }).map(omegaQuincena_); },
+    omegaQuincena: function (id) {
+      asegurarHoja_('OMEGA_QUINCENAS');
+      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === id; })[0];
+      return f ? omegaQuincena_(f) : null;
+    },
+    guardarOmegaQuincena: function (q) {
+      asegurarHoja_('OMEGA_QUINCENAS');
+      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === q.id; })[0];
+      var copia = Object.assign({}, q, { lotes: JSON.stringify(q.lotes || {}), ajustes: JSON.stringify(q.ajustes || {}), _fila: ya ? ya._fila : undefined });
+      if (!copia._fila) { var h = hoja_('OMEGA_QUINCENAS'); h.getRange(h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@'); }
+      escribirFila_('OMEGA_QUINCENAS', copia);
+    },
+    eliminarOmegaQuincena: function (id) {
+      quitarFilas_('OMEGA_QUINCENAS', function (f) { return texto_(f.id) === id; });
+      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === id; });
+    },
+    omegaPagos: function (q, lote) {
+      asegurarHoja_('OMEGA_PAGOS');
+      return leer_('OMEGA_PAGOS').filter(function (f) { return texto_(f.quincena) === q && texto_(f.lote) === lote; }).map(function (f) {
+        var det = {}; try { det = f.detalle ? JSON.parse(f.detalle) : {}; } catch (e) { /* vacío */ }
+        return { quincena: q, lote: lote, clave: texto_(f.clave), cedula: texto_(f.cedula), nombre: texto_(f.nombre), usd: Number(f.usd) || 0, montoBs: Number(f.montoBs) || 0,
+          anticipoBs: Number(f.anticipoBs) || 0, dias: Number(f.dias) || 0, detalle: det, validado: Number(f.validado) || 0 };
+      });
+    },
+    agregarOmegaPagos: function (lista) {
+      asegurarHoja_('OMEGA_PAGOS');
+      agregarFilas_('OMEGA_PAGOS', lista.map(function (x) { return Object.assign({}, x, { detalle: JSON.stringify(x.detalle || {}) }); }));
+    },
+    quitarOmegaPagos: function (q, lote) {
+      asegurarHoja_('OMEGA_PAGOS');
+      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === q && texto_(f.lote) === lote; });
+    },
+    eliminarLote: function (lote, recibos) {
+      recibos.forEach(function (r) { try { DriveApp.getFileById(r.archivo).setTrashed(true); } catch (e) { /* ya no estaba */ } });
+      var ids = {}; recibos.forEach(function (r) { ids[r.id] = true; });
+      quitarFilas_('RECIBOS', function (f) { return ids[texto_(f.id)]; });
+      quitarFilas_('RECIBOS_LOTES', function (f) { return texto_(f.id) === lote.id; });
+    },
   };
+}
+
+function plan_(f) {
+  var b = [];
+  try { b = f.bloques ? JSON.parse(f.bloques) : []; } catch (e) { /* vacío */ }
+  return { _fila: f._fila, id: texto_(f.id), ciclo: texto_(f.ciclo), clave: texto_(f.clave), estado: texto_(f.estado), bloques: b,
+    requeridos: Number(f.requeridos) || 0, planificados: Number(f.planificados) || 0, jefe: texto_(f.jefe), enviada: Number(f.enviada) || 0,
+    decidida: Number(f.decidida) || 0, decididaPor: texto_(f.decididaPor), motivo: texto_(f.motivo), actualizada: Number(f.actualizada) || 0 };
+}
+
+function omegaQuincena_(f) {
+  var j = function (v) { try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } };
+  return { _fila: f._fila, id: texto_(f.id), mes: texto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes),
+    creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+}
+
+function lote_(f) {
+  return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), empresa: texto_(f.empresa), total: Number(f.total) || 0, estado: texto_(f.estado),
+    creado: Number(f.creado) || 0, por: texto_(f.por), publicado: Number(f.publicado) || 0 };
+}
+
+function recibo_(f) {
+  return { _fila: f._fila, id: texto_(f.id), lote: texto_(f.lote), clave: texto_(f.clave), nombre: texto_(f.nombre), pagina: Number(f.pagina) || 0,
+    archivo: texto_(f.archivo), creado: Number(f.creado) || 0, visto: Number(f.visto) || 0, conforme: Number(f.conforme) || 0 };
+}
+
+/** Agrega varias filas de una vez (mucho más rápido que appendRow una por una). */
+function agregarFilas_(nombre, lista) {
+  if (!lista.length) return;
+  var h = hoja_(nombre), cab = HOJAS[nombre], desde = h.getLastRow() + 1;
+  var r = h.getRange(desde, 1, lista.length, cab.length);
+  r.setNumberFormat('@');
+  r.setValues(lista.map(function (o) { return cab.map(function (c) { return o[c] == null ? '' : String(o[c]); }); }));
+  invalidar_(nombre);
+}
+
+/** Reescribe la hoja sin las filas que cumplen la condición. */
+function quitarFilas_(nombre, condicion) {
+  var h = hoja_(nombre), cab = HOJAS[nombre];
+  var quedan = leer_(nombre).filter(function (f) { return !condicion(f); }).map(function (f) { return cab.map(function (c) { return f[c] == null ? '' : f[c]; }); });
+  var ultima = h.getLastRow();
+  if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+  if (quedan.length) { var r = h.getRange(2, 1, quedan.length, cab.length); r.setNumberFormat('@'); r.setValues(quedan); }
+  invalidar_(nombre);
+}
+
+/** Carpeta de Drive donde se guardan los recibos (privada: solo la ve la cuenta dueña del Apps Script). */
+function carpetaRecibos_() {
+  var props = PropertiesService.getScriptProperties(), id = props.getProperty('RECIBOS_CARPETA');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* la borraron: se crea otra */ } }
+  var c = DriveApp.createFolder('CAC · Recibos de pago');
+  props.setProperty('RECIBOS_CARPETA', c.getId());
+  return c;
+}
+
+/**
+ * Notificación al celular con OneSignal (si está configurado en el menú RRHH). destinos: identificadores de
+ * notificación (no cédulas) o '*' para todos los que activaron los avisos. Si falla, no interrumpe nada.
+ */
+/** Datos de OneSignal guardados en la hoja, limpios (sin espacios ni comillas). Sin ellos o mal escritos: { error }. */
+function configOneSignal_() {
+  var props = PropertiesService.getScriptProperties();
+  var appId = String(props.getProperty('ONESIGNAL_APP_ID') || '').replace(/[\s'"]/g, '');
+  var clave = String(props.getProperty('ONESIGNAL_API_KEY') || '').replace(/[\s'"]/g, '');
+  if (!appId || !clave) return { error: 'Falta configurar OneSignal en la hoja (menú RRHH → «3 · Notificaciones al celular»).' };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appId)) {
+    return { error: 'El App ID de OneSignal guardado en la hoja no es válido (debe verse como 97b880ba-f53c-4cb8-…). Vuelve a ponerlo en el menú RRHH → «3».' };
+  }
+  if (!/^os_v2_[a-z0-9_]{20,}$/i.test(clave)) {
+    return { error: 'La REST API Key de OneSignal guardada en la hoja no es válida: debe empezar con «os_v2_app_» (no uses el «Key ID»). Vuelve a ponerla en el menú RRHH → «3».' };
+  }
+  return { appId: appId, clave: clave, sitio: props.getProperty('CAC_URL') || '' };
+}
+
+function pedirOneSignal_(cfg, ruta, cuerpo) {
+  var r = UrlFetchApp.fetch('https://api.onesignal.com' + ruta, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Key ' + cfg.clave }, payload: JSON.stringify(cuerpo),
+  });
+  var texto = r.getContentText(), j = {};
+  try { j = JSON.parse(texto); } catch (x) { /* no es JSON */ }
+  return { codigo: r.getResponseCode(), json: j, texto: texto };
+}
+function errorOneSignal_(r) {
+  var e = r.json && r.json.errors;
+  var txt = e && e.join ? e.map(function (x) { return typeof x === 'string' ? x : (x.title || JSON.stringify(x)); }).join(' ') : r.texto;
+  if (r.codigo === 401 || r.codigo === 403) return 'OneSignal no aceptó la REST API Key guardada en la hoja (HTTP ' + r.codigo + '). Crea una nueva en OneSignal (Settings → Keys & IDs → Add key) y ponla en el menú RRHH → «3».';
+  return 'HTTP ' + r.codigo + ' · ' + String(txt).slice(0, 200);
+}
+
+/**
+ * Registra en OneSignal la suscripción de avisos de un dispositivo (la crea el navegador con la clave pública de la app).
+ * externalId: identificador de la persona (no es su cédula). El tipo sale del servicio de avisos del dispositivo.
+ */
+function registrarSuscripcionPush_(externalId, d) {
+  var cfg = configOneSignal_();
+  if (cfg.error) return { estado: 'SIN_CONFIGURAR', detalle: cfg.error };
+  var host = String(d.endpoint).replace(/^https:\/\/([^/]+).*$/, '$1');
+  var tipo = /push\.apple\.com$/.test(host) ? 'SafariPush' : /mozilla\.com$/.test(host) ? 'FirefoxPush' : 'ChromePush';
+  // OneSignal guarda las llaves en base64 estándar (con + / =); el navegador las entrega en base64url. Si no se
+  // convierten, la suscripción queda creada pero OneSignal no le puede enviar (0 destinatarios).
+  var b64 = function (x) { x = String(x || '').replace(/-/g, '+').replace(/_/g, '/'); return x + '===='.slice(0, (4 - x.length % 4) % 4); };
+  var sub = { type: tipo, token: d.endpoint, enabled: true, notification_types: 1, web_auth: b64(d.auth), web_p256: b64(d.p256dh), sdk: '160700' };
+  try {
+    var r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users', { identity: { external_id: externalId }, subscriptions: [sub] });
+    if (r.codigo === 409) r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users/by/external_id/' + encodeURIComponent(externalId) + '/subscriptions', { subscription: sub });
+    if (r.codigo >= 300) { registrarError_(new Error('OneSignal suscripción ' + errorOneSignal_(r))); return { estado: 'ERROR', detalle: errorOneSignal_(r) }; }
+    // número de suscripción del dispositivo: los avisos se envían directo a él (más seguro que por usuario)
+    var subs = (r.json && r.json.subscriptions) || (r.json && r.json.subscription ? [r.json.subscription] : []);
+    var hecha = subs.filter(function (x) { return x && x.token === d.endpoint; })[0] || subs[0];
+    if (hecha && hecha.id) guardarDispositivo_(externalId, hecha.id, tipo);
+    return { estado: 'REGISTRADO', tipo: tipo };
+  } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
+}
+
+/** Crea la hoja si aún no existe (para no exigir «Configurar hojas» al actualizar). */
+function asegurarHoja_(nombre) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(nombre)) return;
+  var h = ss.insertSheet(nombre);
+  h.getRange(1, 1, 1, HOJAS[nombre].length).setValues([HOJAS[nombre]]).setFontWeight('bold');
+  h.setFrozenRows(1);
+}
+
+/** Guarda (o mueve a esta persona) el número de suscripción de un dispositivo. */
+function guardarDispositivo_(pushId, suscripcion, tipo) {
+  asegurarHoja_('PUSH_DISPOSITIVOS');
+  quitarFilas_('PUSH_DISPOSITIVOS', function (f) { return texto_(f.suscripcion) === suscripcion; });
+  agregarFilas_('PUSH_DISPOSITIVOS', [{ pushId: pushId, suscripcion: suscripcion, tipo: tipo, creado: Date.now() }]);
+}
+
+/** Números de suscripción de los dispositivos de esas personas. */
+function suscripcionesDe_(pushIds) {
+  asegurarHoja_('PUSH_DISPOSITIVOS');
+  var quien = {}; pushIds.forEach(function (p) { quien[p] = true; });
+  return leer_('PUSH_DISPOSITIVOS').filter(function (f) { return quien[texto_(f.pushId)]; }).map(function (f) { return texto_(f.suscripcion); });
+}
+
+function enviarPush_(destinos, titulo, texto, ruta) {
+  var cfg = configOneSignal_();
+  if (cfg.error) return { estado: 'SIN_CONFIGURAR', detalle: cfg.error };
+  var appId = cfg.appId, clave = cfg.clave;
+  if (!destinos || !destinos.length) return { estado: 'SIN_DESTINATARIOS' };
+  var sitio = cfg.sitio;
+  var cuerpo = { app_id: appId, target_channel: 'push', headings: { en: titulo, es: titulo }, contents: { en: texto || titulo, es: texto || titulo } };
+  if (sitio) cuerpo.url = sitio.replace(/\/?$/, '/') + (ruta ? '#/' + ruta : '');
+  var subs = [];
+  if (destinos === '*') cuerpo.included_segments = ['Total Subscriptions'];
+  else {
+    subs = suscripcionesDe_(destinos);
+    if (!subs.length) return { estado: 'SIN_DESTINATARIOS', detalle: 'Ninguna de esas personas tiene los avisos activos en un dispositivo.' };
+    delete cuerpo.target_channel;
+    cuerpo.include_subscription_ids = subs;
+  }
+  try {
+    var r = UrlFetchApp.fetch('https://api.onesignal.com/notifications?c=push', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { Authorization: 'Key ' + clave }, payload: JSON.stringify(cuerpo),
+    });
+    var texto = r.getContentText(), j = {};
+    try { j = JSON.parse(texto); } catch (x) { /* no es JSON */ }
+    if (r.getResponseCode() >= 300) {
+      registrarError_(new Error('OneSignal ' + r.getResponseCode() + ': ' + texto.slice(0, 300)));
+      return { estado: 'ERROR', detalle: errorOneSignal_({ codigo: r.getResponseCode(), json: j, texto: texto }) };
+    }
+    // dispositivos que OneSignal ya no acepta (la persona quitó el permiso o borró el CAC): se olvidan
+    var invalidos = (j.errors && (j.errors.invalid_player_ids || j.errors.invalid_subscription_ids)) || [];
+    if (invalidos.length) {
+      var malos = {}; invalidos.forEach(function (x) { malos[x] = true; });
+      quitarFilas_('PUSH_DISPOSITIVOS', function (f) { return malos[texto_(f.suscripcion)]; });
+    }
+    // sin id, o todos inválidos: nadie de los destinatarios puede recibirlo
+    if (!j.id || (subs.length && invalidos.length >= subs.length)) {
+      return { estado: 'SIN_DESTINATARIOS', detalle: 'OneSignal no tiene un dispositivo válido para recibirlo. Vuelve a activar los avisos.' };
+    }
+    return { estado: 'ENVIADO', id: j.id };
+  } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
+}
+
+/** Tarea diaria (la instala «Configurar hojas»): avisa al celular las constancias que vencieron desde la última vez. */
+function avisosDiarios() {
+  var props = PropertiesService.getScriptProperties(), ahora = Date.now();
+  var desde = Number(props.getProperty('AVISOS_DESDE')) || ahora - 86400000;
+  memo_ = {}; constanciasCache = null;
+  Servicio.avisosDiarios(crearRepo_(), crearCtx_(), desde);
+  props.setProperty('AVISOS_DESDE', String(ahora));
+}
+
+function instalarTareaDiaria_() {
+  try {
+    var ya = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'avisosDiarios'; });
+    if (!ya) ScriptApp.newTrigger('avisosDiarios').timeBased().everyDays(1).atHour(7).create();
+  } catch (e) { /* sin permiso para tareas: los avisos siguen en la campanita */ }
+}
+
+/** Menú RRHH → «3 · Notificaciones al celular»: datos de la app de OneSignal. */
+function configurarNotificaciones() {
+  var ui = SpreadsheetApp.getUi(), props = PropertiesService.getScriptProperties();
+  var pedir = function (titulo, texto, prop) {
+    var r = ui.prompt(titulo, texto + (props.getProperty(prop) ? '\n\n(Ya hay uno guardado. Deja en blanco para no cambiarlo.)' : ''), ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK) return false;
+    var v = String(r.getResponseText() || '').trim();
+    if (v) props.setProperty(prop, v);
+    return true;
+  };
+  if (!pedir('OneSignal · App ID', 'App ID de OneSignal (Settings → Keys & IDs):', 'ONESIGNAL_APP_ID')) return;
+  if (!pedir('OneSignal · REST API Key', 'REST API Key de OneSignal (Settings → Keys & IDs):', 'ONESIGNAL_API_KEY')) return;
+  if (!pedir('Dirección del CAC', 'Dirección del sitio, por ejemplo https://cac.onrender.com', 'CAC_URL')) return;
+  instalarTareaDiaria_();
+  ui.alert('Listo', 'Las notificaciones al celular quedaron configuradas.', ui.ButtonSet.OK);
 }
 
 /** La hoja PINES se crea sola (para no exigir «Configurar hojas» al actualizar). */
@@ -600,11 +1019,17 @@ function configurarInicial() {
    ['vacAnticipacionMin', 15], ['vacAnticipacionMax', 20]]
     .forEach(function (f) { if (!existentes[f[0]]) hp.appendRow(f); });
   sem('EMPRESAS', [['PCA', 5847, 1, 5, 'A'], ['AIV', 5847, 1, 5, 'A']]);
-  // Feriados iniciales (solo si la hoja está vacía; después RRHH la edita)
-  var hf = ss.getSheetByName('FERIADOS');
-  if (hf.getLastRow() <= 1) {
-    hf.getRange(2, 1, FERIADOS_INICIALES.length, 1).setNumberFormat('@');
-    hf.getRange(2, 1, FERIADOS_INICIALES.length, 2).setValues(FERIADOS_INICIALES);
+  // Feriados nacionales 2026-2030: se agregan los que falten (no se tocan los que RRHH ya tenga o haya agregado)
+  if (typeof Vacaciones !== 'undefined' && Vacaciones) {
+    var hf = ss.getSheetByName('FERIADOS'), hay = {};
+    leer_('FERIADOS').forEach(function (f) { hay[fechaIso_(f.fecha)] = true; });
+    var faltan = feriadosIniciales_().filter(function (f) { return !hay[f[0]]; });
+    if (faltan.length) {
+      var desde = hf.getLastRow() + 1;
+      hf.getRange(desde, 1, faltan.length, 1).setNumberFormat('@');
+      hf.getRange(desde, 1, faltan.length, 2).setValues(faltan);
+      invalidar_('FERIADOS');
+    }
   }
   // Empleados fuera de nómina iniciales (si los módulos están cargados)
   if (typeof Empleados !== 'undefined' && Empleados) {
@@ -631,6 +1056,7 @@ function configurarInicial() {
     // cédulas y claves como texto, para que Sheets no les quite ceros ni letras
     ss.getSheetByName(n).getRange(2, 1, 1000, n === 'EMPLEADOS' ? 2 : 1).setNumberFormat('@');
   });
+  instalarTareaDiaria_();
   invalidarTodo_();
 }
 
@@ -640,6 +1066,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('RRHH')
     .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
     .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
+    .addItem('3 · Notificaciones al celular (OneSignal)', 'configurarNotificaciones')
     .addItem('Refrescar datos', 'refrescarDatos')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
@@ -711,6 +1138,7 @@ function diagnostico() {
   var pr = PropertiesService.getScriptProperties();
   l.push((pr.getProperty('SECRETO') ? '✔ ' : '✘ FALTA ') + 'clave secreta');
   l.push((pr.getProperty('API_TOKEN') ? '✔ ' : '✘ FALTA ') + 'token de la API');
+  l.push((pr.getProperty('ONESIGNAL_APP_ID') && pr.getProperty('ONESIGNAL_API_KEY') ? '✔ ' : '· (opcional) sin ') + 'notificaciones al celular (OneSignal)');
   var cargados = modulosCargados_();
   MODULOS.forEach(function (m) { l.push((cargados[m] ? '✔ ' : '✘ FALTA ') + 'módulo ' + m); });
   l.push('Versión del código: ' + VERSION);

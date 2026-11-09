@@ -13,7 +13,7 @@ var ERRORES_CARGA = [];
 var Calculo = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Cálculo del aporte trimestral al fideicomiso.
        Funciones puras: sin hojas, sin DOM, sin fecha del sistema.
@@ -165,7 +165,7 @@ var Calculo = (function () {
 var Empleados = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Base de empleados y cruce del aporte. Funciones puras.
        ========================================================== */
@@ -572,7 +572,7 @@ var Empleados = (function () {
 var Prestaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Módulo 1 · Prestaciones sociales: lo que ve el trabajador y
        las reglas del anticipo. Funciones puras.
@@ -725,7 +725,7 @@ var Prestaciones = (function () {
 var Exportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Archivos para el banco. Funciones puras.
        Diseño NOMINA APORTES: FIDEICOMISO | Cedula (letra) | (número)
@@ -772,7 +772,7 @@ var Exportes = (function () {
 var Constancia = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Constancia de trabajo: textos, monto en letras y vigencia (30 días).
        Funciones puras; las usan el servidor, el navegador (PDF) y las pruebas.
@@ -900,7 +900,7 @@ var Constancia = (function () {
 var Vacaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Vacaciones: días hábiles, períodos, saldo y reglas de la solicitud.
        Funciones puras. Fechas como texto 'AAAA-MM-DD' (sin horas ni zonas).
@@ -967,6 +967,36 @@ var Vacaciones = (function () {
         var fer = conjunto(feriados), d = aDia(fecha) + 1;
         while (!esHabil(deDia(d), fer)) d++;
         return deDia(d);
+      }
+    
+      /* ---------- Feriados nacionales de Venezuela ---------- */
+    
+      function dosDigitos(n) { return ('0' + n).slice(-2); }
+    
+      /** Domingo de Pascua (calendario gregoriano, algoritmo de Meeus/Jones/Butcher). */
+      function pascua(y) {
+        var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+        var g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+        var l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+        return y + '-' + dosDigitos(Math.floor((h + l - 7 * m + 114) / 31)) + '-' + dosDigitos(((h + l - 7 * m + 114) % 31) + 1);
+      }
+    
+      /**
+       * Feriados nacionales de Venezuela de un año (los que usa la empresa: incluye 24 y 31 de diciembre).
+       * Fijos más Carnaval (lunes y martes, 48 y 47 días antes de Pascua) y Jueves y Viernes Santo.
+       * Si dos caen el mismo día, quedan en una sola fecha con los dos motivos. Devuelve [[fecha, motivo]] en orden.
+       */
+      function feriadosVenezuela(y) {
+        var p = pascua(y), mov = function (n) { return sumarDiasTxt(p, n); };
+        var lista = [
+          [y + '-01-01', 'Año Nuevo'], [mov(-48), 'Lunes de Carnaval'], [mov(-47), 'Martes de Carnaval'], [mov(-3), 'Jueves Santo'],
+          [mov(-2), 'Viernes Santo'], [y + '-04-19', 'Declaración de la Independencia'], [y + '-05-01', 'Día del Trabajador'],
+          [y + '-06-24', 'Batalla de Carabobo'], [y + '-07-05', 'Día de la Independencia'], [y + '-07-24', 'Natalicio del Libertador'],
+          [y + '-10-12', 'Día de la Resistencia Indígena'], [y + '-12-24', 'Víspera de Navidad'], [y + '-12-25', 'Navidad'], [y + '-12-31', 'Fin de Año'],
+        ];
+        var porFecha = {};
+        lista.forEach(function (f) { porFecha[f[0]] = porFecha[f[0]] ? porFecha[f[0]] + ' y ' + f[1] : f[1]; });
+        return Object.keys(porFecha).sort().map(function (k) { return [k, porFecha[k]]; });
       }
     
       /* ---------- Períodos y saldo ---------- */
@@ -1142,7 +1172,7 @@ var Vacaciones = (function () {
         contarHabiles: contarHabiles, culminacion: culminacion, siguienteHabil: siguienteHabil,
         diasPorAnios: diasPorAnios, periodosDeEmpleado: periodosDeEmpleado, saldo: saldo, imputar: imputar, condicion: condicion,
         validarSolicitud: validarSolicitud, mapearCierre: mapearCierre,
-        serialExcel: serialExcel, numeroConstancia: numeroConstancia, pendientesTras: pendientesTras,
+        serialExcel: serialExcel, numeroConstancia: numeroConstancia, pendientesTras: pendientesTras, pascua: pascua, feriadosVenezuela: feriadosVenezuela,
       };
       if (typeof module !== 'undefined' && module.exports) module.exports = api;
       else raiz.Vacaciones = api;
@@ -1155,7 +1185,7 @@ var Vacaciones = (function () {
 var Aportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Aporte trimestral al fideicomiso: arma la vista previa a partir del Excel (nombre + monto).
        Función pura: recibe empleados, filas, días adicionales forzados y el aporte anterior.
@@ -1259,11 +1289,446 @@ var Aportes = (function () {
   } catch (e) { ERRORES_CARGA.push('Aportes: ' + (e && e.message)); return undefined; }
 })();
 
+// ===== core/recibos.js =====
+var Recibos = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Recibos de pago: leer cada hoja del PDF de nómina (texto ya extraído),
+       proponer el concepto y asignar cada hoja a su colaborador.
+       Funciones puras: las usan el navegador, Apps Script y las pruebas.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      function dependencia(r, n) { return new Proxy({}, { get: function (_, k) { return r[n][k]; } }); }
+      var isNode = typeof require === 'function' && typeof module !== 'undefined';
+      var Empleados = isNode ? require('./empleados.js') : dependencia(raiz, 'Empleados');
+    
+      var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    
+      /** Cédula impresa en la hoja («Cédula … V028180545» o «V-14.891.031»). Devuelve el texto tal cual o ''. */
+      function cedulaDeTexto(texto) {
+        var t = String(texto || '');
+        var tras = /C[ée]dula[\s\S]{0,200}?\b([VE])\s*-?\s*([\d.]{6,12})\b/i.exec(t);
+        var m = tras || /\b([VE])\s*-?\s*(\d{6,10})\b/.exec(t);
+        return m ? (m[1].toUpperCase() + m[2].replace(/\./g, '')) : '';
+      }
+    
+      /** Nombre del colaborador en la hoja: «Total a Pagar NOMBRE 28.096,05» (formato de la nómina) o la línea bajo «Nombre y Apellido». */
+      function nombreDeTexto(texto) {
+        var t = String(texto || '').replace(/\s+/g, ' ');
+        var m = /Total a Pagar\s+(.+?)\s+-?[\d.]+,\d{2}\b/i.exec(t) || /Nombre y Apellido\s+(?:Departamento\s+)?([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ' ]{3,80}?)\s{1,}(?=[A-ZÁÉÍÓÚ][a-záéíóúñ])/.exec(t);
+        return m ? m[1].trim() : '';
+      }
+    
+      /**
+       * Concepto propuesto a partir del encabezado «Nómina: Nómina Quincenal - NQ-155 (16/10/2026 - 31/10/2026)».
+       * Quincena 1-15 → «1Q», 16-fin → «2Q»; mes completo → solo el mes. Devuelve '' si no lo reconoce.
+       */
+      function conceptoSugerido(texto) {
+        var t = String(texto || '').replace(/\s+/g, ' ');
+        var nom = /N[óo]mina:\s*([^()]+?)\s*\((\d{1,2})\/(\d{1,2})\/(\d{4})\s*-\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\)/i.exec(t);
+        if (!nom) return '';
+        var nombre = nom[1], d1 = +nom[2], m1 = +nom[3], y1 = +nom[4], d2 = +nom[5], m2 = +nom[6];
+        var tipo = /cesta|alimenta/i.test(nombre) ? 'Cestaticket' : /vacaci/i.test(nombre) ? 'Vacaciones' : /utilidad|aguinaldo/i.test(nombre) ? 'Utilidades'
+          : /bono/i.test(nombre) ? 'Bono' : 'Nómina';
+        if (m1 !== m2) return tipo + ' ' + nom[2] + '/' + nom[3] + ' al ' + nom[5] + '/' + nom[6] + '/' + nom[7];
+        var mes = MESES[m1 - 1] + ' ' + y1;
+        if (d1 === 1 && d2 <= 15) return tipo + ' 1Q ' + mes;
+        if (d1 >= 16) return tipo + ' 2Q ' + mes;
+        return tipo + ' ' + mes;
+      }
+    
+      /**
+       * Asigna cada hoja a un empleado: 1) por cédula (con o sin dígito verificador); 2) por nombre exacto
+       * (sin tildes ni espacios dobles). hojas: [{ pagina, cedula, nombre }]. Devuelve la misma lista con
+       * { clave, nombreEmpleado, como: 'cedula' | 'nombre' | '', inactivo, repetida }.
+       */
+      function asignarHojas(hojas, empleados) {
+        var porNumero = {}, porNombre = {};
+        (empleados || []).forEach(function (e) {
+          if (!e.cedulaNumero) return;
+          var n = String(e.cedulaNumero).replace(/^0+/, '');
+          if (!porNumero[n] || porNumero[n].estado === 'Inactivo') porNumero[n] = e;
+          var k = Empleados.normalizarNombre(e.nombre);
+          porNombre[k] = porNombre[k] === undefined ? e : null;   // nombre repetido: no se usa
+        });
+        var usadas = {};
+        return (hojas || []).map(function (h) {
+          var r = { pagina: h.pagina, cedula: h.cedula || '', nombre: h.nombre || '', clave: '', nombreEmpleado: '', como: '', inactivo: false, repetida: false };
+          var c = Empleados.parsearCedula(h.cedula || '');
+          var e = c.numero ? porNumero[c.numero] : null;
+          if (!e && h.cedula) {
+            var d = String(h.cedula).replace(/\D/g, '');
+            if (d.length === 8) e = porNumero[d.slice(0, 7).replace(/^0+/, '')] || null;   // cédula de 7 dígitos con verificador
+          }
+          if (e) r.como = 'cedula';
+          else if (h.nombre && porNombre[Empleados.normalizarNombre(h.nombre)]) { e = porNombre[Empleados.normalizarNombre(h.nombre)]; r.como = 'nombre'; }
+          if (e) {
+            r.clave = Empleados.claveCedula(e); r.nombreEmpleado = e.nombre; r.inactivo = e.estado === 'Inactivo';
+            if (usadas[r.clave]) r.repetida = true;
+            usadas[r.clave] = true;
+          }
+          return r;
+        });
+      }
+    
+      var api = { cedulaDeTexto: cedulaDeTexto, nombreDeTexto: nombreDeTexto, conceptoSugerido: conceptoSugerido, asignarHojas: asignarHojas, MESES: MESES };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Recibos = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Recibos: ' + (e && e.message)); return undefined; }
+})();
+
+// ===== core/planificacion.js =====
+var Planificacion = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Planificación anual de vacaciones y su cumplimiento.
+       Funciones puras. Fechas como texto 'AAAA-MM-DD'.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      function dependencia(r, n) { return new Proxy({}, { get: function (_, k) { return r[n][k]; } }); }
+      var isNode = typeof require === 'function' && typeof module !== 'undefined';
+      var Vacaciones = isNode ? require('./vacaciones.js') : dependencia(raiz, 'Vacaciones');
+    
+      var ESTADOS = { BORRADOR: 'BORRADOR', ENVIADA: 'ENVIADA', APROBADA: 'APROBADA', RECHAZADA: 'RECHAZADA' };
+      var DIA = 86400000;
+      function aDia(t) { var p = String(t).split('-'); return Math.round(Date.UTC(+p[0], +p[1] - 1, +p[2]) / DIA); }
+      function deDia(n) { return new Date(n * DIA).toISOString().slice(0, 10); }
+      function esFecha(t) { return /^\d{4}-\d{2}-\d{2}$/.test(String(t)) && !isNaN(aDia(t)); }
+      function corta(t) { var p = String(t).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+    
+      /** Valida las fechas de una planificación que abre RRHH. */
+      function validarCiclo(c) {
+        var e = [];
+        if (!String(c.nombre || '').trim()) e.push('Escribe el nombre (por ejemplo, «Vacaciones 2027»).');
+        ['desde', 'hasta', 'abre', 'cierra'].forEach(function (k) { if (!esFecha(c[k])) e.push('Falta la fecha «' + k + '».'); });
+        if (!e.length) {
+          if (c.hasta <= c.desde) e.push('El período a planificar debe terminar después de empezar.');
+          if (c.cierra < c.abre) e.push('La fecha de cierre debe ser después de la de apertura.');
+          if (aDia(c.hasta) - aDia(c.desde) > 450) e.push('El período a planificar no puede pasar de 15 meses.');
+        }
+        return { ok: !e.length, errores: e };
+      }
+    
+      /**
+       * Días que la persona debe planificar: sus pendientes de hoy más los de cada período que cumple dentro de
+       * [desde, hasta]. disponibles: [{ fecha, dias }] — desde qué fecha puede usar cada grupo de días (no se adelantan).
+       */
+      function requeridos(saldoTotal, ingreso, importados, hoy, desde, hasta) {
+        var actuales = Vacaciones.periodosDeEmpleado(ingreso, importados, hoy);
+        var conocidos = {}; actuales.forEach(function (p) { conocidos[p.periodo] = true; });
+        var disponibles = [{ fecha: desde, dias: saldoTotal, periodo: 'pendientes' }];
+        var nuevos = Vacaciones.periodosDeEmpleado(ingreso, importados, hasta).filter(function (p) { return !conocidos[p.periodo]; });
+        nuevos.forEach(function (p) {
+          var y = Number(p.periodo.split('-')[1]), mmdd = String(ingreso).slice(5);
+          var aniversario = y + '-' + (mmdd === '02-29' ? '02-28' : mmdd);
+          disponibles.push({ fecha: aniversario < desde ? desde : aniversario, dias: p.correspondientes, periodo: p.periodo });
+        });
+        return { total: disponibles.reduce(function (t, d) { return t + d.dias; }, 0), pendientes: saldoTotal, nuevos: nuevos.map(function (p, i) {
+          return { periodo: p.periodo, dias: p.correspondientes, desde: disponibles[i + 1].fecha };
+        }), disponibles: disponibles };
+      }
+    
+      /** Completa cada bloque { inicio, dias } con culminación y reintegro, en orden de fecha. */
+      function calcularBloques(bloques, feriados) {
+        return (bloques || []).map(function (b) {
+          var dias = Number(b.dias), inicio = String(b.inicio || '');
+          var fin = esFecha(inicio) && dias >= 1 ? Vacaciones.culminacion(inicio, dias, feriados) : '';
+          return { inicio: inicio, dias: dias, culminacion: fin, reintegro: fin ? Vacaciones.siguienteHabil(fin, feriados) : '' };
+        }).sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; });
+      }
+    
+      /**
+       * Revisa una planificación. Para enviarla: bloques dentro del período, en día hábil, sin cruzarse, sin usar días
+       * antes de tenerlos y sumando exactamente los días requeridos. ciclo: { desde, hasta }; req: resultado de requeridos().
+       */
+      function validarPlan(bloques, ciclo, req, feriados, paraEnviar) {
+        var e = [], calc = calcularBloques(bloques, feriados);
+        calc.forEach(function (b, i) {
+          var n = 'Bloque ' + (i + 1) + ': ';
+          if (!esFecha(b.inicio)) { e.push(n + 'elige la fecha de inicio.'); return; }
+          if (!(b.dias >= 1 && b.dias === Math.floor(b.dias))) { e.push(n + 'los días deben ser un número entero mayor que cero.'); return; }
+          if (b.inicio < ciclo.desde || b.culminacion > ciclo.hasta) e.push(n + 'debe quedar entre el ' + corta(ciclo.desde) + ' y el ' + corta(ciclo.hasta) + '.');
+          if (Vacaciones.contarHabiles(b.inicio, b.inicio, feriados) !== 1) e.push(n + 'debe empezar en un día hábil.');
+          if (i > 0 && calc[i - 1].culminacion && b.inicio <= calc[i - 1].culminacion) e.push(n + 'se cruza con el bloque anterior.');
+        });
+        var total = calc.reduce(function (t, b) { return t + (b.dias > 0 ? b.dias : 0); }, 0);
+        // sin adelantar días: hasta cada bloque, lo planificado no puede pasar de lo que ya tendría
+        var acumulado = 0;
+        calc.forEach(function (b, i) {
+          if (!esFecha(b.inicio) || !(b.dias > 0)) return;
+          acumulado += b.dias;
+          var tiene = req.disponibles.filter(function (d) { return d.fecha <= b.inicio; }).reduce(function (t, d) { return t + d.dias; }, 0);
+          if (acumulado > tiene) e.push('Bloque ' + (i + 1) + ': para el ' + corta(b.inicio) + ' solo tendrías ' + tiene + ' días acumulados (no se adelantan días).');
+        });
+        if (total > req.total) e.push('Planificaste ' + total + ' días y te corresponden ' + req.total + '.');
+        if (paraEnviar && total < req.total) e.push('Te faltan ' + (req.total - total) + ' días por planificar (debes planificar ' + req.total + ').');
+        if (paraEnviar && !calc.length) e.push('Agrega al menos un bloque de vacaciones.');
+        return { ok: !e.length, errores: e, bloques: calc, total: total };
+      }
+    
+      /** Días hábiles en que se cruzan dos rangos [a1, a2] y [b1, b2]. */
+      function cruce(a1, a2, b1, b2, feriados) {
+        var d = a1 > b1 ? a1 : b1, h = a2 < b2 ? a2 : b2;
+        return d <= h ? Vacaciones.contarHabiles(d, h, feriados) : 0;
+      }
+    
+      /** ¿La solicitud cae completa dentro de los bloques planificados? */
+      function enPlan(sol, bloques, feriados) {
+        var dentro = (bloques || []).reduce(function (t, b) { return t + (b.culminacion ? cruce(sol.inicio, sol.culminacion, b.inicio, b.culminacion, feriados) : 0); }, 0);
+        return dentro >= Vacaciones.contarHabiles(sol.inicio, sol.culminacion, feriados);
+      }
+    
+      /** Meses 'AAAA-MM' entre dos fechas. */
+      function meses(desde, hasta) {
+        var r = [], y = +desde.slice(0, 4), m = +desde.slice(5, 7), fy = +hasta.slice(0, 4), fm = +hasta.slice(5, 7);
+        while (y < fy || (y === fy && m <= fm)) { r.push(y + '-' + ('0' + m).slice(-2)); m++; if (m > 12) { m = 1; y++; } }
+        return r;
+      }
+      function finDeMes(mes) { var y = +mes.slice(0, 4), m = +mes.slice(5, 7); return deDia(aDia((m === 12 ? y + 1 : y) + '-' + ('0' + (m === 12 ? 1 : m + 1)).slice(-2) + '-01') - 1); }
+    
+      /**
+       * Cumplimiento de una persona: lo planificado contra lo disfrutado (solicitudes aprobadas por el jefe o registradas).
+       * aLaFecha: días planificados que ya debieron disfrutarse hasta hoy. coinciden: días disfrutados dentro de lo planificado.
+       */
+      function cumplimiento(bloques, solicitudes, ciclo, feriados, hoy) {
+        var reales = (solicitudes || []).filter(function (s) { return (s.estado === 'APROBADA_JEFE' || s.estado === 'REGISTRADA') && s.culminacion >= ciclo.desde && s.inicio <= ciclo.hasta; });
+        var tope = hoy < ciclo.hasta ? hoy : ciclo.hasta;
+        var r = { planificados: 0, aLaFecha: 0, disfrutados: 0, coinciden: 0, fueraDePlan: 0, porMes: {} };
+        meses(ciclo.desde, ciclo.hasta).forEach(function (m) { r.porMes[m] = { planificados: 0, disfrutados: 0 }; });
+        (bloques || []).forEach(function (b) {
+          if (!b.culminacion) return;
+          r.planificados += b.dias;
+          r.aLaFecha += cruce(b.inicio, b.culminacion, ciclo.desde, tope, feriados);
+          Object.keys(r.porMes).forEach(function (m) { r.porMes[m].planificados += cruce(b.inicio, b.culminacion, m + '-01', finDeMes(m), feriados); });
+        });
+        reales.forEach(function (s) {
+          var dias = cruce(s.inicio, s.culminacion, ciclo.desde, ciclo.hasta, feriados);
+          var dentro = (bloques || []).reduce(function (t, b) { return t + (b.culminacion ? cruce(s.inicio, s.culminacion, b.inicio, b.culminacion, feriados) : 0); }, 0);
+          r.disfrutados += dias; r.coinciden += dentro; r.fueraDePlan += Math.max(0, dias - dentro);
+          Object.keys(r.porMes).forEach(function (m) { r.porMes[m].disfrutados += cruce(s.inicio, s.culminacion, m + '-01', finDeMes(m), feriados); });
+        });
+        // % sobre lo que ya debió cumplirse (si aún no toca nada, no hay porcentaje)
+        r.porcentaje = r.aLaFecha ? Math.round(Math.min(r.coinciden, r.aLaFecha) / r.aLaFecha * 100) : null;
+        return r;
+      }
+    
+      var api = { ESTADOS: ESTADOS, validarCiclo: validarCiclo, requeridos: requeridos, calcularBloques: calcularBloques, validarPlan: validarPlan,
+        enPlan: enPlan, cumplimiento: cumplimiento, meses: meses };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Planificacion = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Planificacion: ' + (e && e.message)); return undefined; }
+})();
+
+// ===== core/omega.js =====
+var Omega = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Omega Capital: cestaticket y Omega Transferencia (complemento de alimentación
+       y otros beneficios en $), por quincena y en 4 lotes:
+         Cestaticket PCA · Cestaticket AIV · Transferencia PCA · Transferencia AIV.
+       Reglas:
+       - Cestaticket: $40 al mes por ley. Va a la tarjeta de alimentación. Quien no tiene tarjeta, o
+         ingresó en el mes (cobra proporcional a los días), lo cobra por Transferencia.
+       - Transferencia: complemento + ayuda de vehículo + bono especial + comisiones garantizadas
+         (+ el cestaticket de quien no tiene tarjeta o ingresó en el mes).
+       - 1.ª quincena: 50 % del monto en $ × tasa estimada de la 1Q (nada si ingresó después del 15).
+       - 2.ª quincena: 100 % × tasa estimada de la 2Q − lo pagado en la 1Q en ese mismo lote.
+       - Los egresados no cobran: se les paga en la liquidación.
+       El TXT replica la macro «FORMATO DE SOLICITUD DE DEPÓSITO A BENEFICIARIOS V7.0» de Omega.
+       Funciones puras: las usan el navegador, Apps Script y las pruebas. Fechas como { y, m, d }.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      var PARAMETROS = { cestaticket: 40, comision: 0.013, iva: 0.16, retencion: 0.75 };
+      var EMPRESAS = {
+        PCA: { razonSocial: 'PROSEIN PROVEEDURIA Y SERVICIO INDUSTRIAL CA', rif: 'J001417710' },
+        AIV: { razonSocial: 'AUSTRAL IMPORT DE VENEZUELA CA', rif: '' },
+      };
+      var LOTES = [
+        { id: 'CT-PCA', tipo: 'CESTATICKET', empresa: 'PCA', nombre: 'Cestaticket PCA' },
+        { id: 'CT-AIV', tipo: 'CESTATICKET', empresa: 'AIV', nombre: 'Cestaticket AIV' },
+        { id: 'TR-PCA', tipo: 'TRANSFERENCIA', empresa: 'PCA', nombre: 'Omega Transferencia PCA' },
+        { id: 'TR-AIV', tipo: 'TRANSFERENCIA', empresa: 'AIV', nombre: 'Omega Transferencia AIV' },
+      ];
+      var ADICIONALES = ['complemento', 'vehiculo', 'bono', 'comisiones'];
+    
+      function r2(x) { return Math.round((Number(x) || 0) * 100) / 100; }
+      function esMes(m) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(m || '')); }
+      function idQuincena(mes, q) { return mes + '-' + q; }
+      function lote(id) { return LOTES.filter(function (l) { return l.id === id; })[0] || null; }
+    
+      /** Días del mes de cestaticket (mes comercial de 30 días): antes del mes 30; en el mes, del día de ingreso al 30; después 0. */
+      function diasCestaticket(fechaIngreso, mes) {
+        if (!fechaIngreso || !fechaIngreso.y) return 30;
+        var y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7));
+        var ing = fechaIngreso.y * 12 + fechaIngreso.m, act = y * 12 + m;
+        if (ing < act) return 30;
+        if (ing > act) return 0;
+        return Math.max(0, 30 - Math.min(fechaIngreso.d, 30) + 1);
+      }
+      function ingresoEnElMes(fechaIngreso, mes) {
+        return !!(fechaIngreso && fechaIngreso.y === Number(mes.slice(0, 4)) && fechaIngreso.m === Number(mes.slice(5, 7)));
+      }
+      /** ¿Ingresó después de la 1.ª quincena de ese mes? (no recibe anticipo). */
+      function ingresoTrasPrimeraQuincena(fechaIngreso, mes) {
+        return ingresoEnElMes(fechaIngreso, mes) && fechaIngreso.d > 15;
+      }
+    
+      /**
+       * Monto en $ del mes de una persona en cada tipo de lote.
+       * persona: { fechaIngreso, sinTarjeta }; beneficio: { complemento, vehiculo, bono, comisiones } o null.
+       * Devuelve { dias, cestaticketUSD, cestaticketPor: 'CESTATICKET'|'TRANSFERENCIA', CESTATICKET: $, TRANSFERENCIA: $, detalle }.
+       */
+      function montosDelMes(persona, mes, beneficio, parametros) {
+        var p = Object.assign({}, PARAMETROS, parametros || {});
+        var dias = diasCestaticket(persona.fechaIngreso, mes);
+        var cesta = r2(p.cestaticket * dias / 30);
+        var porTransferencia = !!persona.sinTarjeta || ingresoEnElMes(persona.fechaIngreso, mes);
+        var det = { cestaticket: cesta };
+        ADICIONALES.forEach(function (k) { det[k] = r2(beneficio && beneficio[k]); });
+        var adic = ADICIONALES.reduce(function (t, k) { return t + det[k]; }, 0);
+        return { dias: dias, cestaticketUSD: cesta, cestaticketPor: porTransferencia ? 'TRANSFERENCIA' : 'CESTATICKET',
+          CESTATICKET: porTransferencia ? 0 : cesta, TRANSFERENCIA: r2(adic + (porTransferencia ? cesta : 0)), detalle: det };
+      }
+    
+      /** Bs. a pagar en la quincena: 1Q = 50 % × tasa (0 si ingresó tras el 15); 2Q = 100 % × tasa − lo pagado en la 1Q. */
+      function montoQuincena(usd, q, tasa, pagado1Q, sinAnticipo) {
+        if (Number(q) === 1) return sinAnticipo ? 0 : r2(usd / 2 * Number(tasa || 0));
+        return r2(usd * Number(tasa || 0) - Number(pagado1Q || 0));
+      }
+    
+      /**
+       * Líneas de los 4 lotes de una quincena.
+       * personas: [{ clave, cedula, nombre, empresa, fechaIngreso, sinTarjeta }] (solo activos: los egresados no cobran)
+       * beneficios: { clave: {...} }; pagado1Q: { loteId: { clave: Bs } } (lo cerrado en la 1Q, para la 2Q)
+       * Devuelve { 'CT-PCA': [ { clave, cedula, nombre, usd, montoBs, dias, sinAnticipo, detalle } ], ... }.
+       */
+      function lineasQuincena(personas, beneficios, mes, q, tasa, pagado1Q, parametros) {
+        var r = {}; LOTES.forEach(function (l) { r[l.id] = []; });
+        personas.forEach(function (pe) {
+          var m = montosDelMes(pe, mes, beneficios[pe.clave], parametros), sinAnticipo = ingresoTrasPrimeraQuincena(pe.fechaIngreso, mes);
+          ['CESTATICKET', 'TRANSFERENCIA'].forEach(function (tipo) {
+            var id = (tipo === 'CESTATICKET' ? 'CT-' : 'TR-') + pe.empresa;
+            if (!r[id]) return;
+            var pag = pagado1Q && pagado1Q[id] ? pagado1Q[id][pe.clave] : 0;
+            if (!(m[tipo] > 0) && !(pag > 0)) return;
+            var monto = montoQuincena(m[tipo], q, tasa, pag, sinAnticipo);
+            r[id].push({ clave: pe.clave, cedula: pe.cedula, nombre: pe.nombre, usd: m[tipo], montoBs: monto, anticipoBs: Number(q) === 2 ? r2(pag) : 0,
+              dias: m.dias, sinAnticipo: Number(q) === 1 && sinAnticipo, sinTarjeta: !!pe.sinTarjeta, ingresoMes: ingresoEnElMes(pe.fechaIngreso, mes),
+              detalle: tipo === 'CESTATICKET' ? { cestaticket: m.CESTATICKET } : Object.assign({}, m.detalle, { cestaticket: m.cestaticketPor === 'TRANSFERENCIA' ? m.cestaticketUSD : 0 }) });
+          });
+        });
+        Object.keys(r).forEach(function (k) { r[k].sort(function (a, b) { return a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : 0; }); });
+        return r;
+      }
+    
+      /** Totales de un lote para Omega: subtotal + comisión + IVA de la comisión − retención del IVA. */
+      function totalesOmega(subtotal, parametros) {
+        var p = Object.assign({}, PARAMETROS, parametros || {});
+        var comision = r2(subtotal * p.comision), iva = r2(comision * p.iva), retencion = r2(iva * p.retencion);
+        return { subtotal: r2(subtotal), comision: comision, iva: iva, retencion: retencion, totalPagar: r2(subtotal + comision + iva - retencion) };
+      }
+    
+      /** Avisos de la macro de Omega para una línea (no impiden generar el archivo, salvo los errores). */
+      function revisarLinea(l) {
+        var avisos = [], ced = Number(String(l.cedula).replace(/\D/g, ''));
+        if (!(ced > 0)) avisos.push({ tipo: 'error', texto: 'Cédula no válida' });
+        else if (ced < 1000000 || (ced > 30000000 && ced < 80000000) || ced > 100000000) avisos.push({ tipo: 'aviso', texto: 'Cédula fuera del rango habitual' });
+        if (!(l.montoBs > 0)) avisos.push({ tipo: 'aviso', texto: 'Monto en cero: no va en el archivo' });
+        return avisos;
+      }
+    
+      function soloAlfanumerico(t) {
+        return String(t || '').toUpperCase().replace(/ /g, ' ').split('').filter(function (c) { return c === ' ' || '0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÄËÏÖÜ'.indexOf(c) !== -1; }).join('').trim();
+      }
+    
+      /**
+       * Archivo de solicitud de depósito de Omega (igual que la macro V7.0):
+       *   control: '255' + aammdd + RIF (10) + n.º de beneficiarios (5) + '005' + aaaammdd + total en céntimos (18)
+       *   detalle: n.º TAB cédula TAB monto en céntimos TAB, con CRLF; la última línea sin salto.
+       * datos: { razonSocial, rif, fecha: { y, m, d }, lineas: [{ cedula, montoBs }] }. Solo van las líneas con monto > 0.
+       */
+      function archivoDeposito(datos) {
+        var rif = String(datos.rif || '').replace(/-/g, '').trim().toUpperCase();
+        if (!/^[JGVE]\d{9}$/.test(rif)) return { error: 'El RIF de la empresa debe ser una letra (J, G, V o E) y 9 dígitos. Ejemplo: J001417710.' };
+        var empresa = soloAlfanumerico(datos.razonSocial);
+        if (!empresa) return { error: 'Falta la razón social de la empresa.' };
+        var f = datos.fecha, dos = function (n) { return ('0' + n).slice(-2); };
+        var aammdd = String(f.y).slice(2) + dos(f.m) + dos(f.d);
+        var lineas = (datos.lineas || []).filter(function (l) { return Math.round(r2(l.montoBs) * 100) > 0; });
+        if (!lineas.length) return { error: 'El lote no tiene montos para depositar.' };
+        var malas = lineas.filter(function (l) { return !(Number(String(l.cedula).replace(/\D/g, '')) > 0); });
+        if (malas.length) return { error: 'Hay ' + malas.length + ' cédula(s) no válida(s).' };
+        var total = lineas.reduce(function (t, l) { return t + Math.round(r2(l.montoBs) * 100); }, 0);
+        var pad = function (n, k) { var s = String(n); while (s.length < k) s = '0' + s; return s; };
+        var control = '255' + aammdd + (rif + '               ').slice(0, 10) + pad(lineas.length, 5) + '005' + f.y + dos(f.m) + dos(f.d) + pad(total, 18);
+        var det = lineas.map(function (l, i) { return (i + 1) + '\t' + Number(String(l.cedula).replace(/\D/g, '')) + '\t' + Math.round(r2(l.montoBs) * 100) + '\t'; });
+        return { nombre: 'DEP' + empresa.replace(/ /g, '') + aammdd + '.txt', contenido: control + '\r\n' + det.join('\r\n'), beneficiarios: lineas.length, total: total / 100 };
+      }
+    
+      /**
+       * Lee el Excel de beneficios de Omega Transferencia (encabezados en las primeras filas):
+       * «Cédula», «Nombre…», «Monto de complemento de alimentación aprobado», «Ayuda de vehículo», «Bono especial», «Comisiones garantizadas».
+       */
+      function leerExcelBeneficios(matriz) {
+        var norm = function (s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); };
+        var REGLAS = {
+          cedula: function (h) { return /^cedula/.test(h); },
+          nombre: function (h) { return /^nombre/.test(h); },
+          complemento: function (h) { return /complemento/.test(h) && !/pagar/.test(h); },
+          vehiculo: function (h) { return /vehiculo/.test(h); },
+          bono: function (h) { return /^bono/.test(h); },
+          comisiones: function (h) { return /comisiones? garantizad/.test(h); },
+        };
+        for (var f = 0; f < Math.min(6, matriz.length); f++) {
+          var cab = (matriz[f] || []).map(norm), col = {};
+          Object.keys(REGLAS).forEach(function (k) { for (var j = 0; j < cab.length; j++) if (col[k] == null && REGLAS[k](cab[j])) col[k] = j; });
+          if (col.cedula == null || col.complemento == null) continue;
+          var monto = function (v) { var n = typeof v === 'number' ? v : Number(String(v == null ? '' : v).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isFinite(n) && n > 0 ? r2(n) : 0; };
+          var filas = [];
+          for (var i = f + 1; i < matriz.length; i++) {
+            var row = matriz[i] || [], ced = String(row[col.cedula] == null ? '' : row[col.cedula]).replace(/\D/g, '');
+            if (ced.length < 5) continue;
+            var o = { cedula: ced, nombre: col.nombre != null ? String(row[col.nombre] || '').trim() : '' };
+            ADICIONALES.forEach(function (k) { o[k] = col[k] != null ? monto(row[col[k]]) : 0; });
+            filas.push(o);
+          }
+          return { filas: filas, faltan: ADICIONALES.filter(function (k) { return col[k] == null; }) };
+        }
+        return { filas: [], faltan: ['cedula', 'complemento'], error: 'No encontré las columnas «Cédula» y «Monto de complemento de alimentación aprobado».' };
+      }
+    
+      var api = { PARAMETROS: PARAMETROS, EMPRESAS: EMPRESAS, LOTES: LOTES, ADICIONALES: ADICIONALES, r2: r2, esMes: esMes, idQuincena: idQuincena, lote: lote,
+        diasCestaticket: diasCestaticket, ingresoEnElMes: ingresoEnElMes, ingresoTrasPrimeraQuincena: ingresoTrasPrimeraQuincena, montosDelMes: montosDelMes,
+        montoQuincena: montoQuincena, lineasQuincena: lineasQuincena, totalesOmega: totalesOmega, revisarLinea: revisarLinea, archivoDeposito: archivoDeposito,
+        leerExcelBeneficios: leerExcelBeneficios, soloAlfanumerico: soloAlfanumerico };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Omega = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Omega: ' + (e && e.message)); return undefined; }
+})();
+
 // ===== core/servicio.js =====
 var Servicio = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Casos de uso del módulo de prestaciones. No sabe de Sheets:
        recibe un `repo` (hojas en producción, memoria en pruebas) y
@@ -1284,6 +1749,9 @@ var Servicio = (function () {
       var Constancia = isNode ? require('./constancia.js') : dependencia(raiz, 'Constancia');
       var Vacaciones = isNode ? require('./vacaciones.js') : dependencia(raiz, 'Vacaciones');
       var Aportes = isNode ? require('./aportes.js') : dependencia(raiz, 'Aportes');
+      var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
+      var Planificacion = isNode ? require('./planificacion.js') : dependencia(raiz, 'Planificacion');
+      var Omega = isNode ? require('./omega.js') : dependencia(raiz, 'Omega');
     
       var HORAS_SESION = 8;
       var MAX_FALLOS_CEDULA = 5;
@@ -1329,7 +1797,7 @@ var Servicio = (function () {
       function sesionTrabajador(repo, ctx, emp) {
         var clave = Empleados.claveCedula(emp);
         repo.log('LOGIN', clave, 'Entrada de trabajador');
-        return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp) });
+        return ok({ token: crearToken(ctx, clave, 'TRABAJADOR'), nombre: emp.nombre, genero: emp.genero || '', empresa: Empleados.empresaFideicomiso(emp), pushId: idPush(ctx, clave) });
       }
     
       /**
@@ -1409,7 +1877,7 @@ var Servicio = (function () {
         }
         var emp = repo.empleadoPorClave('V' + digitos) || repo.empleadoPorClave('E' + digitos);
         repo.log('LOGIN_ADMIN', digitos, 'Entrada ' + u.rol);
-        var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '' };
+        var data = { token: crearToken(ctx, digitos, u.rol), rol: u.rol, nombre: emp ? emp.nombre : '', genero: emp ? emp.genero || '' : '', pushId: idPush(ctx, digitos) };
         if (emp && emp.estado !== 'Inactivo') data.tokenTrabajador = crearToken(ctx, Empleados.claveCedula(emp), 'TRABAJADOR');
         if (!emp) data.nombre = u.nombre || '';
         var mias = ['V' + digitos, 'E' + digitos];
@@ -1489,6 +1957,12 @@ var Servicio = (function () {
         if (!v.ok) return err('VALIDACION', v.errores.join(' '));
         repo.guardarAperturaAnticipo(Object.assign(previa || {}, c, { por: s.clave, actualizada: ctx.ahora() }));
         repo.log('ANTICIPO_APERTURA', s.clave, c.clave + ' · ' + c.inicio + ' a ' + c.fin);
+        if (!previa) {
+          var yaAbierta = c.inicio <= hoyCaracas(ctx);
+          notificar(repo, ctx, '*', { tipo: 'ANTICIPO_APERTURA', ruta: 'fideicomiso',
+            titulo: yaAbierta ? 'Ya puedes solicitar tu anticipo de fideicomiso' : 'Se abrirá la solicitud de anticipos de fideicomiso',
+            texto: 'Del ' + fechaCorta(c.inicio) + ' al ' + fechaCorta(c.fin) + ' (' + Prestaciones.etiquetaVentana(c.clave) + ').' });
+        }
         return ok(vistaApertura(c, hoyCaracas(ctx)));
       }
     
@@ -1512,7 +1986,9 @@ var Servicio = (function () {
         var a = repo.anticipoPorId(id);
         if (!a) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
         if (a.estado !== 'EN_ARCHIVO') return err('TRANSICION', 'Solo se marca así una solicitud enviada al banco.');
-        return cambiarEstado(repo, ctx, a, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo || '').trim() || 'Rechazada por el banco: el monto supera el disponible.' });
+        var r = cambiarEstado(repo, ctx, a, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo || '').trim() || 'Rechazada por el banco: el monto supera el disponible.' });
+        if (r.ok) notificar(repo, ctx, [a.clave], { tipo: 'ANTICIPO_RECHAZADO', ruta: 'fideicomiso', titulo: 'El banco rechazó tu solicitud de anticipo', texto: a.motivoRechazo });
+        return r;
       }
     
       function cancelarAnticipo(repo, ctx, token, id) {
@@ -1575,6 +2051,7 @@ var Servicio = (function () {
           var a = repo.anticipoPorId(ids[i]);
           if (a && Prestaciones.puedePasar(Prestaciones.SIGUIENTE_SOLICITUD, a.estado, 'PAGADA')) {
             cambiarEstado(repo, ctx, a, 'PAGADA', s.clave, {}); cambiados++;
+            notificar(repo, ctx, [a.clave], { tipo: 'ANTICIPO_PAGADO', ruta: 'fideicomiso', titulo: 'Tu anticipo de fideicomiso fue pagado', texto: 'Revisa tu cuenta del fideicomiso en el banco.' });
           }
         }
         return ok({ cambiados: cambiados });
@@ -1895,6 +2372,7 @@ var Servicio = (function () {
           jefe: s.jefe, jefeNombre: jefe.nombre || '', motivoRechazo: s.motivoRechazo || '', nomina: s.nomina || '',
           // constancia de aprobación (solo cuando RRHH la registró)
           registrada: s.registrada || 0, numeroConstancia: s.numeroConstancia || '', pendientesDespues: s.pendientesDespues || null,
+          planificada: s.planificada || '',   // 'SI' / 'NO' frente a la planificación aprobada ('' si no tenía)
         };
       }
     
@@ -1941,13 +2419,17 @@ var Servicio = (function () {
           tieneJefe: !!jefe, reglas: reglasVac(repo.parametros()),
         });
         if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+        var planVigente = planAprobadoDe(repo, c.clave, datos.inicio);
         var sol = {
+          planificada: planVigente ? (Planificacion.enPlan({ inicio: datos.inicio, culminacion: v.calculo.culminacion }, planVigente.bloques, feriados) ? 'SI' : 'NO') : '',
           id: repo.nuevoIdVac(), clave: c.clave, inicio: datos.inicio, culminacion: v.calculo.culminacion, reintegro: v.calculo.reintegro,
           dias: Number(datos.dias), condicion: v.calculo.condicion, imputacion: v.calculo.imputacion, estado: 'PENDIENTE_JEFE',
           jefe: emp.jefe, creada: ctx.ahora(), actualizada: ctx.ahora(), decididaJefePor: '', registradaPor: '', nomina: '', motivoRechazo: '',
         };
         repo.guardarVacSolicitud(sol);
         repo.log('VACACIONES_SOLICITADA', c.clave, sol.id + ' · ' + sol.dias + ' días desde ' + sol.inicio);
+        notificar(repo, ctx, [emp.jefe], { tipo: 'VACACIONES_POR_APROBAR', ruta: 'equipo', titulo: 'Nueva solicitud de vacaciones por aprobar',
+          texto: emp.nombre + ' pide ' + sol.dias + ' día' + (sol.dias === 1 ? '' : 's') + ' desde el ' + fechaCorta(sol.inicio) + '.' });
         return ok(vistaVac(sol, nombresPorClave(repo)));
       }
     
@@ -1984,7 +2466,11 @@ var Servicio = (function () {
         if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
         var extra = { decididaJefePor: s.clave, decisionJefe: ctx.ahora(), motivoRechazo: aprobar ? '' : String(motivo).trim() };
         if (aprobar) Object.assign(extra, datosConstanciaVac(repo, ctx, sol));   // la constancia de aprobación sale con el visto bueno del jefe
-        return cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave, extra);
+        var r = cambiarVac(repo, ctx, sol, aprobar ? 'APROBADA_JEFE' : 'RECHAZADA', s.clave, extra);
+        if (r.ok) notificar(repo, ctx, [sol.clave], aprobar
+          ? { tipo: 'VACACIONES_APROBADAS', ruta: 'vacaciones', titulo: '¡Tu jefe aprobó tus vacaciones!', texto: 'Del ' + fechaCorta(sol.inicio) + ' al ' + fechaCorta(sol.culminacion) + '. Ya puedes descargar tu constancia de aprobación.' }
+          : { tipo: 'VACACIONES_RECHAZADAS', ruta: 'vacaciones', titulo: 'Tu solicitud de vacaciones fue rechazada', texto: 'Motivo: ' + extra.motivoRechazo });
+        return r;
       }
     
       /** Número de la constancia de aprobación (formato del Excel) y días que quedan por período una vez aplicado este disfrute. */
@@ -2019,7 +2505,9 @@ var Servicio = (function () {
         if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
         var extra = { registradaPor: s.clave, registrada: ctx.ahora(), nomina: String(nomina || '').trim() };
         if (!sol.numeroConstancia) Object.assign(extra, datosConstanciaVac(repo, ctx, sol));
-        return cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
+        var r = cambiarVac(repo, ctx, sol, 'REGISTRADA', s.clave, extra);
+        if (r.ok) notificar(repo, ctx, [sol.clave], { tipo: 'VACACIONES_REGISTRADAS', ruta: 'vacaciones', titulo: 'Gestión Humana registró tus vacaciones', texto: 'Del ' + fechaCorta(sol.inicio) + ' al ' + fechaCorta(sol.culminacion) + '. Te reintegras el ' + fechaCorta(sol.reintegro) + '.' });
+        return r;
       }
     
       function rechazarVacacionesRRHH(repo, ctx, token, id, motivo) {
@@ -2028,7 +2516,9 @@ var Servicio = (function () {
         if (!String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo del rechazo.');
         var sol = repo.vacSolicitudPorId(id);
         if (!sol) return err('NO_ENCONTRADO', 'No encontramos esa solicitud.');
-        return cambiarVac(repo, ctx, sol, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo).trim(), registradaPor: s.clave });
+        var r = cambiarVac(repo, ctx, sol, 'RECHAZADA', s.clave, { motivoRechazo: String(motivo).trim(), registradaPor: s.clave });
+        if (r.ok) notificar(repo, ctx, [sol.clave], { tipo: 'VACACIONES_RECHAZADAS', ruta: 'vacaciones', titulo: 'Gestión Humana rechazó tu solicitud de vacaciones', texto: 'Motivo: ' + String(motivo).trim() });
+        return r;
       }
     
       /**
@@ -2281,8 +2771,768 @@ var Servicio = (function () {
         return p && p.porcentajeAnticipoMax != null ? { porcentajeAnticipoMax: Number(p.porcentajeAnticipoMax) } : {};
       }
     
+    
+      /* ---------- Notificaciones (campanita y celular) ---------- */
+    
+      var DIA_MS = 86400000;
+      function digitos(clave) { return String(clave || '').replace(/\D/g, ''); }
+      function fechaCorta(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || ''); }
+      /** Identificador para el servicio de notificaciones al celular: no revela la cédula. */
+      function idPush(ctx, clave) { return ctx.firmar('push:' + digitos(clave)).slice(0, 32); }
+    
+      /**
+       * Guarda el aviso (campanita) y lo envía al celular de quienes lo activaron. destinos: claves (V12345678) o '*' (todos).
+       * El envío al celular es «mejor esfuerzo»: si falla, el aviso sigue en la campanita.
+       */
+      function notificar(repo, ctx, destinos, n) {
+        var lista = destinos === '*' ? ['*'] : (destinos || []).filter(Boolean);
+        if (!lista.length || !repo.agregarNotificaciones) return;
+        var ahora = ctx.ahora();
+        repo.agregarNotificaciones(lista.map(function (c) {
+          return { id: repo.nuevoIdNotificacion(), clave: c, tipo: n.tipo, titulo: n.titulo, texto: n.texto || '', ruta: n.ruta || '', creada: ahora };
+        }));
+        try { if (repo.enviarPush) return repo.enviarPush(destinos === '*' ? '*' : lista.map(function (c) { return idPush(ctx, c); }), n.titulo, n.texto || '', n.ruta || ''); }
+        catch (e) { return { estado: 'ERROR', detalle: String(e && e.message || e) }; }
+        return { estado: 'SIN_CONFIGURAR' };
+      }
+    
+      /**
+       * Registra en OneSignal la suscripción de avisos de este dispositivo (endpoint y llaves que entrega el navegador).
+       * Se hace desde el servidor con la clave de OneSignal: no depende de la librería de OneSignal en el teléfono.
+       */
+      function registrarDispositivo(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var d = { endpoint: String(datos && datos.endpoint || ''), p256dh: String(datos && datos.p256dh || ''), auth: String(datos && datos.auth || '') };
+        if (!/^https:\/\/[^\s]{10,1000}$/.test(d.endpoint) || !/^[\w-]{20,200}$/.test(d.p256dh) || !/^[\w-]{8,100}$/.test(d.auth)) {
+          return err('VALIDACION', 'El dispositivo no entregó una suscripción de avisos válida.');
+        }
+        if (!repo.registrarSuscripcionPush) return err('SIN_CONFIGURAR', 'Los avisos al celular no están disponibles.');
+        var r = repo.registrarSuscripcionPush(idPush(ctx, s.clave), d) || {};
+        if (r.estado !== 'REGISTRADO') return err(r.estado || 'ERROR', r.detalle || 'OneSignal no registró el dispositivo.');
+        repo.log('AVISOS_DISPOSITIVO', s.clave, r.tipo || '');
+        return ok({ estado: 'REGISTRADO', tipo: r.tipo || '' });
+      }
+    
+      /** Cualquier persona se envía a sí misma un aviso de prueba: dice si el celular lo recibirá y, si no, por qué. */
+      function avisoDePrueba(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var clave = s.rol === 'TRABAJADOR' ? s.clave : 'V' + digitos(s.clave);
+        var r = notificar(repo, ctx, [clave], { tipo: 'PRUEBA', ruta: '', titulo: 'Aviso de prueba del CAC', texto: 'Si ves esto en tu celular, los avisos funcionan.' });
+        return ok({ push: r || { estado: 'SIN_CONFIGURAR' } });
+      }
+    
+      /** La última constancia de una persona, si venció (y no fue anulada ni reemplazada). */
+      function constanciaVencida(repo, clave, ahora) {
+        var ult = repo.constanciasDe(clave).sort(function (a, b) { return b.emision - a.emision; })[0];
+        return ult && ult.estado !== 'ANULADA' && ult.vence < ahora ? ult : null;
+      }
+    
+      function misNotificaciones(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var d = digitos(s.clave), ahora = ctx.ahora(), desde = ahora - 60 * DIA_MS;
+        var hasta = repo.notificacionesLeidasHasta(d) || 0;
+        var items = repo.notificacionesRecientes().filter(function (n) {
+          return n.creada >= desde && (n.clave === '*' || digitos(n.clave) === d);
+        }).map(function (n) { return { id: n.id, tipo: n.tipo, titulo: n.titulo, texto: n.texto, ruta: n.ruta, creada: n.creada }; });
+        (s.rol === 'TRABAJADOR' ? [s.clave] : ['V' + d, 'E' + d]).forEach(function (c) {
+          var v = constanciaVencida(repo, c, ahora);
+          if (v && v.vence >= desde) items.push({ id: 'VENCE-' + v.id, tipo: 'CONSTANCIA_VENCIDA', titulo: 'Tu constancia de trabajo venció', texto: 'Ya puedes generar una nueva.', ruta: 'constancia', creada: v.vence });
+        });
+        items.sort(function (a, b) { return b.creada - a.creada; });
+        items = items.slice(0, 30);
+        return ok({ items: items.map(function (n) { return Object.assign(n, { nueva: n.creada > hasta }); }), noLeidas: items.filter(function (n) { return n.creada > hasta; }).length });
+      }
+    
+      function marcarNotificacionesLeidas(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        repo.marcarNotificacionesLeidas(digitos(s.clave), ctx.ahora());
+        return ok({ noLeidas: 0 });
+      }
+    
+      /** Tarea diaria: avisa al celular a quienes se les venció la constancia desde la última revisión. */
+      function avisosDiarios(repo, ctx, desde) {
+        var ahora = ctx.ahora(), avisadas = {};
+        repo.todasConstancias().forEach(function (c) {
+          if (c.vence > desde && c.vence <= ahora && !avisadas[c.clave] && constanciaVencida(repo, c.clave, ahora) && constanciaVencida(repo, c.clave, ahora).id === c.id) avisadas[c.clave] = true;
+        });
+        var claves = Object.keys(avisadas);
+        try { if (claves.length && repo.enviarPush) repo.enviarPush(claves.map(function (c) { return idPush(ctx, c); }), 'Tu constancia de trabajo venció', 'Ya puedes generar una nueva en el CAC.', 'constancia'); }
+        catch (e) { /* sin celular */ }
+        return ok({ avisadas: claves.length });
+      }
+    
+      /* ---------- Vacaciones: panel de días pendientes (RRHH) ---------- */
+    
+      /** Datos de ubicación de un empleado para filtrar: empresa, departamento y localidad (la «Organización» del Detalle). */
+      function ubicacion(e) {
+        return { empresa: Empleados.empresaFideicomiso(e), departamento: e.departamento || 'Sin departamento', localidad: e.organizacion || 'Sin localidad' };
+      }
+    
+      /** Días pendientes por período de todos los empleados activos (el filtro por empresa, departamento o localidad se hace en la pantalla). */
+      function panelSaldosVacaciones(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var periodos = {};
+        var filas = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }).map(function (e) {
+          var c = contextoVac(repo, ctx, e);
+          var pp = c.saldo.porPeriodo.filter(function (p) { return p.pendientes > 0; });
+          pp.forEach(function (p) { periodos[p.periodo] = true; });
+          return Object.assign({ clave: c.clave, nombre: e.nombre, sinFechaIngreso: !e.fechaIngreso,
+            porPeriodo: pp.map(function (p) { return { periodo: p.periodo, pendientes: p.pendientes }; }), total: c.saldo.total }, ubicacion(e));
+        }).sort(function (a, b) { return b.total - a.total || (a.nombre < b.nombre ? -1 : 1); });
+        return ok({ filas: filas, periodos: Object.keys(periodos).sort(), hoy: hoyCaracas(ctx) });
+      }
+    
+      /* ---------- Planificación anual de vacaciones ---------- */
+    
+      function vistaCiclo(c, hoy) {
+        return { id: c.id, nombre: c.nombre, desde: c.desde, hasta: c.hasta, abre: c.abre, cierra: c.cierra,
+          abierta: c.abre <= hoy && hoy <= c.cierra, vigente: c.desde <= hoy && hoy <= c.hasta };
+      }
+    
+      /** La planificación en curso para el colaborador: la abierta para cargar o, si no, la vigente (la más reciente). */
+      function cicloActual(repo, hoy) {
+        var lista = repo.vacCiclos().sort(function (a, b) { return a.abre < b.abre ? 1 : -1; });
+        return lista.filter(function (c) { return c.abre <= hoy && hoy <= c.cierra; })[0]
+          || lista.filter(function (c) { return c.abre <= hoy && hoy <= c.hasta; })[0] || null;
+      }
+    
+      /** Plan aprobado que cubre esa fecha (para marcar si una solicitud está dentro de lo planificado). */
+      function planAprobadoDe(repo, clave, fecha) {
+        if (!repo.vacCiclos) return null;
+        var ciclo = repo.vacCiclos().filter(function (c) { return c.desde <= fecha && fecha <= c.hasta; })[0];
+        var plan = ciclo && repo.vacPlan(ciclo.id, clave);
+        return plan && plan.estado === 'APROBADA' ? plan : null;
+      }
+    
+      function requeridosDe(repo, ctx, emp, ciclo) {
+        var c = contextoVac(repo, ctx, emp);
+        return Planificacion.requeridos(c.saldo.total, Vacaciones.deObjeto(emp.fechaIngreso), repo.vacPeriodosDe(c.clave), c.hoy, ciclo.desde, ciclo.hasta);
+      }
+    
+      function vistaPlan(p) {
+        return p ? { id: p.id, estado: p.estado, bloques: p.bloques, requeridos: p.requeridos, planificados: p.planificados,
+          enviada: p.enviada || 0, decidida: p.decidida || 0, motivo: p.motivo || '', jefe: p.jefe || '' } : null;
+      }
+    
+      /** RRHH abre (o corrige) una planificación: nombre, período a planificar y fechas de apertura y cierre. */
+      function guardarPlanificacionVac(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = { id: datos && datos.id || '', nombre: String(datos && datos.nombre || '').trim(), desde: String(datos && datos.desde || ''), hasta: String(datos && datos.hasta || ''),
+          abre: String(datos && datos.abre || ''), cierra: String(datos && datos.cierra || '') };
+        var v = Planificacion.validarCiclo(c);
+        if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+        var previa = c.id ? repo.vacCiclos().filter(function (x) { return x.id === c.id; })[0] : null;
+        if (c.id && !previa) return err('NO_ENCONTRADO', 'No encontramos esa planificación.');
+        if (!previa) c.id = repo.nuevoIdCiclo();
+        var cruzada = repo.vacCiclos().filter(function (x) { return x.id !== c.id && !(c.hasta < x.desde || c.desde > x.hasta); })[0];
+        if (cruzada) return err('VALIDACION', 'Ese período se cruza con «' + cruzada.nombre + '».');
+        repo.guardarVacCiclo(Object.assign(previa || {}, c, { por: s.clave, actualizada: ctx.ahora(), creada: previa ? previa.creada : ctx.ahora() }));
+        repo.log('PLAN_VAC_CICLO', s.clave, c.id + ' · ' + c.nombre);
+        if (!previa) notificar(repo, ctx, '*', { tipo: 'PLAN_VAC_ABIERTA', ruta: 'vacaciones', titulo: 'Carga tu planificación de vacaciones',
+          texto: c.nombre + ': del ' + fechaCorta(c.desde) + ' al ' + fechaCorta(c.hasta) + '. Tienes hasta el ' + fechaCorta(c.cierra) + ' para enviarla a tu jefe.' });
+        return ok(vistaCiclo(c, hoyCaracas(ctx)));
+      }
+    
+      function listarPlanificacionesVac(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var hoy = hoyCaracas(ctx);
+        return ok(repo.vacCiclos().sort(function (a, b) { return a.desde < b.desde ? 1 : -1; }).map(function (c) { return vistaCiclo(c, hoy); }));
+      }
+    
+      /** Lo que ve el colaborador: la planificación en curso, cuántos días debe planificar y su plan. */
+      function miPlanificacion(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var hoy = hoyCaracas(ctx), ciclo = cicloActual(repo, hoy);
+        if (!ciclo) return ok({ ciclo: null });
+        var emp = repo.empleadoPorClave(s.clave);
+        if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+        var plan = repo.vacPlan(ciclo.id, s.clave), vc = vistaCiclo(ciclo, hoy);
+        var req = plan && (plan.estado === 'APROBADA' || plan.estado === 'ENVIADA') ? { total: plan.requeridos } : requeridosDe(repo, ctx, emp, ciclo);
+        var editable = (!plan || plan.estado === 'BORRADOR' || plan.estado === 'RECHAZADA') && (vc.abierta || (plan && plan.estado === 'RECHAZADA'));
+        var cump = plan && plan.estado === 'APROBADA' ? Planificacion.cumplimiento(plan.bloques, repo.vacSolicitudesDe(s.clave), ciclo, repo.feriados(), hoy) : null;
+        return ok({ ciclo: vc, requeridos: req.total, pendientes: req.pendientes, nuevos: req.nuevos || [], plan: vistaPlan(plan), editable: editable,
+          tieneJefe: !!jefeActivo(repo, emp.jefe), feriados: repo.feriados(), cumplimiento: cump });
+      }
+    
+      /** El colaborador guarda su plan (borrador) o lo envía a su jefe. */
+      function guardarMiPlanificacion(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var hoy = hoyCaracas(ctx), ciclo = cicloActual(repo, hoy);
+        if (!ciclo) return err('VALIDACION', 'No hay una planificación de vacaciones abierta.');
+        var emp = repo.empleadoPorClave(s.clave);
+        if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+        var plan = repo.vacPlan(ciclo.id, s.clave), vc = vistaCiclo(ciclo, hoy);
+        if (plan && (plan.estado === 'ENVIADA' || plan.estado === 'APROBADA')) return err('TRANSICION', plan.estado === 'ENVIADA' ? 'Tu planificación ya está con tu jefe.' : 'Tu planificación ya fue aprobada.');
+        if (!vc.abierta && !(plan && plan.estado === 'RECHAZADA')) return err('VALIDACION', 'La carga de la planificación cerró el ' + fechaCorta(ciclo.cierra) + '.');
+        var enviar = !!(datos && datos.enviar), jefe = jefeActivo(repo, emp.jefe);
+        if (enviar && !jefe) return err('VALIDACION', 'No tienes jefe directo asignado. Comunícate con Gestión Humana.');
+        var req = requeridosDe(repo, ctx, emp, ciclo), feriados = repo.feriados();
+        var v = Planificacion.validarPlan((datos && datos.bloques) || [], ciclo, req, feriados, enviar);
+        if (!v.ok) return err('VALIDACION', v.errores.join(' '));
+        plan = Object.assign(plan || { id: repo.nuevoIdPlan(), ciclo: ciclo.id, clave: s.clave }, {
+          bloques: v.bloques, requeridos: req.total, planificados: v.total, estado: enviar ? 'ENVIADA' : 'BORRADOR',
+          enviada: enviar ? ctx.ahora() : 0, motivo: enviar ? '' : (plan && plan.motivo) || '', jefe: emp.jefe || '', actualizada: ctx.ahora(),
+        });
+        repo.guardarVacPlan(plan);
+        repo.log(enviar ? 'PLAN_VAC_ENVIADO' : 'PLAN_VAC_BORRADOR', s.clave, plan.id + ' · ' + v.total + ' días');
+        if (enviar) notificar(repo, ctx, [emp.jefe], { tipo: 'PLAN_VAC_POR_APROBAR', ruta: 'equipo', titulo: 'Planificación de vacaciones por aprobar',
+          texto: emp.nombre + ' envió su planificación (' + v.total + ' días).' });
+        return ok(vistaPlan(plan));
+      }
+    
+      /** Bandeja del jefe: planificaciones de su equipo (por aprobar y el estado de cada persona). */
+      function equipoPlanificacion(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var hoy = hoyCaracas(ctx), ciclo = cicloActual(repo, hoy);
+        if (!ciclo) return ok({ ciclo: null, pendientes: [], equipo: [] });
+        var mias = clavesDeJefe(s);
+        var equipo = repo.todosEmpleados().filter(function (e) { return mias.indexOf(e.jefe) !== -1 && e.estado !== 'Inactivo'; });
+        var planes = {}; repo.vacPlanes(ciclo.id).forEach(function (p) { planes[p.clave] = p; });
+        var filas = equipo.map(function (e) {
+          var k = Empleados.claveCedula(e), p = planes[k];
+          return { clave: k, nombre: e.nombre, estado: p ? p.estado : 'SIN_CARGAR', plan: vistaPlan(p) };
+        }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+        return ok({ ciclo: vistaCiclo(ciclo, hoy), pendientes: filas.filter(function (f) { return f.estado === 'ENVIADA'; }), equipo: filas });
+      }
+    
+      function decidirPlanificacion(repo, ctx, token, id, aprobar, motivo) {
+        var s = leerToken(ctx, token, ['TRABAJADOR', 'RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var plan = repo.vacPlanPorId(id);
+        if (!plan || clavesDeJefe(s).indexOf(plan.jefe) === -1) return err('NO_ENCONTRADO', 'Esa planificación no es de tu equipo.');
+        if (plan.estado !== 'ENVIADA') return err('TRANSICION', 'Esa planificación ya no está pendiente.');
+        if (!aprobar && !String(motivo || '').trim()) return err('VALIDACION', 'Indica el motivo para que la corrija.');
+        Object.assign(plan, { estado: aprobar ? 'APROBADA' : 'RECHAZADA', decidida: ctx.ahora(), decididaPor: s.clave, motivo: aprobar ? '' : String(motivo).trim(), actualizada: ctx.ahora() });
+        repo.guardarVacPlan(plan);
+        repo.log(aprobar ? 'PLAN_VAC_APROBADO' : 'PLAN_VAC_RECHAZADO', s.clave, plan.id);
+        notificar(repo, ctx, [plan.clave], aprobar
+          ? { tipo: 'PLAN_VAC_APROBADA', ruta: 'vacaciones', titulo: 'Tu jefe aprobó tu planificación de vacaciones', texto: plan.planificados + ' días planificados.' }
+          : { tipo: 'PLAN_VAC_RECHAZADA', ruta: 'vacaciones', titulo: 'Tu jefe pidió corregir tu planificación', texto: 'Motivo: ' + plan.motivo });
+        return ok(vistaPlan(plan));
+      }
+    
+      /** RRHH: cada empleado activo con el estado de su plan y su cumplimiento (planificado contra disfrutado). */
+      function panelPlanificacionVac(repo, ctx, token, cicloId) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var hoy = hoyCaracas(ctx), ciclos = repo.vacCiclos();
+        var ciclo = ciclos.filter(function (c) { return c.id === cicloId; })[0] || cicloActual(repo, hoy) || ciclos[0];
+        if (!ciclo) return ok({ ciclo: null, filas: [], meses: [] });
+        var planes = {}; repo.vacPlanes(ciclo.id).forEach(function (p) { planes[p.clave] = p; });
+        var feriados = repo.feriados(), nombres = nombresPorClave(repo);
+        var filas = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }).map(function (e) {
+          var k = Empleados.claveCedula(e), p = planes[k];
+          var cump = Planificacion.cumplimiento(p && p.estado === 'APROBADA' ? p.bloques : [], repo.vacSolicitudesDe(k), ciclo, feriados, hoy);
+          return Object.assign({ clave: k, nombre: e.nombre, jefeNombre: e.jefe && nombres[e.jefe] ? nombres[e.jefe].nombre : '',
+            estado: p ? p.estado : 'SIN_CARGAR', requeridos: p ? p.requeridos : null, cumplimiento: cump }, ubicacion(e));
+        }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+        return ok({ ciclo: vistaCiclo(ciclo, hoy), filas: filas, meses: Planificacion.meses(ciclo.desde, ciclo.hasta), hoy: hoy });
+      }
+    
+      /** RRHH: aviso a quienes aún no han enviado su planificación. */
+      function recordarPlanificacionVac(repo, ctx, token, cicloId) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var ciclo = repo.vacCiclos().filter(function (c) { return c.id === cicloId; })[0];
+        if (!ciclo) return err('NO_ENCONTRADO', 'No encontramos esa planificación.');
+        var listos = {}; repo.vacPlanes(ciclo.id).forEach(function (p) { if (p.estado === 'ENVIADA' || p.estado === 'APROBADA') listos[p.clave] = true; });
+        var faltan = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero && !listos[Empleados.claveCedula(e)]; })
+          .map(function (e) { return Empleados.claveCedula(e); });
+        if (faltan.length) notificar(repo, ctx, faltan, { tipo: 'PLAN_VAC_RECORDATORIO', ruta: 'vacaciones', titulo: 'Falta tu planificación de vacaciones',
+          texto: ciclo.nombre + ': envíala a tu jefe antes del ' + fechaCorta(ciclo.cierra) + '.' });
+        repo.log('PLAN_VAC_RECORDATORIO', s.clave, ciclo.id + ' · ' + faltan.length);
+        return ok({ avisados: faltan.length });
+      }
+    
+      /* ---------- Recibos de pago ---------- */
+    
+      var MAX_PDF_RECIBO = 3 * 1024 * 1024;   // base64 de una hoja: sobra con 3 MB
+    
+      function vistaLote(l, recibos) {
+        var v = { id: l.id, concepto: l.concepto, empresa: l.empresa, estado: l.estado, creado: l.creado, publicado: l.publicado || 0, total: Number(l.total) || 0 };
+        if (recibos) {
+          v.cargados = recibos.length;
+          v.vistos = recibos.filter(function (r) { return r.visto; }).length;
+          v.conformes = recibos.filter(function (r) { return r.conforme; }).length;
+        }
+        return v;
+      }
+    
+      /** RRHH: asigna las hojas leídas del PDF (cédula y nombre impresos) a los empleados. */
+      function asignarRecibos(repo, ctx, token, hojas) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        if (!Array.isArray(hojas) || !hojas.length) return err('VALIDACION', 'El PDF no trae hojas.');
+        var emps = repo.todosEmpleados();
+        return ok({
+          hojas: Recibos.asignarHojas(hojas, emps),
+          empleados: emps.filter(function (e) { return e.cedulaNumero; }).map(function (e) {
+            return { clave: Empleados.claveCedula(e), nombre: e.nombre, inactivo: e.estado === 'Inactivo' };
+          }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; }),
+        });
+      }
+    
+      function crearLoteRecibos(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var concepto = String(datos && datos.concepto || '').replace(/\s+/g, ' ').trim();
+        if (!concepto) return err('VALIDACION', 'Escribe el concepto (por ejemplo, «Nómina 1Q noviembre 2026»).');
+        if (concepto.length > 80) return err('VALIDACION', 'El concepto es muy largo (máximo 80 caracteres).');
+        var lote = { id: repo.nuevoIdLote(), concepto: concepto, empresa: String(datos.empresa || ''), total: Number(datos.total) || 0,
+          estado: 'BORRADOR', creado: ctx.ahora(), por: s.clave, publicado: 0 };
+        repo.guardarLote(lote);
+        repo.log('RECIBOS_LOTE', s.clave, lote.id + ' · ' + concepto);
+        return ok(vistaLote(lote, []));
+      }
+    
+      /** Sube un grupo de hojas (PDF de una página en base64) a un lote en borrador. Repetir el envío no duplica. */
+      function subirRecibos(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lote = repo.lotePorId(datos && datos.lote);
+        if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+        if (lote.estado !== 'BORRADOR') return err('TRANSICION', 'Esa carga ya fue publicada.');
+        var previos = repo.recibosDeLote(lote.id), hechas = {};
+        previos.forEach(function (r) { hechas[r.pagina] = true; });
+        var nuevos = [], items = (datos && datos.items) || [];
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i], pdf = String(it.pdf || '');
+          if (hechas[it.pagina]) continue;
+          var emp = repo.empleadoPorClave(String(it.clave || ''));
+          if (!emp) return err('VALIDACION', 'La hoja ' + it.pagina + ' no tiene un colaborador válido asignado.');
+          if (!pdf || pdf.length > MAX_PDF_RECIBO) return err('VALIDACION', 'La hoja ' + it.pagina + ' está vacía o es demasiado grande.');
+          var archivo = repo.guardarArchivoRecibo(lote.concepto + ' - ' + Empleados.claveCedula(emp) + ' - hoja ' + it.pagina + '.pdf', pdf);
+          nuevos.push({ id: repo.nuevoIdRecibo(), lote: lote.id, clave: Empleados.claveCedula(emp), nombre: emp.nombre, pagina: Number(it.pagina), archivo: archivo, creado: ctx.ahora(), visto: 0, conforme: 0 });
+          hechas[it.pagina] = true;
+        }
+        if (nuevos.length) repo.agregarRecibos(nuevos);
+        return ok({ guardados: nuevos.length, cargados: previos.length + nuevos.length });
+      }
+    
+      function publicarLote(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lote = repo.lotePorId(id);
+        if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+        if (lote.estado !== 'BORRADOR') return err('TRANSICION', 'Esa carga ya fue publicada.');
+        var recibos = repo.recibosDeLote(id);
+        if (!recibos.length) return err('VACIO', 'Esta carga no tiene recibos.');
+        lote.estado = 'PUBLICADO'; lote.publicado = ctx.ahora();
+        repo.guardarLote(lote);
+        var claves = {}; recibos.forEach(function (r) { claves[r.clave] = true; });
+        notificar(repo, ctx, Object.keys(claves), { tipo: 'RECIBO', ruta: 'recibos', titulo: 'Tienes un recibo de pago nuevo', texto: lote.concepto });
+        repo.log('RECIBOS_PUBLICADOS', s.clave, id + ' · ' + recibos.length + ' recibos');
+        return ok(vistaLote(lote, recibos));
+      }
+    
+      function eliminarLote(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lote = repo.lotePorId(id);
+        if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+        var recibos = repo.recibosDeLote(id);
+        if (recibos.some(function (r) { return r.conforme; })) return err('VALIDACION', 'No se puede eliminar: hay colaboradores que ya confirmaron «Recibí conforme».');
+        repo.eliminarLote(lote, recibos);
+        repo.log('RECIBOS_ELIMINADOS', s.clave, id + ' · ' + lote.concepto);
+        return ok({ id: id });
+      }
+    
+      function listarLotes(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var porLote = {};
+        repo.todosRecibos().forEach(function (r) { (porLote[r.lote] = porLote[r.lote] || []).push(r); });
+        return ok(repo.lotes().sort(function (a, b) { return b.creado - a.creado; }).map(function (l) { return vistaLote(l, porLote[l.id] || []); }));
+      }
+    
+      function detalleLote(repo, ctx, token, id) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var lote = repo.lotePorId(id);
+        if (!lote) return err('NO_ENCONTRADO', 'No encontramos esa carga de recibos.');
+        var recibos = repo.recibosDeLote(id);
+        return ok({ lote: vistaLote(lote, recibos), recibos: recibos.sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; }).map(function (r) {
+          return { id: r.id, clave: r.clave, nombre: r.nombre, pagina: r.pagina, visto: r.visto || 0, conforme: r.conforme || 0 };
+        }) });
+      }
+    
+      /** RRHH abre el recibo de cualquier persona (no cuenta como visto por el colaborador). */
+      function verReciboRRHH(repo, ctx, token, id) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var r = repo.reciboPorId(id), lote = r && repo.lotePorId(r.lote);
+        if (!r || !lote) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+        return ok({ pdf: repo.leerArchivoRecibo(r.archivo), archivo: 'Recibo ' + lote.concepto + ' - ' + r.nombre + '.pdf' });
+      }
+    
+      function misRecibos(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var lotes = {};
+        repo.lotes().forEach(function (l) { if (l.estado === 'PUBLICADO') lotes[l.id] = l; });
+        return ok(repo.recibosDe(s.clave).filter(function (r) { return lotes[r.lote]; }).map(function (r) {
+          var l = lotes[r.lote];
+          return { id: r.id, concepto: l.concepto, empresa: l.empresa, publicado: l.publicado, visto: r.visto || 0, conforme: r.conforme || 0 };
+        }).sort(function (a, b) { return b.publicado - a.publicado; }));
+      }
+    
+      function reciboPropio(repo, s, id) {
+        var r = repo.reciboPorId(id), lote = r && repo.lotePorId(r.lote);
+        return r && lote && r.clave === s.clave && lote.estado === 'PUBLICADO' ? { r: r, lote: lote } : null;
+      }
+    
+      /** El colaborador abre su recibo: la primera vez queda la fecha en que lo vio. */
+      function verRecibo(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var x = reciboPropio(repo, s, id);
+        if (!x) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+        if (!x.r.visto) { x.r.visto = ctx.ahora(); repo.guardarRecibo(x.r); }
+        return ok({ pdf: repo.leerArchivoRecibo(x.r.archivo), archivo: 'Recibo ' + x.lote.concepto + '.pdf', visto: x.r.visto, conforme: x.r.conforme || 0 });
+      }
+    
+      /** «Recibí conforme»: el sello de entrega, con fecha y hora. */
+      function confirmarRecibo(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var x = reciboPropio(repo, s, id);
+        if (!x) return err('NO_ENCONTRADO', 'No encontramos ese recibo.');
+        if (!x.r.conforme) {
+          x.r.visto = x.r.visto || ctx.ahora(); x.r.conforme = ctx.ahora();
+          repo.guardarRecibo(x.r);
+          repo.log('RECIBO_CONFORME', s.clave, x.r.id + ' · ' + x.lote.concepto);
+        }
+        return ok({ id: x.r.id, visto: x.r.visto, conforme: x.r.conforme });
+      }
+    
+      /* ---------- Omega Capital: cestaticket y Omega Transferencia por quincena, en 4 lotes ---------- */
+    
+      function configOmega(repo) {
+        var c = repo.omegaConfig() || {}, num = function (k, def) { return c[k] != null && c[k] !== '' && isFinite(Number(c[k])) ? Number(c[k]) : def; };
+        var empresas = {};
+        Object.keys(Omega.EMPRESAS).forEach(function (e) {
+          empresas[e] = { razonSocial: c['razonSocial_' + e] || Omega.EMPRESAS[e].razonSocial, rif: c['rif_' + e] || Omega.EMPRESAS[e].rif };
+        });
+        return { empresas: empresas, parametros: { cestaticket: num('cestaticket', Omega.PARAMETROS.cestaticket), comision: num('comision', Omega.PARAMETROS.comision),
+          iva: num('iva', Omega.PARAMETROS.iva), retencion: num('retencion', Omega.PARAMETROS.retencion) } };
+      }
+    
+      function personasOmega(repo) {
+        var sin = repo.omegaSinTarjeta();
+        return repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina; }).map(function (e) {
+          var clave = Empleados.claveCedula(e);
+          return { clave: clave, cedula: e.cedulaNumero, nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e), fechaIngreso: e.fechaIngreso, sinTarjeta: !!sin[clave],
+            organizacion: e.organizacion || '', puesto: e.puesto || '' };
+        });
+      }
+    
+      function quincenaOmega(repo, id) {
+        var q = repo.omegaQuincena(id);
+        if (!q) return null;
+        q.lotes = q.lotes || {}; q.ajustes = q.ajustes || {};
+        return q;
+      }
+    
+      /** Lo pagado (validado) en la 1Q del mismo mes, por lote y persona. */
+      function pagado1Q(repo, mes) {
+        var q1 = quincenaOmega(repo, Omega.idQuincena(mes, 1)), r = {};
+        if (!q1) return { existe: false, pagado: r, validados: {} };
+        Omega.LOTES.forEach(function (l) {
+          if (!q1.lotes[l.id] || q1.lotes[l.id].estado !== 'VALIDADO') return;
+          r[l.id] = {}; repo.omegaPagos(q1.id, l.id).forEach(function (x) { r[l.id][x.clave] = x.montoBs; });
+        });
+        var val = {}; Omega.LOTES.forEach(function (l) { val[l.id] = !!(q1.lotes[l.id] && q1.lotes[l.id].estado === 'VALIDADO'); });
+        return { existe: true, pagado: r, validados: val };
+      }
+    
+      /** Líneas de un lote: guardadas si está validado; si no, calculadas con los datos actuales y los ajustes. */
+      function lineasLote(repo, q, loteId, cfg, cache) {
+        if (q.lotes[loteId] && q.lotes[loteId].estado === 'VALIDADO') {
+          return repo.omegaPagos(q.id, loteId).map(function (x) { return Object.assign({}, x, { excluida: false }); });
+        }
+        if (!cache.calc) {
+          var benef = {}; repo.omegaBeneficios().forEach(function (b) { benef[b.clave] = b; });
+          var p1 = Number(q.quincena) === 2 ? pagado1Q(repo, q.mes) : { pagado: {} };
+          cache.calc = Omega.lineasQuincena(personasOmega(repo), benef, q.mes, q.quincena, q.tasa, p1.pagado, cfg.parametros);
+        }
+        var aj = q.ajustes[loteId] || {};
+        return (cache.calc[loteId] || []).map(function (l) {
+          var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs });
+          if (a.monto != null && a.monto !== '') { x.montoBs = Omega.r2(a.monto); x.ajustado = true; }
+          return x;
+        });
+      }
+    
+      function resumenLote(lineas, cfg) {
+        var validas = lineas.filter(function (l) { return !l.excluida && l.montoBs > 0; });
+        var subtotal = validas.reduce(function (t, l) { return t + l.montoBs; }, 0);
+        var avisos = 0, errores = 0;
+        lineas.forEach(function (l) { if (l.excluida) return; Omega.revisarLinea(l).forEach(function (a) { if (a.tipo === 'error') errores++; else avisos++; }); });
+        return { personas: validas.length, excluidas: lineas.filter(function (l) { return l.excluida; }).length, usd: Omega.r2(validas.reduce(function (t, l) { return t + (Number(l.usd) || 0); }, 0)),
+          totales: Omega.totalesOmega(subtotal, cfg.parametros), avisos: avisos, errores: errores };
+      }
+    
+      function vistaQuincena(repo, q, cfg) {
+        var cache = {}, p1 = Number(q.quincena) === 2 ? pagado1Q(repo, q.mes) : null;
+        return {
+          id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, creada: q.creada, por: q.por,
+          sin1Q: !!(p1 && !p1.existe),
+          lotes: Omega.LOTES.map(function (l) {
+            var st = q.lotes[l.id] || {};
+            return Object.assign({ id: l.id, nombre: l.nombre, tipo: l.tipo, empresa: l.empresa, estado: st.estado || 'PENDIENTE', validado: st.cuando || 0, validadoPor: st.por || '',
+              falta1Q: !!(p1 && p1.existe && !p1.validados[l.id]) }, resumenLote(lineasLote(repo, q, l.id, cfg, cache), cfg));
+          }),
+        };
+      }
+    
+      function sesionRRHH(ctx, token) { return leerToken(ctx, token, ['RRHH', 'ADMIN']); }
+    
+      function omegaInicio(repo, ctx, token) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        var cfg = configOmega(repo), sin = repo.omegaSinTarjeta();
+        var activos = {}; personasOmega(repo).forEach(function (p) { activos[p.clave] = true; });
+        return ok({
+          config: cfg, lotes: Omega.LOTES,
+          quincenas: repo.omegaQuincenas().map(function (q) {
+            q.lotes = q.lotes || {};
+            var val = Omega.LOTES.filter(function (l) { return q.lotes[l.id] && q.lotes[l.id].estado === 'VALIDADO'; }).length;
+            return { id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, validados: val, creada: q.creada };
+          }).sort(function (a, b) { return a.id < b.id ? 1 : -1; }),
+          beneficiosCargados: repo.omegaBeneficios().length,
+          sinTarjeta: Object.keys(sin).filter(function (k) { return activos[k]; }).length,
+        });
+      }
+    
+      function omegaGuardarConfig(repo, ctx, token, d) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = {};
+        Object.keys(Omega.EMPRESAS).forEach(function (e) {
+          var x = (d.empresas || {})[e]; if (!x) return;
+          if (x.rif != null) {
+            var rif = String(x.rif).replace(/[-\s]/g, '').toUpperCase();
+            if (rif && !/^[JGVE]\d{9}$/.test(rif)) return (c.error = 'El RIF de ' + e + ' debe ser una letra (J, G, V o E) y 9 dígitos. Ejemplo: J001417710.');
+            c['rif_' + e] = rif;
+          }
+          if (x.razonSocial != null) c['razonSocial_' + e] = String(x.razonSocial).trim();
+        });
+        if (c.error) return err('VALIDACION', c.error);
+        ['cestaticket', 'comision', 'iva', 'retencion'].forEach(function (k) {
+          var v = (d.parametros || {})[k]; if (v == null || v === '') return;
+          var n = Number(String(v).replace(',', '.')); if (isFinite(n) && n >= 0) c[k] = n;
+        });
+        repo.guardarOmegaConfig(c);
+        repo.log('OMEGA_CONFIG', s.clave, Object.keys(c).join(','));
+        return omegaInicio(repo, ctx, token);
+      }
+    
+      /** Personas activas con su marca de tarjeta (para marcar a quién le falta). */
+      function omegaTarjetas(repo, ctx, token) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        var hoy = new Date(ctx.ahora() - 4 * 3600e3), limite = (hoy.getUTCFullYear() * 12 + hoy.getUTCMonth() + 1) - 2;
+        return ok(personasOmega(repo).map(function (p) {
+          var f = p.fechaIngreso;
+          return { clave: p.clave, nombre: p.nombre, empresa: p.empresa, organizacion: p.organizacion, sinTarjeta: p.sinTarjeta,
+            ingreso: f ? ('0' + f.d).slice(-2) + '/' + ('0' + f.m).slice(-2) + '/' + f.y : '', reciente: !!(f && f.y * 12 + f.m >= limite) };
+        }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; }));
+      }
+    
+      function omegaMarcarTarjeta(repo, ctx, token, claves, sinTarjeta) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var n = 0;
+        (claves || []).forEach(function (c) {
+          var e = repo.empleadoPorClave(c);
+          if (!e) return;
+          repo.marcarOmegaSinTarjeta(Empleados.claveCedula(e), e.nombre, !!sinTarjeta, s.clave, ctx.ahora()); n++;
+        });
+        return ok({ cambiados: n });
+      }
+    
+      function omegaAbrirQuincena(repo, ctx, token, mes, quincena, tasa) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        quincena = Number(quincena); tasa = Number(String(tasa == null ? '' : tasa).replace(',', '.'));
+        if (!Omega.esMes(mes) || (quincena !== 1 && quincena !== 2)) return err('VALIDACION', 'Elige el mes y la quincena.');
+        if (!(tasa > 0)) return err('VALIDACION', 'Escribe la tasa estimada (Bs. por $).');
+        var id = Omega.idQuincena(mes, quincena);
+        if (repo.omegaQuincena(id)) return err('DUPLICADO', 'Esa quincena ya está abierta.');
+        var q = { id: id, mes: mes, quincena: quincena, tasa: Omega.r2(tasa), lotes: {}, ajustes: {}, creada: ctx.ahora(), por: s.clave, actualizada: ctx.ahora() };
+        repo.guardarOmegaQuincena(q);
+        repo.log('OMEGA_QUINCENA', s.clave, id + ' · tasa ' + q.tasa);
+        return omegaQuincena(repo, ctx, token, id);
+      }
+    
+      function omegaQuincena(repo, ctx, token, id) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id);
+        if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+        return ok(vistaQuincena(repo, q, configOmega(repo)));
+      }
+    
+      function omegaCambiarTasa(repo, ctx, token, id, tasa) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id);
+        if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+        if (Object.keys(q.lotes).some(function (k) { return q.lotes[k].estado === 'VALIDADO'; })) return err('VALIDADO', 'Ya hay lotes validados con la tasa actual: reábrelos para cambiarla.');
+        tasa = Number(String(tasa).replace(',', '.'));
+        if (!(tasa > 0)) return err('VALIDACION', 'Escribe la tasa estimada.');
+        q.tasa = Omega.r2(tasa); q.actualizada = ctx.ahora();
+        repo.guardarOmegaQuincena(q);
+        return omegaQuincena(repo, ctx, token, id);
+      }
+    
+      function omegaEliminarQuincena(repo, ctx, token, id) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id);
+        if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+        if (Object.keys(q.lotes).some(function (k) { return q.lotes[k].estado === 'VALIDADO'; })) return err('VALIDADO', 'Tiene lotes validados: reábrelos antes de eliminarla.');
+        repo.eliminarOmegaQuincena(id);
+        repo.log('OMEGA_ELIMINAR', s.clave, id);
+        return ok({ eliminada: id });
+      }
+    
+      function omegaLote(repo, ctx, token, id, loteId) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id), l = Omega.lote(loteId);
+        if (!q || !l) return err('NO_ENCONTRADO', 'No existe ese lote.');
+        var cfg = configOmega(repo), lineas = lineasLote(repo, q, loteId, cfg, {});
+        var st = q.lotes[loteId] || {};
+        return ok({ quincena: { id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa }, lote: l, estado: st.estado || 'PENDIENTE', validado: st.cuando || 0,
+          empresa: cfg.empresas[l.empresa], parametros: cfg.parametros, resumen: resumenLote(lineas, cfg),
+          lineas: lineas.map(function (x) { return Object.assign({}, x, { avisos: x.excluida ? [] : Omega.revisarLinea(x) }); }) });
+      }
+    
+      /** Excluye a una persona del lote o cambia su monto en Bs. (cambio: { excluir: bool } o { monto: n | null }). */
+      function omegaAjustarLinea(repo, ctx, token, id, loteId, clave, cambio) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id);
+        if (!q || !Omega.lote(loteId)) return err('NO_ENCONTRADO', 'No existe ese lote.');
+        if (q.lotes[loteId] && q.lotes[loteId].estado === 'VALIDADO') return err('VALIDADO', 'El lote ya está validado: reábrelo para cambiarlo.');
+        var aj = q.ajustes[loteId] = q.ajustes[loteId] || {}, a = aj[clave] = aj[clave] || {};
+        if (cambio && cambio.excluir != null) { if (cambio.excluir) a.excluir = true; else delete a.excluir; }
+        if (cambio && 'monto' in cambio) {
+          var m = cambio.monto == null || cambio.monto === '' ? null : Number(String(cambio.monto).replace(/\./g, '').replace(',', '.'));
+          if (m == null) delete a.monto; else if (isFinite(m) && m >= 0) a.monto = Omega.r2(m); else return err('VALIDACION', 'Monto no válido.');
+        }
+        if (!Object.keys(a).length) delete aj[clave];
+        q.actualizada = ctx.ahora();
+        repo.guardarOmegaQuincena(q);
+        return omegaLote(repo, ctx, token, id, loteId);
+      }
+    
+      /** Valida el lote: congela personas y montos (los de 1Q se descuentan en la 2Q) y permite generar el TXT. */
+      function omegaValidarLote(repo, ctx, token, id, loteId) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id), l = Omega.lote(loteId);
+        if (!q || !l) return err('NO_ENCONTRADO', 'No existe ese lote.');
+        if (q.lotes[loteId] && q.lotes[loteId].estado === 'VALIDADO') return err('VALIDADO', 'Ese lote ya está validado.');
+        if (Number(q.quincena) === 2) {
+          var p1 = pagado1Q(repo, q.mes);
+          if (p1.existe && !p1.validados[loteId]) return err('VALIDACION', 'Primero valida el lote «' + l.nombre + '» de la 1.ª quincena: la 2.ª descuenta lo pagado allí.');
+        }
+        var cfg = configOmega(repo), lineas = lineasLote(repo, q, loteId, cfg, {}).filter(function (x) { return !x.excluida && x.montoBs > 0; });
+        if (!lineas.length) return err('VACIO', 'El lote no tiene montos para pagar.');
+        var errores = lineas.filter(function (x) { return Omega.revisarLinea(x).some(function (a) { return a.tipo === 'error'; }); });
+        if (errores.length) return err('VALIDACION', 'Hay ' + errores.length + ' persona(s) con cédula no válida: corrígelas en Empleados o exclúyelas.');
+        var ahora = ctx.ahora();
+        repo.quitarOmegaPagos(id, loteId);
+        repo.agregarOmegaPagos(lineas.map(function (x) {
+          return { quincena: id, lote: loteId, clave: x.clave, cedula: x.cedula, nombre: x.nombre, usd: x.usd, montoBs: x.montoBs, anticipoBs: x.anticipoBs || 0,
+            dias: x.dias, detalle: x.detalle, validado: ahora };
+        }));
+        var total = Omega.r2(lineas.reduce(function (t, x) { return t + x.montoBs; }, 0));
+        q.lotes[loteId] = { estado: 'VALIDADO', cuando: ahora, por: s.clave, personas: lineas.length, total: total };
+        q.actualizada = ahora;
+        repo.guardarOmegaQuincena(q);
+        repo.log('OMEGA_VALIDAR', s.clave, id + ' · ' + loteId + ' · ' + lineas.length + ' · ' + total);
+        return omegaLote(repo, ctx, token, id, loteId);
+      }
+    
+      function omegaReabrirLote(repo, ctx, token, id, loteId) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id);
+        if (!q || !Omega.lote(loteId)) return err('NO_ENCONTRADO', 'No existe ese lote.');
+        if (!q.lotes[loteId] || q.lotes[loteId].estado !== 'VALIDADO') return err('VALIDACION', 'Ese lote no está validado.');
+        if (Number(q.quincena) === 1) {
+          var q2 = quincenaOmega(repo, Omega.idQuincena(q.mes, 2));
+          if (q2 && q2.lotes[loteId] && q2.lotes[loteId].estado === 'VALIDADO') return err('VALIDACION', 'La 2.ª quincena de este lote ya está validada: reábrela primero.');
+        }
+        repo.quitarOmegaPagos(id, loteId);
+        delete q.lotes[loteId]; q.actualizada = ctx.ahora();
+        repo.guardarOmegaQuincena(q);
+        repo.log('OMEGA_REABRIR', s.clave, id + ' · ' + loteId);
+        return omegaLote(repo, ctx, token, id, loteId);
+      }
+    
+      /** Reemplaza la lista de beneficios en $ de Omega Transferencia con las filas del Excel. */
+      function omegaImportarBeneficios(repo, ctx, token, filas) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        if (!filas || !filas.length) return err('VALIDACION', 'El archivo no trae personas.');
+        var todos = repo.todosEmpleados(), porNumero = {}, porNombre = {};
+        todos.forEach(function (e) {
+          var n = String(e.cedulaNumero).replace(/^0+/, '');
+          if (!porNumero[n] || porNumero[n].estado === 'Inactivo') porNumero[n] = e;
+          porNombre[e.nombreNorm] = porNombre[e.nombreNorm] === undefined ? e : null;
+        });
+        var lista = [], noEncontrados = [], usados = {}, porNombreN = 0;
+        filas.forEach(function (f) {
+          var c = Empleados.parsearCedula(f.cedula), e = c.numero ? porNumero[c.numero] : null;
+          if (!e) { var d = String(f.cedula).replace(/\D/g, ''); if (d.length === 9) e = porNumero[d.slice(0, 8).replace(/^0+/, '')] || null; }
+          if (!e && f.nombre && porNombre[Empleados.normalizarNombre(f.nombre)]) { e = porNombre[Empleados.normalizarNombre(f.nombre)]; porNombreN++; }
+          if (!e) { noEncontrados.push({ cedula: String(f.cedula), nombre: f.nombre || '' }); return; }
+          var clave = Empleados.claveCedula(e);
+          if (usados[clave]) return; usados[clave] = true;
+          var b = { clave: clave, nombre: e.nombre, actualizado: ctx.ahora(), por: s.clave };
+          Omega.ADICIONALES.forEach(function (k) { b[k] = Omega.r2(Math.max(0, Number(f[k]) || 0)); });
+          lista.push(b);
+        });
+        if (!lista.length) return err('VALIDACION', 'Ninguna cédula del archivo coincide con los empleados cargados.');
+        repo.reemplazarOmegaBeneficios(lista);
+        repo.log('OMEGA_BENEFICIOS', s.clave, lista.length + ' personas');
+        return ok({ cargados: lista.length, porNombre: porNombreN, noEncontrados: noEncontrados });
+      }
+    
+      function omegaBeneficios(repo, ctx, token) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        return ok(repo.omegaBeneficios().sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; }));
+      }
+    
+      /** Cambia los montos en $ de una persona (montos: { complemento, vehiculo, bono, comisiones }). */
+      function omegaEditarBeneficio(repo, ctx, token, clave, montos) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var e = repo.empleadoPorClave(clave);
+        if (!e) return err('NO_ENCONTRADO', 'No encontramos a esa persona.');
+        var k0 = Empleados.claveCedula(e);
+        var b = repo.omegaBeneficios().filter(function (x) { return x.clave === k0; })[0] || { clave: k0 };
+        Omega.ADICIONALES.forEach(function (k) { if (montos && montos[k] != null && montos[k] !== '') b[k] = Omega.r2(Math.max(0, Number(String(montos[k]).replace(',', '.')) || 0)); else if (b[k] == null) b[k] = 0; });
+        b.nombre = e.nombre; b.actualizado = ctx.ahora(); b.por = s.clave;
+        repo.guardarOmegaBeneficio(b);
+        return ok(b);
+      }
+    
       var api = {
+        omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
+        omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
+        omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,
+        omegaImportarBeneficios: omegaImportarBeneficios, omegaBeneficios: omegaBeneficios, omegaEditarBeneficio: omegaEditarBeneficio,
         iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
+        panelSaldosVacaciones: panelSaldosVacaciones, guardarPlanificacionVac: guardarPlanificacionVac, listarPlanificacionesVac: listarPlanificacionesVac,
+        miPlanificacion: miPlanificacion, guardarMiPlanificacion: guardarMiPlanificacion, equipoPlanificacion: equipoPlanificacion,
+        decidirPlanificacion: decidirPlanificacion, panelPlanificacionVac: panelPlanificacionVac, recordarPlanificacionVac: recordarPlanificacionVac,
+        misNotificaciones: misNotificaciones, marcarNotificacionesLeidas: marcarNotificacionesLeidas, avisoDePrueba: avisoDePrueba, registrarDispositivo: registrarDispositivo, avisosDiarios: avisosDiarios, idPush: idPush,
+        asignarRecibos: asignarRecibos, crearLoteRecibos: crearLoteRecibos, subirRecibos: subirRecibos, publicarLote: publicarLote, eliminarLote: eliminarLote,
+        listarLotes: listarLotes, detalleLote: detalleLote, verReciboRRHH: verReciboRRHH, misRecibos: misRecibos, verRecibo: verRecibo, confirmarRecibo: confirmarRecibo,
         crearPin: crearPin, restablecerPin: restablecerPin, revisarPin: revisarPin,
         miEstadoDeCuenta: miEstadoDeCuenta, solicitarAnticipo: solicitarAnticipo, cancelarAnticipo: cancelarAnticipo,
         estadoAporte: estadoAporte, prepararAporte: prepararAporte, cerrarAporte: cerrarAporte, archivoAporte: archivoAporte,
@@ -2318,9 +3568,9 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-06.4';
+var VERSION = '2026-11-09.2';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -2328,7 +3578,9 @@ function modulosCargados_() {
     Calculo: typeof Calculo !== 'undefined' && !!Calculo, Empleados: typeof Empleados !== 'undefined' && !!Empleados,
     Prestaciones: typeof Prestaciones !== 'undefined' && !!Prestaciones, Exportes: typeof Exportes !== 'undefined' && !!Exportes,
     Constancia: typeof Constancia !== 'undefined' && !!Constancia, Vacaciones: typeof Vacaciones !== 'undefined' && !!Vacaciones,
-    Aportes: typeof Aportes !== 'undefined' && !!Aportes,
+    Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
+    Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
+    Omega: typeof Omega !== 'undefined' && !!Omega,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -2347,9 +3599,21 @@ var HOJAS = {
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
   VAC_SOLICITUDES: ['id', 'clave', 'inicio', 'culminacion', 'reintegro', 'dias', 'condicion', 'imputacion', 'estado', 'jefe', 'creada', 'actualizada',
-    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues'],
+    'decididaJefePor', 'decisionJefe', 'registradaPor', 'registrada', 'nomina', 'motivoRechazo', 'numeroConstancia', 'pendientesDespues', 'planificada'],
+  VAC_CICLOS: ['id', 'nombre', 'desde', 'hasta', 'abre', 'cierra', 'creada', 'por', 'actualizada'],
+  VAC_PLANES: ['id', 'ciclo', 'clave', 'estado', 'bloques', 'requeridos', 'planificados', 'jefe', 'enviada', 'decidida', 'decididaPor', 'motivo', 'actualizada'],
   USUARIOS: ['cedula', 'sal', 'hash', 'rol', 'nombre'],
+  NOTIFICACIONES: ['id', 'clave', 'tipo', 'titulo', 'texto', 'ruta', 'creada'],
+  NOTIF_LECTURAS: ['clave', 'hasta'],
+  RECIBOS_LOTES: ['id', 'concepto', 'empresa', 'total', 'estado', 'creado', 'por', 'publicado'],
+  PUSH_DISPOSITIVOS: ['pushId', 'suscripcion', 'tipo', 'creado'],
+  RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   PINES: ['clave', 'sal', 'hash', 'creado'],
+  OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
+  OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
+  OMEGA_CONFIG: ['clave', 'valor'],
+  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada'],
+  OMEGA_PAGOS: ['quincena', 'lote', 'clave', 'cedula', 'nombre', 'usd', 'montoBs', 'anticipoBs', 'dias', 'detalle', 'validado'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -2373,14 +3637,14 @@ var EMPLEADOS_FUERA_NOMINA_INICIALES = [
   { cedula: 'E810535060', nombre: 'DANILO KOENIG', empresa: 'PCA', fechaIngreso: '09/09/2008' },
 ];
 
-// Feriados nacionales 2026 (lista de RRHH, corregida: 12 de octubre en vez de 10/12; se agregan 5 y 24 de julio).
-var FERIADOS_INICIALES = [
-  ['2026-01-01', 'Año Nuevo'], ['2026-02-16', 'Lunes de Carnaval'], ['2026-02-17', 'Martes de Carnaval'], ['2026-04-02', 'Jueves Santo'],
-  ['2026-04-03', 'Viernes Santo'], ['2026-04-19', 'Declaración de la Independencia'], ['2026-05-01', 'Día del Trabajador'],
-  ['2026-06-24', 'Batalla de Carabobo'], ['2026-07-05', 'Día de la Independencia'], ['2026-07-24', 'Natalicio del Libertador'],
-  ['2026-10-12', 'Día de la Resistencia Indígena'], ['2026-12-24', 'Víspera de Navidad'], ['2026-12-25', 'Navidad'],
-  ['2026-12-31', 'Fin de Año'], ['2027-01-01', 'Año Nuevo'],
-];
+// Feriados nacionales de Venezuela de 2026 a 2030 (Carnaval y Semana Santa se calculan con la fecha de Pascua).
+// La lista 2026 de RRHH quedó igual: 12 de octubre (no 10/12) y con 5 y 24 de julio.
+var FERIADOS_DESDE = 2026, FERIADOS_HASTA = 2030;
+function feriadosIniciales_() {
+  var l = [];
+  for (var y = FERIADOS_DESDE; y <= FERIADOS_HASTA; y++) l = l.concat(Vacaciones.feriadosVenezuela(y));
+  return l;
+}
 
 var RUTAS_TRABAJADOR = {
   datosAnticipo: function (repo, ctx, d) { return Servicio.datosAnticipo(repo, ctx, d.token); },
@@ -2397,9 +3661,28 @@ var RUTAS_TRABAJADOR = {
   estadoDeCuenta: function (repo, ctx, d) { return Servicio.miEstadoDeCuenta(repo, ctx, d.token); },
   solicitarAnticipo: function (repo, ctx, d) { return Servicio.solicitarAnticipo(repo, ctx, d.token, d); },
   cancelarAnticipo: function (repo, ctx, d) { return Servicio.cancelarAnticipo(repo, ctx, d.token, d.id); },
+  misNotificaciones: function (repo, ctx, d) { return Servicio.misNotificaciones(repo, ctx, d.token); },
+  miPlanificacion: function (repo, ctx, d) { return Servicio.miPlanificacion(repo, ctx, d.token); },
+  guardarMiPlanificacion: function (repo, ctx, d) { return Servicio.guardarMiPlanificacion(repo, ctx, d.token, d); },
+  equipoPlanificacion: function (repo, ctx, d) { return Servicio.equipoPlanificacion(repo, ctx, d.token); },
+  decidirPlanificacion: function (repo, ctx, d) { return Servicio.decidirPlanificacion(repo, ctx, d.token, d.id, !!d.aprobar, d.motivo); },
+  avisoDePrueba: function (repo, ctx, d) { return Servicio.avisoDePrueba(repo, ctx, d.token); },
+  registrarDispositivo: function (repo, ctx, d) { return Servicio.registrarDispositivo(repo, ctx, d.token, d); },
+  marcarNotificacionesLeidas: function (repo, ctx, d) { return Servicio.marcarNotificacionesLeidas(repo, ctx, d.token); },
+  misRecibos: function (repo, ctx, d) { return Servicio.misRecibos(repo, ctx, d.token); },
+  verRecibo: function (repo, ctx, d) { return Servicio.verRecibo(repo, ctx, d.token, d.id); },
+  confirmarRecibo: function (repo, ctx, d) { return Servicio.confirmarRecibo(repo, ctx, d.token, d.id); },
 };
 
 var RUTAS_RRHH = {
+  asignarRecibos: function (repo, ctx, d) { return Servicio.asignarRecibos(repo, ctx, d.token, d.hojas); },
+  crearLoteRecibos: function (repo, ctx, d) { return Servicio.crearLoteRecibos(repo, ctx, d.token, d); },
+  subirRecibos: function (repo, ctx, d) { return Servicio.subirRecibos(repo, ctx, d.token, d); },
+  publicarLote: function (repo, ctx, d) { return Servicio.publicarLote(repo, ctx, d.token, d.id); },
+  eliminarLote: function (repo, ctx, d) { return Servicio.eliminarLote(repo, ctx, d.token, d.id); },
+  listarLotes: function (repo, ctx, d) { return Servicio.listarLotes(repo, ctx, d.token); },
+  detalleLote: function (repo, ctx, d) { return Servicio.detalleLote(repo, ctx, d.token, d.id); },
+  verReciboRRHH: function (repo, ctx, d) { return Servicio.verReciboRRHH(repo, ctx, d.token, d.id); },
   restablecerPin: function (repo, ctx, d) { return Servicio.restablecerPin(repo, ctx, d.token, d.clave); },
   guardarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.guardarEmpleadoFueraNomina(repo, ctx, d.token, d); },
   desactivarEmpleadoFueraNomina: function (repo, ctx, d) { return Servicio.desactivarEmpleadoFueraNomina(repo, ctx, d.token, d.clave); },
@@ -2421,6 +3704,26 @@ var RUTAS_RRHH = {
   registrarVacaciones: function (repo, ctx, d) { return Servicio.registrarVacaciones(repo, ctx, d.token, d.id, d.nomina); },
   rechazarVacacionesRRHH: function (repo, ctx, d) { return Servicio.rechazarVacacionesRRHH(repo, ctx, d.token, d.id, d.motivo); },
   importarCierreVacaciones: function (repo, ctx, d) { return Servicio.importarCierreVacaciones(repo, ctx, d.token, d.personas); },
+  panelSaldosVacaciones: function (repo, ctx, d) { return Servicio.panelSaldosVacaciones(repo, ctx, d.token); },
+  guardarPlanificacionVac: function (repo, ctx, d) { return Servicio.guardarPlanificacionVac(repo, ctx, d.token, d); },
+  listarPlanificacionesVac: function (repo, ctx, d) { return Servicio.listarPlanificacionesVac(repo, ctx, d.token); },
+  panelPlanificacionVac: function (repo, ctx, d) { return Servicio.panelPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  recordarPlanificacionVac: function (repo, ctx, d) { return Servicio.recordarPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  omegaInicio: function (repo, ctx, d) { return Servicio.omegaInicio(repo, ctx, d.token); },
+  omegaGuardarConfig: function (repo, ctx, d) { return Servicio.omegaGuardarConfig(repo, ctx, d.token, d); },
+  omegaTarjetas: function (repo, ctx, d) { return Servicio.omegaTarjetas(repo, ctx, d.token); },
+  omegaMarcarTarjeta: function (repo, ctx, d) { return Servicio.omegaMarcarTarjeta(repo, ctx, d.token, d.claves, !!d.sinTarjeta); },
+  omegaAbrirQuincena: function (repo, ctx, d) { return Servicio.omegaAbrirQuincena(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
+  omegaQuincena: function (repo, ctx, d) { return Servicio.omegaQuincena(repo, ctx, d.token, d.id); },
+  omegaCambiarTasa: function (repo, ctx, d) { return Servicio.omegaCambiarTasa(repo, ctx, d.token, d.id, d.tasa); },
+  omegaEliminarQuincena: function (repo, ctx, d) { return Servicio.omegaEliminarQuincena(repo, ctx, d.token, d.id); },
+  omegaLote: function (repo, ctx, d) { return Servicio.omegaLote(repo, ctx, d.token, d.id, d.lote); },
+  omegaAjustarLinea: function (repo, ctx, d) { return Servicio.omegaAjustarLinea(repo, ctx, d.token, d.id, d.lote, d.clave, d.cambio); },
+  omegaValidarLote: function (repo, ctx, d) { return Servicio.omegaValidarLote(repo, ctx, d.token, d.id, d.lote); },
+  omegaReabrirLote: function (repo, ctx, d) { return Servicio.omegaReabrirLote(repo, ctx, d.token, d.id, d.lote); },
+  omegaImportarBeneficios: function (repo, ctx, d) { return Servicio.omegaImportarBeneficios(repo, ctx, d.token, d.filas); },
+  omegaBeneficios: function (repo, ctx, d) { return Servicio.omegaBeneficios(repo, ctx, d.token); },
+  omegaEditarBeneficio: function (repo, ctx, d) { return Servicio.omegaEditarBeneficio(repo, ctx, d.token, d.clave, d.montos); },
   saldoVacacionesEmpleado: function (repo, ctx, d) { return Servicio.saldoVacacionesEmpleado(repo, ctx, d.token, d.clave); },
   listarConstancias: function (repo, ctx, d) { return Servicio.listarConstancias(repo, ctx, d.token); },
   anularConstancia: function (repo, ctx, d) { return Servicio.anularConstancia(repo, ctx, d.token, d.id); },
@@ -2447,6 +3750,9 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
+  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
+  subirRecibos: 1,
 };
 
 function doPost(e) {
@@ -2668,7 +3974,7 @@ function vacSolicitud_(f) {
     reintegro: fechaIso_(f.reintegro), dias: Number(f.dias) || 0, condicion: texto_(f.condicion), imputacion: imp, estado: texto_(f.estado),
     jefe: texto_(f.jefe), creada: Number(f.creada) || 0, actualizada: Number(f.actualizada) || 0, decididaJefePor: texto_(f.decididaJefePor),
     decisionJefe: Number(f.decisionJefe) || 0, registradaPor: texto_(f.registradaPor), registrada: Number(f.registrada) || 0,
-    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo), numeroConstancia: texto_(f.numeroConstancia), pendientesDespues: pend,
+    nomina: texto_(f.nomina), motivoRechazo: texto_(f.motivoRechazo), numeroConstancia: texto_(f.numeroConstancia), pendientesDespues: pend, planificada: texto_(f.planificada),
   };
 }
 
@@ -2877,7 +4183,370 @@ function crearRepo_() {
     log: function (accion, actor, detalle) {
       hoja_('LOG').appendRow([new Date(), accion, actor, detalle]);
     },
+
+    /* ---- Notificaciones ---- */
+    agregarNotificaciones: function (lista) { agregarFilas_('NOTIFICACIONES', lista); },
+    nuevoIdNotificacion: function () { return 'N-' + Utilities.getUuid().slice(0, 13).toUpperCase(); },
+    /** Solo las últimas 3.000 filas: la campanita muestra los avisos de los últimos 60 días. */
+    notificacionesRecientes: function () {
+      var h = hoja_('NOTIFICACIONES'), ultima = h.getLastRow(), cab = HOJAS.NOTIFICACIONES;
+      if (ultima < 2) return [];
+      var desde = Math.max(2, ultima - 2999);
+      return h.getRange(desde, 1, ultima - desde + 1, cab.length).getValues().map(function (f) {
+        return { id: texto_(f[0]), clave: texto_(f[1]), tipo: texto_(f[2]), titulo: texto_(f[3]), texto: texto_(f[4]), ruta: texto_(f[5]), creada: Number(f[6]) || 0 };
+      });
+    },
+    notificacionesLeidasHasta: function (d) {
+      var f = leer_('NOTIF_LECTURAS').filter(function (x) { return texto_(x.clave) === d; })[0];
+      return f ? Number(f.hasta) || 0 : 0;
+    },
+    marcarNotificacionesLeidas: function (d, t) {
+      var f = leer_('NOTIF_LECTURAS').filter(function (x) { return texto_(x.clave) === d; })[0];
+      if (!f) { var h = hoja_('NOTIF_LECTURAS'); h.getRange(h.getLastRow() + 1, 1).setNumberFormat('@'); }
+      escribirFila_('NOTIF_LECTURAS', { _fila: f ? f._fila : 0, clave: d, hasta: t });
+    },
+    enviarPush: enviarPush_,
+    registrarSuscripcionPush: registrarSuscripcionPush_,
+
+    /* ---- Planificación de vacaciones ---- */
+    vacCiclos: function () {
+      asegurarHoja_('VAC_CICLOS'); asegurarHoja_('VAC_PLANES');   // por si aún no se corrió «Configurar hojas»
+      return leer_('VAC_CICLOS').filter(function (f) { return texto_(f.id); }).map(function (f) {
+        return { _fila: f._fila, id: texto_(f.id), nombre: texto_(f.nombre), desde: fechaIso_(f.desde), hasta: fechaIso_(f.hasta), abre: fechaIso_(f.abre),
+          cierra: fechaIso_(f.cierra), creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+      });
+    },
+    guardarVacCiclo: function (c) {
+      if (!c._fila) { var h = hoja_('VAC_CICLOS'); h.getRange(h.getLastRow() + 1, 1, 1, 6).setNumberFormat('@'); }
+      else hoja_('VAC_CICLOS').getRange(c._fila, 1, 1, 6).setNumberFormat('@');
+      escribirFila_('VAC_CICLOS', c);
+    },
+    nuevoIdCiclo: function () { return 'PVC-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+    vacPlanes: function (ciclo) { return leer_('VAC_PLANES').map(plan_).filter(function (p) { return p.ciclo === ciclo; }); },
+    vacPlan: function (ciclo, clave) { return leer_('VAC_PLANES').map(plan_).filter(function (p) { return p.ciclo === ciclo && p.clave === clave; })[0] || null; },
+    vacPlanPorId: function (id) { return leer_('VAC_PLANES').map(plan_).filter(function (p) { return p.id === id; })[0] || null; },
+    guardarVacPlan: function (p) {
+      var copia = Object.assign({}, p, { bloques: JSON.stringify(p.bloques || []) });
+      if (!copia._fila) { var h = hoja_('VAC_PLANES'); h.getRange(h.getLastRow() + 1, 1, 1, 3).setNumberFormat('@'); }
+      escribirFila_('VAC_PLANES', copia);
+      p._fila = copia._fila;
+    },
+    nuevoIdPlan: function () { return 'PLN-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+
+    /* ---- Recibos de pago ---- */
+    nuevoIdLote: function () { return 'LOT-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+    nuevoIdRecibo: function () { return 'REC-' + Utilities.getUuid().slice(0, 13).toUpperCase(); },
+    lotes: function () { return leer_('RECIBOS_LOTES').map(lote_).filter(function (l) { return l.id; }); },
+    lotePorId: function (id) { return leer_('RECIBOS_LOTES').map(lote_).filter(function (l) { return l.id === id; })[0] || null; },
+    guardarLote: function (l) { escribirFila_('RECIBOS_LOTES', l); },
+    todosRecibos: function () { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.id; }); },
+    recibosDeLote: function (id) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.lote === id; }); },
+    recibosDe: function (clave) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.clave === clave; }); },
+    reciboPorId: function (id) { return leer_('RECIBOS').map(recibo_).filter(function (r) { return r.id === id; })[0] || null; },
+    agregarRecibos: function (lista) {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(20000);
+      try { agregarFilas_('RECIBOS', lista); } finally { lock.releaseLock(); }
+    },
+    guardarRecibo: function (r) { escribirFila_('RECIBOS', r); },
+    guardarArchivoRecibo: function (nombre, b64) {
+      var blob = Utilities.newBlob(Utilities.base64Decode(b64), 'application/pdf', nombre);
+      return carpetaRecibos_().createFile(blob).getId();
+    },
+    leerArchivoRecibo: function (id) { return Utilities.base64Encode(DriveApp.getFileById(id).getBlob().getBytes()); },
+    /* ---- Omega Capital ---- */
+    omegaBeneficios: function () {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      return leer_('OMEGA_BENEFICIOS').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { _fila: f._fila, clave: texto_(f.clave), nombre: texto_(f.nombre), complemento: Number(f.complemento) || 0, vehiculo: Number(f.vehiculo) || 0,
+          bono: Number(f.bono) || 0, comisiones: Number(f.comisiones) || 0, actualizado: Number(f.actualizado) || 0, por: texto_(f.por) };
+      });
+    },
+    reemplazarOmegaBeneficios: function (lista) {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      quitarFilas_('OMEGA_BENEFICIOS', function () { return true; });
+      agregarFilas_('OMEGA_BENEFICIOS', lista);
+    },
+    guardarOmegaBeneficio: function (b) {
+      asegurarHoja_('OMEGA_BENEFICIOS');
+      var ya = leer_('OMEGA_BENEFICIOS').filter(function (f) { return texto_(f.clave) === b.clave; })[0];
+      var copia = Object.assign({}, b); delete copia._fila; if (ya) copia._fila = ya._fila;
+      escribirFila_('OMEGA_BENEFICIOS', copia);
+    },
+    omegaSinTarjeta: function () {
+      asegurarHoja_('OMEGA_SIN_TARJETA');
+      var r = {}; leer_('OMEGA_SIN_TARJETA').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = { nombre: texto_(f.nombre), desde: Number(f.desde) || 0, por: texto_(f.por) }; });
+      return r;
+    },
+    marcarOmegaSinTarjeta: function (clave, nombre, sin, por, cuando) {
+      asegurarHoja_('OMEGA_SIN_TARJETA');
+      var ya = leer_('OMEGA_SIN_TARJETA').filter(function (f) { return texto_(f.clave) === clave; })[0];
+      if (sin && !ya) agregarFilas_('OMEGA_SIN_TARJETA', [{ clave: clave, nombre: nombre, desde: cuando, por: por }]);
+      if (!sin && ya) quitarFilas_('OMEGA_SIN_TARJETA', function (f) { return texto_(f.clave) === clave; });
+    },
+    omegaConfig: function () {
+      asegurarHoja_('OMEGA_CONFIG');
+      var r = {}; leer_('OMEGA_CONFIG').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = f.valor; });
+      return r;
+    },
+    guardarOmegaConfig: function (c) {
+      asegurarHoja_('OMEGA_CONFIG');
+      var filas = leer_('OMEGA_CONFIG');
+      Object.keys(c).forEach(function (k) {
+        var ya = filas.filter(function (f) { return texto_(f.clave) === k; })[0];
+        escribirFila_('OMEGA_CONFIG', { _fila: ya ? ya._fila : undefined, clave: k, valor: c[k] });
+      });
+    },
+    omegaQuincenas: function () { asegurarHoja_('OMEGA_QUINCENAS'); return leer_('OMEGA_QUINCENAS').filter(function (f) { return texto_(f.id); }).map(omegaQuincena_); },
+    omegaQuincena: function (id) {
+      asegurarHoja_('OMEGA_QUINCENAS');
+      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === id; })[0];
+      return f ? omegaQuincena_(f) : null;
+    },
+    guardarOmegaQuincena: function (q) {
+      asegurarHoja_('OMEGA_QUINCENAS');
+      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === q.id; })[0];
+      var copia = Object.assign({}, q, { lotes: JSON.stringify(q.lotes || {}), ajustes: JSON.stringify(q.ajustes || {}), _fila: ya ? ya._fila : undefined });
+      if (!copia._fila) { var h = hoja_('OMEGA_QUINCENAS'); h.getRange(h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@'); }
+      escribirFila_('OMEGA_QUINCENAS', copia);
+    },
+    eliminarOmegaQuincena: function (id) {
+      quitarFilas_('OMEGA_QUINCENAS', function (f) { return texto_(f.id) === id; });
+      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === id; });
+    },
+    omegaPagos: function (q, lote) {
+      asegurarHoja_('OMEGA_PAGOS');
+      return leer_('OMEGA_PAGOS').filter(function (f) { return texto_(f.quincena) === q && texto_(f.lote) === lote; }).map(function (f) {
+        var det = {}; try { det = f.detalle ? JSON.parse(f.detalle) : {}; } catch (e) { /* vacío */ }
+        return { quincena: q, lote: lote, clave: texto_(f.clave), cedula: texto_(f.cedula), nombre: texto_(f.nombre), usd: Number(f.usd) || 0, montoBs: Number(f.montoBs) || 0,
+          anticipoBs: Number(f.anticipoBs) || 0, dias: Number(f.dias) || 0, detalle: det, validado: Number(f.validado) || 0 };
+      });
+    },
+    agregarOmegaPagos: function (lista) {
+      asegurarHoja_('OMEGA_PAGOS');
+      agregarFilas_('OMEGA_PAGOS', lista.map(function (x) { return Object.assign({}, x, { detalle: JSON.stringify(x.detalle || {}) }); }));
+    },
+    quitarOmegaPagos: function (q, lote) {
+      asegurarHoja_('OMEGA_PAGOS');
+      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === q && texto_(f.lote) === lote; });
+    },
+    eliminarLote: function (lote, recibos) {
+      recibos.forEach(function (r) { try { DriveApp.getFileById(r.archivo).setTrashed(true); } catch (e) { /* ya no estaba */ } });
+      var ids = {}; recibos.forEach(function (r) { ids[r.id] = true; });
+      quitarFilas_('RECIBOS', function (f) { return ids[texto_(f.id)]; });
+      quitarFilas_('RECIBOS_LOTES', function (f) { return texto_(f.id) === lote.id; });
+    },
   };
+}
+
+function plan_(f) {
+  var b = [];
+  try { b = f.bloques ? JSON.parse(f.bloques) : []; } catch (e) { /* vacío */ }
+  return { _fila: f._fila, id: texto_(f.id), ciclo: texto_(f.ciclo), clave: texto_(f.clave), estado: texto_(f.estado), bloques: b,
+    requeridos: Number(f.requeridos) || 0, planificados: Number(f.planificados) || 0, jefe: texto_(f.jefe), enviada: Number(f.enviada) || 0,
+    decidida: Number(f.decidida) || 0, decididaPor: texto_(f.decididaPor), motivo: texto_(f.motivo), actualizada: Number(f.actualizada) || 0 };
+}
+
+function omegaQuincena_(f) {
+  var j = function (v) { try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } };
+  return { _fila: f._fila, id: texto_(f.id), mes: texto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes),
+    creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+}
+
+function lote_(f) {
+  return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), empresa: texto_(f.empresa), total: Number(f.total) || 0, estado: texto_(f.estado),
+    creado: Number(f.creado) || 0, por: texto_(f.por), publicado: Number(f.publicado) || 0 };
+}
+
+function recibo_(f) {
+  return { _fila: f._fila, id: texto_(f.id), lote: texto_(f.lote), clave: texto_(f.clave), nombre: texto_(f.nombre), pagina: Number(f.pagina) || 0,
+    archivo: texto_(f.archivo), creado: Number(f.creado) || 0, visto: Number(f.visto) || 0, conforme: Number(f.conforme) || 0 };
+}
+
+/** Agrega varias filas de una vez (mucho más rápido que appendRow una por una). */
+function agregarFilas_(nombre, lista) {
+  if (!lista.length) return;
+  var h = hoja_(nombre), cab = HOJAS[nombre], desde = h.getLastRow() + 1;
+  var r = h.getRange(desde, 1, lista.length, cab.length);
+  r.setNumberFormat('@');
+  r.setValues(lista.map(function (o) { return cab.map(function (c) { return o[c] == null ? '' : String(o[c]); }); }));
+  invalidar_(nombre);
+}
+
+/** Reescribe la hoja sin las filas que cumplen la condición. */
+function quitarFilas_(nombre, condicion) {
+  var h = hoja_(nombre), cab = HOJAS[nombre];
+  var quedan = leer_(nombre).filter(function (f) { return !condicion(f); }).map(function (f) { return cab.map(function (c) { return f[c] == null ? '' : f[c]; }); });
+  var ultima = h.getLastRow();
+  if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
+  if (quedan.length) { var r = h.getRange(2, 1, quedan.length, cab.length); r.setNumberFormat('@'); r.setValues(quedan); }
+  invalidar_(nombre);
+}
+
+/** Carpeta de Drive donde se guardan los recibos (privada: solo la ve la cuenta dueña del Apps Script). */
+function carpetaRecibos_() {
+  var props = PropertiesService.getScriptProperties(), id = props.getProperty('RECIBOS_CARPETA');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* la borraron: se crea otra */ } }
+  var c = DriveApp.createFolder('CAC · Recibos de pago');
+  props.setProperty('RECIBOS_CARPETA', c.getId());
+  return c;
+}
+
+/**
+ * Notificación al celular con OneSignal (si está configurado en el menú RRHH). destinos: identificadores de
+ * notificación (no cédulas) o '*' para todos los que activaron los avisos. Si falla, no interrumpe nada.
+ */
+/** Datos de OneSignal guardados en la hoja, limpios (sin espacios ni comillas). Sin ellos o mal escritos: { error }. */
+function configOneSignal_() {
+  var props = PropertiesService.getScriptProperties();
+  var appId = String(props.getProperty('ONESIGNAL_APP_ID') || '').replace(/[\s'"]/g, '');
+  var clave = String(props.getProperty('ONESIGNAL_API_KEY') || '').replace(/[\s'"]/g, '');
+  if (!appId || !clave) return { error: 'Falta configurar OneSignal en la hoja (menú RRHH → «3 · Notificaciones al celular»).' };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appId)) {
+    return { error: 'El App ID de OneSignal guardado en la hoja no es válido (debe verse como 97b880ba-f53c-4cb8-…). Vuelve a ponerlo en el menú RRHH → «3».' };
+  }
+  if (!/^os_v2_[a-z0-9_]{20,}$/i.test(clave)) {
+    return { error: 'La REST API Key de OneSignal guardada en la hoja no es válida: debe empezar con «os_v2_app_» (no uses el «Key ID»). Vuelve a ponerla en el menú RRHH → «3».' };
+  }
+  return { appId: appId, clave: clave, sitio: props.getProperty('CAC_URL') || '' };
+}
+
+function pedirOneSignal_(cfg, ruta, cuerpo) {
+  var r = UrlFetchApp.fetch('https://api.onesignal.com' + ruta, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Key ' + cfg.clave }, payload: JSON.stringify(cuerpo),
+  });
+  var texto = r.getContentText(), j = {};
+  try { j = JSON.parse(texto); } catch (x) { /* no es JSON */ }
+  return { codigo: r.getResponseCode(), json: j, texto: texto };
+}
+function errorOneSignal_(r) {
+  var e = r.json && r.json.errors;
+  var txt = e && e.join ? e.map(function (x) { return typeof x === 'string' ? x : (x.title || JSON.stringify(x)); }).join(' ') : r.texto;
+  if (r.codigo === 401 || r.codigo === 403) return 'OneSignal no aceptó la REST API Key guardada en la hoja (HTTP ' + r.codigo + '). Crea una nueva en OneSignal (Settings → Keys & IDs → Add key) y ponla en el menú RRHH → «3».';
+  return 'HTTP ' + r.codigo + ' · ' + String(txt).slice(0, 200);
+}
+
+/**
+ * Registra en OneSignal la suscripción de avisos de un dispositivo (la crea el navegador con la clave pública de la app).
+ * externalId: identificador de la persona (no es su cédula). El tipo sale del servicio de avisos del dispositivo.
+ */
+function registrarSuscripcionPush_(externalId, d) {
+  var cfg = configOneSignal_();
+  if (cfg.error) return { estado: 'SIN_CONFIGURAR', detalle: cfg.error };
+  var host = String(d.endpoint).replace(/^https:\/\/([^/]+).*$/, '$1');
+  var tipo = /push\.apple\.com$/.test(host) ? 'SafariPush' : /mozilla\.com$/.test(host) ? 'FirefoxPush' : 'ChromePush';
+  // OneSignal guarda las llaves en base64 estándar (con + / =); el navegador las entrega en base64url. Si no se
+  // convierten, la suscripción queda creada pero OneSignal no le puede enviar (0 destinatarios).
+  var b64 = function (x) { x = String(x || '').replace(/-/g, '+').replace(/_/g, '/'); return x + '===='.slice(0, (4 - x.length % 4) % 4); };
+  var sub = { type: tipo, token: d.endpoint, enabled: true, notification_types: 1, web_auth: b64(d.auth), web_p256: b64(d.p256dh), sdk: '160700' };
+  try {
+    var r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users', { identity: { external_id: externalId }, subscriptions: [sub] });
+    if (r.codigo === 409) r = pedirOneSignal_(cfg, '/apps/' + cfg.appId + '/users/by/external_id/' + encodeURIComponent(externalId) + '/subscriptions', { subscription: sub });
+    if (r.codigo >= 300) { registrarError_(new Error('OneSignal suscripción ' + errorOneSignal_(r))); return { estado: 'ERROR', detalle: errorOneSignal_(r) }; }
+    // número de suscripción del dispositivo: los avisos se envían directo a él (más seguro que por usuario)
+    var subs = (r.json && r.json.subscriptions) || (r.json && r.json.subscription ? [r.json.subscription] : []);
+    var hecha = subs.filter(function (x) { return x && x.token === d.endpoint; })[0] || subs[0];
+    if (hecha && hecha.id) guardarDispositivo_(externalId, hecha.id, tipo);
+    return { estado: 'REGISTRADO', tipo: tipo };
+  } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
+}
+
+/** Crea la hoja si aún no existe (para no exigir «Configurar hojas» al actualizar). */
+function asegurarHoja_(nombre) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(nombre)) return;
+  var h = ss.insertSheet(nombre);
+  h.getRange(1, 1, 1, HOJAS[nombre].length).setValues([HOJAS[nombre]]).setFontWeight('bold');
+  h.setFrozenRows(1);
+}
+
+/** Guarda (o mueve a esta persona) el número de suscripción de un dispositivo. */
+function guardarDispositivo_(pushId, suscripcion, tipo) {
+  asegurarHoja_('PUSH_DISPOSITIVOS');
+  quitarFilas_('PUSH_DISPOSITIVOS', function (f) { return texto_(f.suscripcion) === suscripcion; });
+  agregarFilas_('PUSH_DISPOSITIVOS', [{ pushId: pushId, suscripcion: suscripcion, tipo: tipo, creado: Date.now() }]);
+}
+
+/** Números de suscripción de los dispositivos de esas personas. */
+function suscripcionesDe_(pushIds) {
+  asegurarHoja_('PUSH_DISPOSITIVOS');
+  var quien = {}; pushIds.forEach(function (p) { quien[p] = true; });
+  return leer_('PUSH_DISPOSITIVOS').filter(function (f) { return quien[texto_(f.pushId)]; }).map(function (f) { return texto_(f.suscripcion); });
+}
+
+function enviarPush_(destinos, titulo, texto, ruta) {
+  var cfg = configOneSignal_();
+  if (cfg.error) return { estado: 'SIN_CONFIGURAR', detalle: cfg.error };
+  var appId = cfg.appId, clave = cfg.clave;
+  if (!destinos || !destinos.length) return { estado: 'SIN_DESTINATARIOS' };
+  var sitio = cfg.sitio;
+  var cuerpo = { app_id: appId, target_channel: 'push', headings: { en: titulo, es: titulo }, contents: { en: texto || titulo, es: texto || titulo } };
+  if (sitio) cuerpo.url = sitio.replace(/\/?$/, '/') + (ruta ? '#/' + ruta : '');
+  var subs = [];
+  if (destinos === '*') cuerpo.included_segments = ['Total Subscriptions'];
+  else {
+    subs = suscripcionesDe_(destinos);
+    if (!subs.length) return { estado: 'SIN_DESTINATARIOS', detalle: 'Ninguna de esas personas tiene los avisos activos en un dispositivo.' };
+    delete cuerpo.target_channel;
+    cuerpo.include_subscription_ids = subs;
+  }
+  try {
+    var r = UrlFetchApp.fetch('https://api.onesignal.com/notifications?c=push', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { Authorization: 'Key ' + clave }, payload: JSON.stringify(cuerpo),
+    });
+    var texto = r.getContentText(), j = {};
+    try { j = JSON.parse(texto); } catch (x) { /* no es JSON */ }
+    if (r.getResponseCode() >= 300) {
+      registrarError_(new Error('OneSignal ' + r.getResponseCode() + ': ' + texto.slice(0, 300)));
+      return { estado: 'ERROR', detalle: errorOneSignal_({ codigo: r.getResponseCode(), json: j, texto: texto }) };
+    }
+    // dispositivos que OneSignal ya no acepta (la persona quitó el permiso o borró el CAC): se olvidan
+    var invalidos = (j.errors && (j.errors.invalid_player_ids || j.errors.invalid_subscription_ids)) || [];
+    if (invalidos.length) {
+      var malos = {}; invalidos.forEach(function (x) { malos[x] = true; });
+      quitarFilas_('PUSH_DISPOSITIVOS', function (f) { return malos[texto_(f.suscripcion)]; });
+    }
+    // sin id, o todos inválidos: nadie de los destinatarios puede recibirlo
+    if (!j.id || (subs.length && invalidos.length >= subs.length)) {
+      return { estado: 'SIN_DESTINATARIOS', detalle: 'OneSignal no tiene un dispositivo válido para recibirlo. Vuelve a activar los avisos.' };
+    }
+    return { estado: 'ENVIADO', id: j.id };
+  } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
+}
+
+/** Tarea diaria (la instala «Configurar hojas»): avisa al celular las constancias que vencieron desde la última vez. */
+function avisosDiarios() {
+  var props = PropertiesService.getScriptProperties(), ahora = Date.now();
+  var desde = Number(props.getProperty('AVISOS_DESDE')) || ahora - 86400000;
+  memo_ = {}; constanciasCache = null;
+  Servicio.avisosDiarios(crearRepo_(), crearCtx_(), desde);
+  props.setProperty('AVISOS_DESDE', String(ahora));
+}
+
+function instalarTareaDiaria_() {
+  try {
+    var ya = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'avisosDiarios'; });
+    if (!ya) ScriptApp.newTrigger('avisosDiarios').timeBased().everyDays(1).atHour(7).create();
+  } catch (e) { /* sin permiso para tareas: los avisos siguen en la campanita */ }
+}
+
+/** Menú RRHH → «3 · Notificaciones al celular»: datos de la app de OneSignal. */
+function configurarNotificaciones() {
+  var ui = SpreadsheetApp.getUi(), props = PropertiesService.getScriptProperties();
+  var pedir = function (titulo, texto, prop) {
+    var r = ui.prompt(titulo, texto + (props.getProperty(prop) ? '\n\n(Ya hay uno guardado. Deja en blanco para no cambiarlo.)' : ''), ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK) return false;
+    var v = String(r.getResponseText() || '').trim();
+    if (v) props.setProperty(prop, v);
+    return true;
+  };
+  if (!pedir('OneSignal · App ID', 'App ID de OneSignal (Settings → Keys & IDs):', 'ONESIGNAL_APP_ID')) return;
+  if (!pedir('OneSignal · REST API Key', 'REST API Key de OneSignal (Settings → Keys & IDs):', 'ONESIGNAL_API_KEY')) return;
+  if (!pedir('Dirección del CAC', 'Dirección del sitio, por ejemplo https://cac.onrender.com', 'CAC_URL')) return;
+  instalarTareaDiaria_();
+  ui.alert('Listo', 'Las notificaciones al celular quedaron configuradas.', ui.ButtonSet.OK);
 }
 
 /** La hoja PINES se crea sola (para no exigir «Configurar hojas» al actualizar). */
@@ -2912,11 +4581,17 @@ function configurarInicial() {
    ['vacAnticipacionMin', 15], ['vacAnticipacionMax', 20]]
     .forEach(function (f) { if (!existentes[f[0]]) hp.appendRow(f); });
   sem('EMPRESAS', [['PCA', 5847, 1, 5, 'A'], ['AIV', 5847, 1, 5, 'A']]);
-  // Feriados iniciales (solo si la hoja está vacía; después RRHH la edita)
-  var hf = ss.getSheetByName('FERIADOS');
-  if (hf.getLastRow() <= 1) {
-    hf.getRange(2, 1, FERIADOS_INICIALES.length, 1).setNumberFormat('@');
-    hf.getRange(2, 1, FERIADOS_INICIALES.length, 2).setValues(FERIADOS_INICIALES);
+  // Feriados nacionales 2026-2030: se agregan los que falten (no se tocan los que RRHH ya tenga o haya agregado)
+  if (typeof Vacaciones !== 'undefined' && Vacaciones) {
+    var hf = ss.getSheetByName('FERIADOS'), hay = {};
+    leer_('FERIADOS').forEach(function (f) { hay[fechaIso_(f.fecha)] = true; });
+    var faltan = feriadosIniciales_().filter(function (f) { return !hay[f[0]]; });
+    if (faltan.length) {
+      var desde = hf.getLastRow() + 1;
+      hf.getRange(desde, 1, faltan.length, 1).setNumberFormat('@');
+      hf.getRange(desde, 1, faltan.length, 2).setValues(faltan);
+      invalidar_('FERIADOS');
+    }
   }
   // Empleados fuera de nómina iniciales (si los módulos están cargados)
   if (typeof Empleados !== 'undefined' && Empleados) {
@@ -2943,6 +4618,7 @@ function configurarInicial() {
     // cédulas y claves como texto, para que Sheets no les quite ceros ni letras
     ss.getSheetByName(n).getRange(2, 1, 1000, n === 'EMPLEADOS' ? 2 : 1).setNumberFormat('@');
   });
+  instalarTareaDiaria_();
   invalidarTodo_();
 }
 
@@ -2952,6 +4628,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('RRHH')
     .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
     .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
+    .addItem('3 · Notificaciones al celular (OneSignal)', 'configurarNotificaciones')
     .addItem('Refrescar datos', 'refrescarDatos')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
@@ -3023,6 +4700,7 @@ function diagnostico() {
   var pr = PropertiesService.getScriptProperties();
   l.push((pr.getProperty('SECRETO') ? '✔ ' : '✘ FALTA ') + 'clave secreta');
   l.push((pr.getProperty('API_TOKEN') ? '✔ ' : '✘ FALTA ') + 'token de la API');
+  l.push((pr.getProperty('ONESIGNAL_APP_ID') && pr.getProperty('ONESIGNAL_API_KEY') ? '✔ ' : '· (opcional) sin ') + 'notificaciones al celular (OneSignal)');
   var cargados = modulosCargados_();
   MODULOS.forEach(function (m) { l.push((cargados[m] ? '✔ ' : '✘ FALTA ') + 'módulo ' + m); });
   l.push('Versión del código: ' + VERSION);

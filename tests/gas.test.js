@@ -283,6 +283,59 @@ test('poner clave de RRHH escribiendo el número de la lista en vez de la cédul
   assert.equal(e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-por-lista' }).ok, true);   // la 1 de la lista es Samuel
 });
 
+test('recibos de pago y avisos sobre las hojas: Drive, campanita y OneSignal', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  assert.equal(e.tareas.length, 1);                                   // tarea diaria de avisos instalada
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba'; e.props.CAC_URL = 'https://cac-pruebas.onrender.com';
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', puesto: 'Vendedora', estado: 'Active', fechaInicio: '05/03/2025', salarioMensual: 100 },
+  ] });
+  const asig = e.llamar({ action: 'asignarRecibos', token: admin, hojas: [{ pagina: 1, cedula: 'V111111119', nombre: 'ANA PRUEBA' }] }).data;
+  assert.equal(asig.hojas[0].clave, 'V11111111');
+  const lote = e.llamar({ action: 'crearLoteRecibos', token: admin, concepto: 'Nómina 1Q noviembre 2026', empresa: 'PCA', total: 1 }).data;
+  const pdf = Buffer.from('%PDF-1.4 recibo de Ana').toString('base64');
+  assert.equal(e.llamar({ action: 'subirRecibos', token: admin, lote: lote.id, items: [{ pagina: 1, clave: 'V11111111', pdf }] }).data.guardados, 1);
+  const archivo = Object.values(e.drive.archivos)[0];
+  const ana0 = entrarTrabajador(e, '11111111');
+  const disp = { endpoint: 'https://fcm.googleapis.com/fcm/send/abcdefghijk', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: ana0.token, ...disp }).ok, true);
+  assert.equal(e.hojas.PUSH_DISPOSITIVOS.getLastRow(), 2);   // quedó guardado el número de suscripción
+  assert.match(archivo.nombre, /^Nómina 1Q noviembre 2026 - V11111111/);
+  assert.equal(e.llamar({ action: 'publicarLote', token: admin, id: lote.id }).data.estado, 'PUBLICADO');
+
+  // OneSignal: directo al número de suscripción del dispositivo de la persona, con enlace a su sección
+  const envio = e.pedidos.at(-1);
+  assert.equal(envio.url, 'https://api.onesignal.com/notifications?c=push');
+  assert.equal(envio.headers.Authorization, 'Key os_v2_app_clavedepruebaclavedeprueba');
+  assert.deepEqual(envio.cuerpo.include_subscription_ids, ['sub-1']);
+  assert.ok(!JSON.stringify(envio.cuerpo).includes('11111111'));
+  assert.equal(envio.cuerpo.url, 'https://cac-pruebas.onrender.com/#/recibos');
+  assert.equal(e.pedidos.find((x) => /\/users$/.test(x.url)).cuerpo.identity.external_id, ana0.pushId);   // el dispositivo, a nombre de Ana
+
+  const ana = entrarTrabajador(e, '11111111');
+  const n = e.llamar({ action: 'misNotificaciones', token: ana.token }).data;
+  assert.equal(n.noLeidas, 1);
+  assert.equal(e.llamar({ action: 'marcarNotificacionesLeidas', token: ana.token }).ok, true);
+  assert.equal(e.llamar({ action: 'misNotificaciones', token: ana.token }).data.noLeidas, 0);
+
+  const mio = e.llamar({ action: 'misRecibos', token: ana.token }).data;
+  const visto = e.llamar({ action: 'verRecibo', token: ana.token, id: mio[0].id }).data;
+  assert.equal(visto.pdf, pdf);
+  assert.ok(e.llamar({ action: 'confirmarRecibo', token: ana.token, id: mio[0].id }).data.conforme > 0);
+  const det = e.llamar({ action: 'detalleLote', token: admin, id: lote.id }).data;
+  assert.equal(det.lote.conformes, 1);
+  assert.equal(e.llamar({ action: 'eliminarLote', token: admin, id: lote.id }).code, 'VALIDACION');
+
+  // una carga sin confirmaciones se elimina con sus archivos (a la papelera)
+  const l2 = e.llamar({ action: 'crearLoteRecibos', token: admin, concepto: 'Prueba', empresa: 'PCA' }).data;
+  e.llamar({ action: 'subirRecibos', token: admin, lote: l2.id, items: [{ pagina: 1, clave: 'V11111111', pdf }] });
+  assert.equal(e.llamar({ action: 'eliminarLote', token: admin, id: l2.id }).ok, true);
+  assert.equal(Object.values(e.drive.archivos).filter((a) => a.papelera).length, 1);
+  assert.equal(e.llamar({ action: 'listarLotes', token: admin }).data.length, 1);
+});
+
 test('constancia: la fecha de ingreso sale bien aunque Sheets la haya convertido en fecha', () => {
   const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
   e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
@@ -296,6 +349,120 @@ test('constancia: la fecha de ingreso sale bien aunque Sheets la haya convertido
   const h = e.hojas.CONSTANCIAS, col = h.filas[0].indexOf('fechaIngreso');
   h.filas[1][col] = new Date(2025, 4, 3);
   assert.equal(e.llamar({ action: 'misConstancias', token: ana }).data[0].fechaIngreso, '05/03/2025');
+});
+
+test('aviso de prueba: dice si falta configurar OneSignal, si el dispositivo no está suscrito o si se envió', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_CONFIGURAR');
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba';
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_DESTINATARIOS');   // aún sin dispositivo
+  const disp = { endpoint: 'https://web.push.apple.com/QGx1Zm9vYmFyYmF6cXV4', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: admin, ...disp }).ok, true);
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'ENVIADO');
+  assert.deepEqual(e.pedidos.at(-1).cuerpo.include_subscription_ids, ['sub-1']);
+  // OneSignal dice que ese dispositivo ya no es válido (quitaron el permiso): se olvida y se informa
+  e.onesignalResponde(() => ({ codigo: 200, json: { id: 'x', errors: { invalid_player_ids: ['sub-1'] } } }));
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_DESTINATARIOS');
+  assert.equal(e.hojas.PUSH_DISPOSITIVOS.getLastRow(), 1);
+});
+
+test('registrar el dispositivo en OneSignal desde el servidor (iPhone = SafariPush) y App ID mal escrito', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const ses = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data;
+  const disp = { endpoint: 'https://web.push.apple.com/QGx1Zm9vYmFyYmF6cXV4', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).code, 'SIN_CONFIGURAR');
+  e.props.ONESIGNAL_APP_ID = 'cac pruebas'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba';
+  assert.match(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).message, /App ID de OneSignal .* no es válido/);
+  assert.match(e.llamar({ action: 'avisoDePrueba', token: ses.token }).data.push.detalle, /no es válido/);
+  e.props.ONESIGNAL_APP_ID = ' "97b880ba-f53c-4cb8-88f3-9c4cf9fc186f" ';   // con espacios y comillas: se limpia
+  const r = e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.data.tipo, 'SafariPush');
+  const pedido = e.pedidos.at(-1);
+  assert.equal(pedido.url, 'https://api.onesignal.com/apps/97b880ba-f53c-4cb8-88f3-9c4cf9fc186f/users');
+  assert.equal(pedido.cuerpo.identity.external_id, ses.pushId);
+  // llaves en base64 estándar con relleno (como las guarda OneSignal): base64url sin «=» deja la suscripción sin poder recibir
+  assert.deepEqual(pedido.cuerpo.subscriptions[0], { type: 'SafariPush', token: disp.endpoint, enabled: true, notification_types: 1,
+    web_auth: 'k8JV6sjdbhAi+n7Y', web_p256: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM=', sdk: '160700' });
+  // si la persona ya existe en OneSignal (409), se agrega la suscripción a esa persona
+  e.onesignalResponde((url) => (/\/users$/.test(url) ? { codigo: 409, json: { errors: ['exists'] } } : { codigo: 201, json: { subscription: { id: 's1' } } }));
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, ...disp }).ok, true);
+  assert.match(e.pedidos.at(-1).url, /\/users\/by\/external_id\/[0-9a-f]{32}\/subscriptions$/);
+  assert.equal(e.llamar({ action: 'registrarDispositivo', token: ses.token, endpoint: 'http://x', p256dh: 'a', auth: 'b' }).code, 'VALIDACION');
+});
+
+test('la hoja PUSH_DISPOSITIVOS se crea sola si la hoja de cálculo es de una versión anterior', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  delete e.hojas.PUSH_DISPOSITIVOS;
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba';
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  assert.equal(e.llamar({ action: 'avisoDePrueba', token: admin }).data.push.estado, 'SIN_DESTINATARIOS');
+  assert.ok(e.hojas.PUSH_DISPOSITIVOS);
+});
+
+test('OneSignal: REST API Key con formato equivocado o rechazada (401) se explica', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  const disp = { endpoint: 'https://web.push.apple.com/QGx1Zm9vYmFyYmF6cXV4', p256dh: 'BOr8sXlAXVQnzF4e3NQ1oUPg2Jr7ZQ9xL3z8M2tY5kM', auth: 'k8JV6sjdbhAi-n7Y' };
+  e.props.ONESIGNAL_APP_ID = '00000000-0000-4000-8000-000000000001'; e.props.ONESIGNAL_API_KEY = 'qbwu7rtmxubvvjtcy623yei6y';   // el Key ID, no la clave
+  assert.match(e.llamar({ action: 'registrarDispositivo', token: admin, ...disp }).message, /os_v2_app_/);
+  e.props.ONESIGNAL_API_KEY = 'os_v2_app_clavedepruebaclavedeprueba';
+  e.onesignalResponde(() => ({ codigo: 401, json: { errors: ['Access denied.'] } }));
+  assert.match(e.llamar({ action: 'registrarDispositivo', token: admin, ...disp }).message, /no aceptó la REST API Key/);
+});
+
+test('feriados de Venezuela 2026-2030: se agregan los que falten sin duplicar ni borrar los de RRHH', () => {
+  const e = crearEntorno();
+  e.ejecutar('configurarInicial');
+  const fechas = () => e.hojas.FERIADOS.filas.slice(1).map((f) => f[0]).filter(Boolean);
+  assert.equal(fechas().length, 14 * 4 + 13);                    // 2030: Viernes Santo cae el 19 de abril
+  for (const f of ['2027-02-08', '2027-03-26', '2028-02-29', '2029-03-29', '2030-04-19', '2030-12-31']) assert.ok(fechas().includes(f), f);
+  e.hojas.FERIADOS.appendRow(['2027-06-15', 'Día puente de la empresa']);
+  e.ejecutar('configurarInicial');                               // repetir no duplica y respeta lo agregado
+  assert.equal(fechas().length, 14 * 4 + 13 + 1);
+});
+
+test('planificación sobre las hojas: abrir, cargar, aprobar y panel de RRHH (las hojas se crean solas)', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  delete e.hojas.VAC_CICLOS; delete e.hojas.VAC_PLANES;          // hoja de una versión anterior
+  // Ana entró hace 400 días: tiene 15 pendientes y cumple su 2.º año (16 días) dentro del período
+  const hoy = new Date(), iso = (d) => d.toISOString().slice(0, 10), mas = (n) => iso(new Date(hoy.getTime() + n * 864e5));
+  const ingreso = new Date(hoy.getTime() - 400 * 864e5), ingresoAna = iso(ingreso).split('-').reverse().join('/');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', departamento: 'Recursos Humanos', puesto: 'Asistente', estado: 'Active', fechaInicio: '12/11/2020', salarioMensual: 1 },
+    { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'SUCURSAL EL BOSQUE', departamento: 'Ventas', puesto: 'Vendedora', estado: 'Active', fechaInicio: ingresoAna, salarioMensual: 1 },
+  ] });
+  e.llamar({ action: 'asignarJefe', token: admin, claves: ['V11111111'], jefe: 'V30580323' });
+  const c = e.llamar({ action: 'guardarPlanificacionVac', token: admin, nombre: 'Vacaciones de prueba', desde: mas(-5), hasta: mas(430), abre: mas(-1), cierra: mas(20) });
+  assert.equal(c.ok, true, c.message);
+  const ana = entrarTrabajador(e, '11111111').token;
+  const mia = e.llamar({ action: 'miPlanificacion', token: ana }).data;
+  assert.equal(mia.editable, true);
+  assert.ok(mia.requeridos > 0);
+  const sem = (d) => { const x = new Date(d); while ([0, 6].includes(x.getUTCDay()) || e.hojas.FERIADOS.filas.some((f) => f[0] === iso(x))) x.setUTCDate(x.getUTCDate() + 1); return iso(x); };
+  assert.equal(mia.requeridos, 31);
+  // todo en un bloque cuando ya tenga todos los días (después de su aniversario)
+  const bloques = [{ inicio: sem(new Date(hoy.getTime() + 340 * 864e5)), dias: 31 }];
+  const env = e.llamar({ action: 'guardarMiPlanificacion', token: ana, bloques, enviar: true });
+  assert.equal(env.ok, true, env.message);
+  const samuel = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data;
+  const eq = e.llamar({ action: 'equipoPlanificacion', token: samuel.token }).data;
+  assert.equal(eq.pendientes.length, 1);
+  assert.equal(e.llamar({ action: 'decidirPlanificacion', token: samuel.token, id: env.data.id, aprobar: true }).data.estado, 'APROBADA');
+  const plan = e.llamar({ action: 'miPlanificacion', token: ana }).data.plan;
+  assert.equal(plan.bloques[0].dias, mia.requeridos);              // los bloques se guardan y se leen como lista
+  const panel = e.llamar({ action: 'panelPlanificacionVac', token: admin, ciclo: c.data.id }).data;
+  assert.equal(panel.filas.find((f) => f.nombre === 'ANA PRUEBA').estado, 'APROBADA');
+  assert.equal(panel.filas.find((f) => f.nombre === 'SAMUEL HERRERA').estado, 'SIN_CARGAR');
+  const saldos = e.llamar({ action: 'panelSaldosVacaciones', token: admin }).data;
+  assert.equal(saldos.filas.find((f) => f.nombre === 'ANA PRUEBA').localidad, 'SUCURSAL EL BOSQUE');
 });
 
 test('PIN de 4 números: crear la primera vez, entrar, bloqueo tras 5 fallos y RRHH lo restablece', () => {
@@ -324,4 +491,30 @@ test('PIN de 4 números: crear la primera vez, entrar, bloqueo tras 5 fallos y R
   // RRHH lo restablece: al entrar crea uno nuevo
   assert.equal(e.llamar({ action: 'restablecerPin', token: admin, clave: 'V11111111' }).ok, true);
   assert.equal(e.llamar({ action: 'restablecerPin', token: creado.data.token, clave: 'V11111111' }).code, 'SESION');   // solo RRHH
+});
+
+test('Omega Capital sobre las hojas: quincena, lotes, validar y textos que Sheets no debe convertir en fechas', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const t = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: t, filas: [
+    { cedula: 'V079246270', nombre: 'ZORAYA PEREZ', organizacion: 'PROSEIN CENTRAL', estado: 'Active', fechaInicio: '08/10/2009' },
+    { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'AUSTRAL IMPORT DE VENEZUELA C.A', estado: 'Active', fechaInicio: '05/03/2025' },
+  ] });
+  assert.equal(e.llamar({ action: 'omegaImportarBeneficios', token: t, filas: [{ cedula: '7924627', complemento: 200 }] }).data.cargados, 1);
+  assert.equal(e.llamar({ action: 'omegaMarcarTarjeta', token: t, claves: ['V11111111'], sinTarjeta: true }).data.cambiados, 1);
+  const q = e.llamar({ action: 'omegaAbrirQuincena', token: t, mes: '2026-11', quincena: 1, tasa: 905 });
+  assert.equal(q.ok, true, JSON.stringify(q));
+  assert.deepEqual(q.data.lotes.map((l) => l.personas), [1, 0, 1, 1]);
+  let l = e.llamar({ action: 'omegaAjustarLinea', token: t, id: '2026-11-1', lote: 'TR-PCA', clave: 'V7924627', cambio: { monto: '90.000,50' } });
+  assert.equal(l.data.lineas[0].montoBs, 90000.5);
+  l = e.llamar({ action: 'omegaValidarLote', token: t, id: '2026-11-1', lote: 'TR-PCA' });
+  assert.equal(l.data.estado, 'VALIDADO', JSON.stringify(l));
+  assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[0] === '2026-11-1').length, 1);
+  const r = e.llamar({ action: 'omegaInicio', token: t });
+  assert.deepEqual(r.data.quincenas.map((x) => [x.id, x.validados]), [['2026-11-1', 1]]);
+  assert.equal(r.data.sinTarjeta, 1);
+  assert.equal(e.llamar({ action: 'omegaLote', token: t, id: '2026-11-1', lote: 'TR-PCA' }).data.lineas[0].montoBs, 90000.5);
+  assert.equal(e.llamar({ action: 'omegaReabrirLote', token: t, id: '2026-11-1', lote: 'TR-PCA' }).data.estado, 'PENDIENTE');
+  assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[0] === '2026-11-1').length, 0);
 });

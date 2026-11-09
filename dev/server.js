@@ -50,6 +50,8 @@ if (MODO_GAS) {
   // Samuel y Luis Paul (ADMIN, empleados) y Johanna, la CEO (ADMIN, no es empleada). Clave de los tres: clave-demo-123
   gas = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-demo-123', '7952013', 'YES', 'clave-demo-123', '6291577', 'YES', 'clave-demo-123'] });
   gas.ejecutar('configurarInicial'); gas.ejecutar('ponerClaveRRHH'); gas.ejecutar('ponerClaveRRHH'); gas.ejecutar('ponerClaveRRHH');
+  // ONESIGNAL_DEMO=1: OneSignal «configurado» en la hoja simulada (los envíos no salen: el simulador los responde)
+  if (process.env.ONESIGNAL_DEMO) Object.assign(gas.props, { ONESIGNAL_APP_ID: '97b880ba-f53c-4cb8-88f3-9c4cf9fc186f', ONESIGNAL_API_KEY: 'demo', CAC_URL: 'http://localhost' });
 }
 
 http.createServer((req, res) => {
