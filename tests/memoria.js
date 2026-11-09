@@ -91,11 +91,17 @@ function crearRepo(empleadosFilas) {
     omegaBeneficios: () => Object.values(st.omegaBenef || {}).map((b) => ({ ...b })),
     reemplazarOmegaBeneficios: (lista) => { st.omegaBenef = {}; lista.forEach((b) => { st.omegaBenef[b.clave] = { ...b }; }); },
     guardarOmegaBeneficio: (b) => { st.omegaBenef = st.omegaBenef || {}; st.omegaBenef[b.clave] = { ...b }; },
-    omegaPeriodo: (mes) => (st.omegaPer && st.omegaPer[mes] ? JSON.parse(JSON.stringify(st.omegaPer[mes])) : null),
-    guardarOmegaPeriodo: (p) => { st.omegaPer = st.omegaPer || {}; st.omegaPer[p.mes] = JSON.parse(JSON.stringify(p)); },
-    omegaPagos: (mes, q) => (st.omegaPagos || []).filter((x) => x.mes === mes && x.quincena === q).map((x) => ({ ...x })),
-    agregarOmegaPagos: (lista) => { st.omegaPagos = (st.omegaPagos || []).concat(lista.map((x) => ({ ...x }))); },
-    quitarOmegaPagos: (mes, q) => { st.omegaPagos = (st.omegaPagos || []).filter((x) => !(x.mes === mes && x.quincena === q)); },
+    omegaSinTarjeta: () => ({ ...(st.omegaSin || {}) }),
+    marcarOmegaSinTarjeta: (clave, nombre, sin, por, cuando) => { st.omegaSin = st.omegaSin || {}; if (sin) st.omegaSin[clave] = { nombre, por, desde: cuando }; else delete st.omegaSin[clave]; },
+    omegaConfig: () => ({ ...(st.omegaCfg || {}) }),
+    guardarOmegaConfig: (c) => { st.omegaCfg = { ...(st.omegaCfg || {}), ...c }; },
+    omegaQuincenas: () => Object.values(st.omegaQ || {}).map((q) => JSON.parse(JSON.stringify(q))),
+    omegaQuincena: (id) => (st.omegaQ && st.omegaQ[id] ? JSON.parse(JSON.stringify(st.omegaQ[id])) : null),
+    guardarOmegaQuincena: (q) => { st.omegaQ = st.omegaQ || {}; st.omegaQ[q.id] = JSON.parse(JSON.stringify(q)); },
+    eliminarOmegaQuincena: (id) => { delete st.omegaQ[id]; },
+    omegaPagos: (q, lote) => (st.omegaPagos || []).filter((x) => x.quincena === q && x.lote === lote).map((x) => JSON.parse(JSON.stringify(x))),
+    agregarOmegaPagos: (lista) => { st.omegaPagos = (st.omegaPagos || []).concat(lista.map((x) => JSON.parse(JSON.stringify(x)))); },
+    quitarOmegaPagos: (q, lote) => { st.omegaPagos = (st.omegaPagos || []).filter((x) => !(x.quincena === q && x.lote === lote)); },
   };
 }
 

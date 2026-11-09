@@ -48,8 +48,10 @@ var HOJAS = {
   RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   PINES: ['clave', 'sal', 'hash', 'creado'],
   OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
-  OMEGA_PERIODOS: ['mes', 'tasa1', 'tasa2', 'comision', 'iva', 'retencion', 'cestaticket', 'ajustes', 'estado1', 'estado2', 'cerrada1', 'cerrada2', 'actualizado', 'por'],
-  OMEGA_PAGOS: ['mes', 'quincena', 'clave', 'nombre', 'empresa', 'dias', 'cestaticket', 'complemento', 'vehiculo', 'bono', 'comisiones', 'totalUSD', 'tasa', 'anticipoBs', 'montoBs', 'cerrada'],
+  OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
+  OMEGA_CONFIG: ['clave', 'valor'],
+  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada'],
+  OMEGA_PAGOS: ['quincena', 'lote', 'clave', 'cedula', 'nombre', 'usd', 'montoBs', 'anticipoBs', 'dias', 'detalle', 'validado'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -145,12 +147,21 @@ var RUTAS_RRHH = {
   listarPlanificacionesVac: function (repo, ctx, d) { return Servicio.listarPlanificacionesVac(repo, ctx, d.token); },
   panelPlanificacionVac: function (repo, ctx, d) { return Servicio.panelPlanificacionVac(repo, ctx, d.token, d.ciclo); },
   recordarPlanificacionVac: function (repo, ctx, d) { return Servicio.recordarPlanificacionVac(repo, ctx, d.token, d.ciclo); },
-  omegaMes: function (repo, ctx, d) { return Servicio.omegaMes(repo, ctx, d.token, d.mes); },
-  omegaGuardarPeriodo: function (repo, ctx, d) { return Servicio.omegaGuardarPeriodo(repo, ctx, d.token, d); },
+  omegaInicio: function (repo, ctx, d) { return Servicio.omegaInicio(repo, ctx, d.token); },
+  omegaGuardarConfig: function (repo, ctx, d) { return Servicio.omegaGuardarConfig(repo, ctx, d.token, d); },
+  omegaTarjetas: function (repo, ctx, d) { return Servicio.omegaTarjetas(repo, ctx, d.token); },
+  omegaMarcarTarjeta: function (repo, ctx, d) { return Servicio.omegaMarcarTarjeta(repo, ctx, d.token, d.claves, !!d.sinTarjeta); },
+  omegaAbrirQuincena: function (repo, ctx, d) { return Servicio.omegaAbrirQuincena(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
+  omegaQuincena: function (repo, ctx, d) { return Servicio.omegaQuincena(repo, ctx, d.token, d.id); },
+  omegaCambiarTasa: function (repo, ctx, d) { return Servicio.omegaCambiarTasa(repo, ctx, d.token, d.id, d.tasa); },
+  omegaEliminarQuincena: function (repo, ctx, d) { return Servicio.omegaEliminarQuincena(repo, ctx, d.token, d.id); },
+  omegaLote: function (repo, ctx, d) { return Servicio.omegaLote(repo, ctx, d.token, d.id, d.lote); },
+  omegaAjustarLinea: function (repo, ctx, d) { return Servicio.omegaAjustarLinea(repo, ctx, d.token, d.id, d.lote, d.clave, d.cambio); },
+  omegaValidarLote: function (repo, ctx, d) { return Servicio.omegaValidarLote(repo, ctx, d.token, d.id, d.lote); },
+  omegaReabrirLote: function (repo, ctx, d) { return Servicio.omegaReabrirLote(repo, ctx, d.token, d.id, d.lote); },
   omegaImportarBeneficios: function (repo, ctx, d) { return Servicio.omegaImportarBeneficios(repo, ctx, d.token, d.filas); },
+  omegaBeneficios: function (repo, ctx, d) { return Servicio.omegaBeneficios(repo, ctx, d.token); },
   omegaEditarBeneficio: function (repo, ctx, d) { return Servicio.omegaEditarBeneficio(repo, ctx, d.token, d.clave, d.montos); },
-  omegaCerrarQuincena: function (repo, ctx, d) { return Servicio.omegaCerrarQuincena(repo, ctx, d.token, d.mes, d.quincena); },
-  omegaReabrirQuincena: function (repo, ctx, d) { return Servicio.omegaReabrirQuincena(repo, ctx, d.token, d.mes, d.quincena); },
   saldoVacacionesEmpleado: function (repo, ctx, d) { return Servicio.saldoVacacionesEmpleado(repo, ctx, d.token, d.clave); },
   listarConstancias: function (repo, ctx, d) { return Servicio.listarConstancias(repo, ctx, d.token); },
   anularConstancia: function (repo, ctx, d) { return Servicio.anularConstancia(repo, ctx, d.token, d.id); },
@@ -177,7 +188,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaMes: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -700,34 +711,62 @@ function crearRepo_() {
       var copia = Object.assign({}, b); delete copia._fila; if (ya) copia._fila = ya._fila;
       escribirFila_('OMEGA_BENEFICIOS', copia);
     },
-    omegaPeriodo: function (mes) {
-      asegurarHoja_('OMEGA_PERIODOS');
-      var f = leer_('OMEGA_PERIODOS').filter(function (x) { return texto_(x.mes) === mes; })[0];
-      if (!f) return null;
-      var aj = {}; try { aj = f.ajustes ? JSON.parse(f.ajustes) : {}; } catch (e) { /* vacío */ }
-      var n = function (v) { return v === '' || v == null ? null : Number(v); };
-      return { _fila: f._fila, mes: mes, tasa1: n(f.tasa1), tasa2: n(f.tasa2), comision: n(f.comision), iva: n(f.iva), retencion: n(f.retencion), cestaticket: n(f.cestaticket),
-        ajustes: aj, estado1: texto_(f.estado1) || 'ABIERTA', estado2: texto_(f.estado2) || 'ABIERTA', cerrada1: Number(f.cerrada1) || 0, cerrada2: Number(f.cerrada2) || 0 };
+    omegaSinTarjeta: function () {
+      asegurarHoja_('OMEGA_SIN_TARJETA');
+      var r = {}; leer_('OMEGA_SIN_TARJETA').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = { nombre: texto_(f.nombre), desde: Number(f.desde) || 0, por: texto_(f.por) }; });
+      return r;
     },
-    guardarOmegaPeriodo: function (p) {
-      asegurarHoja_('OMEGA_PERIODOS');
-      var copia = Object.assign({}, p, { ajustes: JSON.stringify(p.ajustes || {}) });
-      if (!copia._fila) { var h = hoja_('OMEGA_PERIODOS'); h.getRange(h.getLastRow() + 1, 1).setNumberFormat('@'); }
-      escribirFila_('OMEGA_PERIODOS', copia);
-      p._fila = copia._fila;
+    marcarOmegaSinTarjeta: function (clave, nombre, sin, por, cuando) {
+      asegurarHoja_('OMEGA_SIN_TARJETA');
+      var ya = leer_('OMEGA_SIN_TARJETA').filter(function (f) { return texto_(f.clave) === clave; })[0];
+      if (sin && !ya) agregarFilas_('OMEGA_SIN_TARJETA', [{ clave: clave, nombre: nombre, desde: cuando, por: por }]);
+      if (!sin && ya) quitarFilas_('OMEGA_SIN_TARJETA', function (f) { return texto_(f.clave) === clave; });
     },
-    omegaPagos: function (mes, q) {
-      asegurarHoja_('OMEGA_PAGOS');
-      return leer_('OMEGA_PAGOS').filter(function (f) { return texto_(f.mes) === mes && Number(f.quincena) === q; }).map(function (f) {
-        var x = { mes: mes, quincena: q, clave: texto_(f.clave), nombre: texto_(f.nombre), empresa: texto_(f.empresa), dias: Number(f.dias) || 0 };
-        ['cestaticket', 'complemento', 'vehiculo', 'bono', 'comisiones', 'totalUSD', 'tasa', 'anticipoBs', 'montoBs', 'cerrada'].forEach(function (k) { x[k] = Number(f[k]) || 0; });
-        return x;
+    omegaConfig: function () {
+      asegurarHoja_('OMEGA_CONFIG');
+      var r = {}; leer_('OMEGA_CONFIG').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = f.valor; });
+      return r;
+    },
+    guardarOmegaConfig: function (c) {
+      asegurarHoja_('OMEGA_CONFIG');
+      var filas = leer_('OMEGA_CONFIG');
+      Object.keys(c).forEach(function (k) {
+        var ya = filas.filter(function (f) { return texto_(f.clave) === k; })[0];
+        escribirFila_('OMEGA_CONFIG', { _fila: ya ? ya._fila : undefined, clave: k, valor: c[k] });
       });
     },
-    agregarOmegaPagos: function (lista) { asegurarHoja_('OMEGA_PAGOS'); agregarFilas_('OMEGA_PAGOS', lista); },
-    quitarOmegaPagos: function (mes, q) {
+    omegaQuincenas: function () { asegurarHoja_('OMEGA_QUINCENAS'); return leer_('OMEGA_QUINCENAS').filter(function (f) { return texto_(f.id); }).map(omegaQuincena_); },
+    omegaQuincena: function (id) {
+      asegurarHoja_('OMEGA_QUINCENAS');
+      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === id; })[0];
+      return f ? omegaQuincena_(f) : null;
+    },
+    guardarOmegaQuincena: function (q) {
+      asegurarHoja_('OMEGA_QUINCENAS');
+      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === q.id; })[0];
+      var copia = Object.assign({}, q, { lotes: JSON.stringify(q.lotes || {}), ajustes: JSON.stringify(q.ajustes || {}), _fila: ya ? ya._fila : undefined });
+      if (!copia._fila) { var h = hoja_('OMEGA_QUINCENAS'); h.getRange(h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@'); }
+      escribirFila_('OMEGA_QUINCENAS', copia);
+    },
+    eliminarOmegaQuincena: function (id) {
+      quitarFilas_('OMEGA_QUINCENAS', function (f) { return texto_(f.id) === id; });
+      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === id; });
+    },
+    omegaPagos: function (q, lote) {
       asegurarHoja_('OMEGA_PAGOS');
-      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.mes) === mes && Number(f.quincena) === q; });
+      return leer_('OMEGA_PAGOS').filter(function (f) { return texto_(f.quincena) === q && texto_(f.lote) === lote; }).map(function (f) {
+        var det = {}; try { det = f.detalle ? JSON.parse(f.detalle) : {}; } catch (e) { /* vacío */ }
+        return { quincena: q, lote: lote, clave: texto_(f.clave), cedula: texto_(f.cedula), nombre: texto_(f.nombre), usd: Number(f.usd) || 0, montoBs: Number(f.montoBs) || 0,
+          anticipoBs: Number(f.anticipoBs) || 0, dias: Number(f.dias) || 0, detalle: det, validado: Number(f.validado) || 0 };
+      });
+    },
+    agregarOmegaPagos: function (lista) {
+      asegurarHoja_('OMEGA_PAGOS');
+      agregarFilas_('OMEGA_PAGOS', lista.map(function (x) { return Object.assign({}, x, { detalle: JSON.stringify(x.detalle || {}) }); }));
+    },
+    quitarOmegaPagos: function (q, lote) {
+      asegurarHoja_('OMEGA_PAGOS');
+      quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === q && texto_(f.lote) === lote; });
     },
     eliminarLote: function (lote, recibos) {
       recibos.forEach(function (r) { try { DriveApp.getFileById(r.archivo).setTrashed(true); } catch (e) { /* ya no estaba */ } });
@@ -744,6 +783,12 @@ function plan_(f) {
   return { _fila: f._fila, id: texto_(f.id), ciclo: texto_(f.ciclo), clave: texto_(f.clave), estado: texto_(f.estado), bloques: b,
     requeridos: Number(f.requeridos) || 0, planificados: Number(f.planificados) || 0, jefe: texto_(f.jefe), enviada: Number(f.enviada) || 0,
     decidida: Number(f.decidida) || 0, decididaPor: texto_(f.decididaPor), motivo: texto_(f.motivo), actualizada: Number(f.actualizada) || 0 };
+}
+
+function omegaQuincena_(f) {
+  var j = function (v) { try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } };
+  return { _fila: f._fila, id: texto_(f.id), mes: texto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes),
+    creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
 }
 
 function lote_(f) {

@@ -493,7 +493,7 @@ test('PIN de 4 números: crear la primera vez, entrar, bloqueo tras 5 fallos y R
   assert.equal(e.llamar({ action: 'restablecerPin', token: creado.data.token, clave: 'V11111111' }).code, 'SESION');   // solo RRHH
 });
 
-test('Omega Capital sobre las hojas: beneficios, tasas, cierre de quincenas y el mes guardado como texto', () => {
+test('Omega Capital sobre las hojas: quincena, lotes, validar y textos que Sheets no debe convertir en fechas', () => {
   const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
   e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
   const t = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
@@ -501,18 +501,20 @@ test('Omega Capital sobre las hojas: beneficios, tasas, cierre de quincenas y el
     { cedula: 'V079246270', nombre: 'ZORAYA PEREZ', organizacion: 'PROSEIN CENTRAL', estado: 'Active', fechaInicio: '08/10/2009' },
     { cedula: 'V111111119', nombre: 'ANA PRUEBA', organizacion: 'AUSTRAL IMPORT DE VENEZUELA C.A', estado: 'Active', fechaInicio: '05/03/2025' },
   ] });
-  const imp = e.llamar({ action: 'omegaImportarBeneficios', token: t, filas: [{ cedula: '7924627', complemento: 200 }] });
-  assert.equal(imp.data.cargados, 1, JSON.stringify(imp));
-  let r = e.llamar({ action: 'omegaGuardarPeriodo', token: t, mes: '2026-11', tasa1: 905, tasa2: 920, ajustes: { V11111111: 15 } });
-  assert.equal(r.ok, true, JSON.stringify(r));
-  const z = r.data.lineas.find((l) => l.nombre === 'ZORAYA PEREZ'), a = r.data.lineas.find((l) => l.nombre === 'ANA PRUEBA');
-  assert.equal(z.q1, 108600); assert.equal(a.cestaticket, 20);
-  assert.equal(e.llamar({ action: 'omegaCerrarQuincena', token: t, mes: '2026-11', quincena: 1 }).data.estado1, 'CERRADA');
-  r = e.llamar({ action: 'omegaMes', token: t, mes: '2026-11' });
-  assert.equal(r.data.estado1, 'CERRADA'); assert.equal(r.data.tasa2, 920);
-  assert.equal(r.data.lineas.find((l) => l.nombre === 'ANA PRUEBA').dias, 15);
-  assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[0] === '2026-11').length, 2);
-  assert.equal(e.llamar({ action: 'omegaCerrarQuincena', token: t, mes: '2026-11', quincena: 2 }).data.estado2, 'CERRADA');
-  assert.equal(e.llamar({ action: 'omegaReabrirQuincena', token: t, mes: '2026-11', quincena: 2 }).data.estado2, 'ABIERTA');
-  assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[1] === '2').length, 0);
+  assert.equal(e.llamar({ action: 'omegaImportarBeneficios', token: t, filas: [{ cedula: '7924627', complemento: 200 }] }).data.cargados, 1);
+  assert.equal(e.llamar({ action: 'omegaMarcarTarjeta', token: t, claves: ['V11111111'], sinTarjeta: true }).data.cambiados, 1);
+  const q = e.llamar({ action: 'omegaAbrirQuincena', token: t, mes: '2026-11', quincena: 1, tasa: 905 });
+  assert.equal(q.ok, true, JSON.stringify(q));
+  assert.deepEqual(q.data.lotes.map((l) => l.personas), [1, 0, 1, 1]);
+  let l = e.llamar({ action: 'omegaAjustarLinea', token: t, id: '2026-11-1', lote: 'TR-PCA', clave: 'V7924627', cambio: { monto: '90.000,50' } });
+  assert.equal(l.data.lineas[0].montoBs, 90000.5);
+  l = e.llamar({ action: 'omegaValidarLote', token: t, id: '2026-11-1', lote: 'TR-PCA' });
+  assert.equal(l.data.estado, 'VALIDADO', JSON.stringify(l));
+  assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[0] === '2026-11-1').length, 1);
+  const r = e.llamar({ action: 'omegaInicio', token: t });
+  assert.deepEqual(r.data.quincenas.map((x) => [x.id, x.validados]), [['2026-11-1', 1]]);
+  assert.equal(r.data.sinTarjeta, 1);
+  assert.equal(e.llamar({ action: 'omegaLote', token: t, id: '2026-11-1', lote: 'TR-PCA' }).data.lineas[0].montoBs, 90000.5);
+  assert.equal(e.llamar({ action: 'omegaReabrirLote', token: t, id: '2026-11-1', lote: 'TR-PCA' }).data.estado, 'PENDIENTE');
+  assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[0] === '2026-11-1').length, 0);
 });
