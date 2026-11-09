@@ -548,7 +548,7 @@ async function vistaRRHH() {
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Omega Capital'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Omega Capital'], ['nominas', 'Nóminas especiales'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel" class="contenido"></div></div>`;
@@ -557,6 +557,7 @@ async function vistaRRHH() {
   if (pestana === 'fideicomiso') return panelFideicomiso(panel);
   if (pestana === 'recibos') return panelRecibos(panel);
   if (pestana === 'omega') return panelOmega(panel);
+  if (pestana === 'nominas') return panelNominas(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'vacaciones') return panelVacaciones(panel);
@@ -1578,6 +1579,7 @@ function irAviso(ruta) {
   cerrarAvisos();
   const s = sesion.leer() || {};
   const destino = SECCIONES.includes(ruta) ? ruta : 'inicio';
+  if (s.rol !== 'TRABAJADOR' && ruta === 'nominas') { pestana = 'nominas'; subNom = 'pendientes'; return vistaRRHH(); }
   if (s.rol === 'TRABAJADOR') return navegar(destino);
   if (destino === 'equipo' && s.esJefe && !s.tokenTrabajador) pestana = 'miequipo';
   else if (s.tokenTrabajador) { pestana = 'micuenta'; seccionMiCuenta = destino; }
@@ -2312,4 +2314,139 @@ async function vistaEmpresasOmega(panel) {
     if (!x.ok) return errorEn(err, x.message);
     toast('Guardado.'); irOmega(panel, { vista: 'inicio' });
   }); });
+}
+
+/* ---------- RRHH: Nóminas especiales (el jefe solicita un pago especial; Gestión Humana lo registra en la nómina) ---------- */
+
+let subNom = 'solicitar';
+let borradorNomina = { concepto: '', moneda: 'Bs.', fechaPago: '', observacion: '', items: [] };
+const ESTADOS_NOM = { SOLICITADA: ['Por registrar', 'espera'], REGISTRADA: ['Registrada', 'ok'], RECHAZADA: ['Rechazada', 'error'], CANCELADA: ['Cancelada', 'neutro'] };
+const montoNom = (n, moneda) => (moneda === '$' ? usd(n) : bs(n));
+
+async function panelNominas(panel) {
+  const r = await llamar('listarNominasEspeciales', {});
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } panel.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const { yo, solicitudes } = r.data, pend = solicitudes.filter((x) => x.estado === 'SOLICITADA');
+  const SUB = [['solicitar', 'Solicitar nómina'], ['pendientes', `Por registrar${pend.length ? ` (${pend.length})` : ''}`], ['historial', 'Historial']];
+  panel.innerHTML = `<div class="submodulos" role="tablist">${SUB.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subNom}">${t}</button>`).join('')}</div><div id="sub"></div>`;
+  panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subNom = b.dataset.sub; panelNominas(panel); }));
+  const sub = panel.querySelector('#sub');
+  if (subNom === 'pendientes') return pintarListaNominas(panel, sub, pend, yo, true);
+  if (subNom === 'historial') return pintarListaNominas(panel, sub, solicitudes, yo, false);
+  return pintarSolicitarNomina(panel, sub);
+}
+
+function pintarSolicitarNomina(panel, sub) {
+  const b = borradorNomina, total = b.items.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+  sub.innerHTML = `<section class="tarjeta">
+      <div><h2>Solicitar nómina de pago especial</h2><p class="suave">Busca a cada persona, asígnale el monto y envía la solicitud. Gestión Humana la recibe con cédula, nombre y monto para registrarla en el sistema de nómina.</p></div>
+      <form id="fnom" class="form-vac" novalidate>
+        <div class="fila">
+          <label class="grow">Concepto <input name="concepto" maxlength="120" value="${esc(b.concepto)}" placeholder="Ej.: Bono por cierre de inventario"></label>
+          <label>Moneda <select name="moneda">${['Bs.', '$'].map((m) => `<option${m === b.moneda ? ' selected' : ''}>${m}</option>`).join('')}</select></label>
+          <label>Fecha de pago (opcional) <input type="date" name="fechaPago" value="${esc(b.fechaPago)}"></label>
+        </div>
+        <label>Observación (opcional) <textarea name="observacion" maxlength="500">${esc(b.observacion)}</textarea></label>
+        <label class="buscador-nom">Agregar persona <input id="busca-nom" placeholder="Escribe el nombre o la cédula" autocomplete="off"><div id="res-nom" class="resultados-nom" hidden></div></label>
+        <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th>Empresa</th><th class="num">Monto (${esc(b.moneda)})</th><th></th></tr></thead><tbody>
+          ${b.items.map((x, i) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.puesto || '')}</span></td><td class="num">${esc(x.clave.slice(1))}</td><td>${esc(x.empresa)}</td>
+            <td class="num"><input class="monto-om" data-monto-nom="${i}" value="${x.monto === '' || x.monto == null ? '' : Number(x.monto).toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" placeholder="0,00" aria-label="Monto"></td>
+            <td><button class="btn btn-sec btn-chico" type="button" data-quitar-nom="${i}">Quitar</button></td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Todavía no has agregado personas.</td></tr>'}
+          </tbody>${b.items.length ? `<tfoot><tr class="fila-total"><td colspan="3"><b>${b.items.length} persona${b.items.length === 1 ? '' : 's'}</b></td><td class="num"><b>${montoNom(total, b.moneda)}</b></td><td></td></tr></tfoot>` : ''}</table></div>
+        <div class="error-msg" id="err-nom" hidden></div>
+        <div class="fila"><button class="btn" type="submit">Solicitar</button>${b.items.length ? '<button class="btn btn-sec" type="button" id="limpiar-nom">Empezar de nuevo</button>' : ''}</div>
+      </form></section>`;
+  const f = sub.querySelector('#fnom'), err = sub.querySelector('#err-nom');
+  ['concepto', 'moneda', 'fechaPago', 'observacion'].forEach((k) => f[k].addEventListener('change', () => { b[k] = f[k].value; if (k === 'moneda') pintarSolicitarNomina(panel, sub); }));
+  sub.querySelectorAll('[data-monto-nom]').forEach((i) => i.addEventListener('change', () => { b.items[Number(i.dataset.montoNom)].monto = numVe(i.value); pintarSolicitarNomina(panel, sub); }));
+  sub.querySelectorAll('[data-quitar-nom]').forEach((x) => x.addEventListener('click', () => { b.items.splice(Number(x.dataset.quitarNom), 1); pintarSolicitarNomina(panel, sub); }));
+  sub.querySelector('#limpiar-nom')?.addEventListener('click', () => { if (confirm('¿Borrar esta solicitud sin enviarla?')) { borradorNomina = { concepto: '', moneda: 'Bs.', fechaPago: '', observacion: '', items: [] }; pintarSolicitarNomina(panel, sub); } });
+  const busca = sub.querySelector('#busca-nom'), res = sub.querySelector('#res-nom'); let tb, ultima = '';
+  busca.addEventListener('input', () => { clearTimeout(tb); tb = setTimeout(async () => {
+    const q = busca.value.trim(); ultima = q;
+    if (q.length < 2) { res.hidden = true; return; }
+    const x = await llamar('listarEmpleados', { buscar: q });
+    if (q !== ultima) return;
+    const lista = x.ok ? x.data.empleados.filter((e) => e.estado !== 'Inactivo').slice(0, 8) : [];
+    res.innerHTML = lista.map((e) => `<button type="button" class="opcion-nom" data-agregar='${esc(JSON.stringify({ clave: e.clave, nombre: e.nombre, empresa: e.empresa, puesto: e.puesto }))}'${b.items.some((y) => y.clave === e.clave) ? ' disabled' : ''}>
+      <b>${esc(e.nombre)}</b><span>${esc(e.clave)} · ${esc(e.empresa)}${e.puesto ? ' · ' + esc(e.puesto) : ''}${b.items.some((y) => y.clave === e.clave) ? ' · ya agregado' : ''}</span></button>`).join('') || '<p class="suave">Nadie activo coincide.</p>';
+    res.hidden = false;
+    res.querySelectorAll('[data-agregar]').forEach((o) => o.addEventListener('click', () => {
+      b.items.push(Object.assign(JSON.parse(o.dataset.agregar), { monto: '' }));
+      pintarSolicitarNomina(panel, sub);
+      const m = sub.querySelector(`[data-monto-nom="${b.items.length - 1}"]`); if (m) m.focus();
+    }));
+  }, 300); });
+  f.addEventListener('submit', (e) => { e.preventDefault(); errorEn(err, '');
+    ['concepto', 'moneda', 'fechaPago', 'observacion'].forEach((k) => { b[k] = f[k].value; });
+    sub.querySelectorAll('[data-monto-nom]').forEach((i) => { b.items[Number(i.dataset.montoNom)].monto = numVe(i.value); });
+    if (!b.concepto.trim()) return errorEn(err, 'Escribe el concepto del pago.');
+    if (!b.items.length) return errorEn(err, 'Agrega al menos una persona.');
+    const sinMonto = b.items.find((x) => !(Number(x.monto) > 0));
+    if (sinMonto) return errorEn(err, `Falta el monto de ${sinMonto.nombre}.`);
+    const tot = b.items.reduce((t, x) => t + Number(x.monto), 0);
+    if (!confirm(`¿Solicitar «${b.concepto}» para ${b.items.length} persona${b.items.length === 1 ? '' : 's'} por ${montoNom(tot, b.moneda)}?`)) return;
+    conBoton(f.querySelector('button[type=submit]'), async () => {
+      const x = await llamar('solicitarNominaEspecial', { concepto: b.concepto, moneda: b.moneda, fechaPago: b.fechaPago, observacion: b.observacion, items: b.items.map((y) => ({ clave: y.clave, monto: y.monto })) });
+      if (!x.ok) return errorEn(err, x.message);
+      borradorNomina = { concepto: '', moneda: 'Bs.', fechaPago: '', observacion: '', items: [] };
+      toast('Solicitud enviada a Gestión Humana.'); subNom = 'historial'; panelNominas(panel);
+    });
+  });
+}
+
+function pintarListaNominas(panel, sub, lista, yo, pendientes) {
+  const digit = (c) => String(c || '').replace(/\D/g, '');
+  sub.innerHTML = lista.length ? lista.map((n) => {
+    const [txt, tono] = ESTADOS_NOM[n.estado] || [n.estado, 'neutro'], mia = digit(n.solicitadaPor) === yo;
+    return `<section class="tarjeta">
+      <div class="item-cab"><div><h2>${esc(n.concepto)}</h2><p class="suave">Solicitada por ${esc(n.solicitadaPorNombre)} · ${esc(fechaHoraMin(n.solicitada))}${n.fechaPago ? ` · pagar el ${esc(window.Vacaciones ? window.Vacaciones.corta(n.fechaPago) : n.fechaPago)}` : ''}</p></div><span class="chip chip-${tono}">${txt}</span></div>
+      ${n.observacion ? `<p class="aviso">${esc(n.observacion)}</p>` : ''}
+      <div class="tabla-caja"><table class="tabla-omega tabla-nom"><thead><tr><th class="num">Cédula</th><th>Nombre</th><th>Empresa</th><th class="num">Monto (${esc(n.moneda)})</th></tr></thead><tbody>
+        ${n.items.map((x) => `<tr><td class="num">${esc(x.cedula)}</td><td>${esc(x.nombre)}</td><td>${esc(x.empresa)}</td><td class="num">${montoNom(x.monto, n.moneda)}</td></tr>`).join('')}
+      </tbody><tfoot><tr class="fila-total"><td colspan="3"><b>${n.personas} persona${n.personas === 1 ? '' : 's'}</b></td><td class="num"><b>${montoNom(n.total, n.moneda)}</b></td></tr></tfoot></table></div>
+      ${n.estado === 'REGISTRADA' ? `<p class="suave">Registrada por ${esc(n.atendidaPorNombre)} · ${esc(fechaHoraMin(n.atendida))}${n.referencia ? ` · referencia ${esc(n.referencia)}` : ''}</p>` : ''}
+      ${n.estado === 'RECHAZADA' ? `<p class="error-msg">Rechazada por ${esc(n.atendidaPorNombre)}: ${esc(n.motivo)}</p>` : ''}
+      <div class="fila">
+        <button class="btn btn-sec btn-chico" data-copiar-nom="${esc(n.id)}">Copiar cédula, nombre y monto</button>
+        <button class="btn btn-sec btn-chico" data-xls-nom="${esc(n.id)}">Descargar Excel</button>
+        ${n.estado === 'SOLICITADA' ? `<button class="btn btn-chico" data-reg-nom="${esc(n.id)}">Marcar como registrada</button><button class="btn btn-sec btn-chico" data-rech-nom="${esc(n.id)}">Rechazar</button>` : ''}
+        ${n.estado === 'SOLICITADA' && mia ? `<button class="btn btn-sec btn-chico" data-canc-nom="${esc(n.id)}">Cancelar mi solicitud</button>` : ''}
+      </div></section>`;
+  }).join('') : `<section class="tarjeta"><p class="vacio">${pendientes ? 'No hay nóminas especiales por registrar.' : 'Todavía no hay solicitudes.'}</p></section>`;
+  const porId = (id) => lista.find((n) => n.id === id);
+  sub.querySelectorAll('[data-copiar-nom]').forEach((b) => b.addEventListener('click', async () => {
+    const n = porId(b.dataset.copiarNom);
+    const texto = ['Cédula\tNombre\tMonto', ...n.items.map((x) => `${x.cedula}\t${x.nombre}\t${x.monto.toFixed(2).replace('.', ',')}`)].join('\n');
+    try { await navigator.clipboard.writeText(texto); toast('Copiado: pégalo en Excel o en el sistema de nómina.'); } catch { toast('No se pudo copiar; usa «Descargar Excel».'); }
+  }));
+  sub.querySelectorAll('[data-xls-nom]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const n = porId(b.dataset.xlsNom), XLSX = await cargarXlsx(), libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(n.items.map((x) => ({ 'Cédula': Number(x.cedula), Nombre: x.nombre, Empresa: x.empresa, [`Monto (${n.moneda})`]: x.monto }))), 'Nómina especial');
+    XLSX.writeFile(libro, `Nomina-especial-${n.concepto.replace(/[^\w\sáéíóúñÁÉÍÓÚÑ-]/g, '').replace(/\s+/g, '-').slice(0, 40)}-${n.id}.xlsx`);
+  })));
+  const atender = (accion, datos, mensaje) => async () => {
+    const x = await llamar(accion, datos);
+    if (!x.ok) { toast(x.message); return x; }
+    toast(mensaje); panelNominas(panel); return x;
+  };
+  sub.querySelectorAll('[data-reg-nom]').forEach((b) => b.addEventListener('click', () => {
+    const n = porId(b.dataset.regNom);
+    dlg.innerHTML = `<form id="freg" novalidate><h2>Marcar como registrada</h2><p class="suave">«${esc(n.concepto)}»: ${n.personas} persona${n.personas === 1 ? '' : 's'} por ${montoNom(n.total, n.moneda)}. Se le avisa a ${esc(n.solicitadaPorNombre)}.</p>
+      <label>Referencia de la nómina (opcional) <input name="referencia" maxlength="80" placeholder="Ej.: NE-015"></label>
+      <div class="fila"><button class="btn grow" type="submit">Registrada</button><button class="btn btn-sec" type="button" id="no">Cerrar</button></div></form>`;
+    const f = dlg.querySelector('#freg');
+    dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+    f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(f.querySelector('button'), async () => { dlg.close(); await atender('registrarNominaEspecial', { id: n.id, referencia: f.referencia.value }, 'Marcada como registrada.')(); }); });
+    dlg.showModal(); f.referencia.focus();
+  }));
+  sub.querySelectorAll('[data-rech-nom]').forEach((b) => b.addEventListener('click', () => pedirMotivo('Rechazar nómina especial', async (motivo) => {
+    const x = await llamar('rechazarNominaEspecial', { id: b.dataset.rechNom, motivo });
+    if (x.ok) { toast('Rechazada.'); panelNominas(panel); }
+    return x;
+  })));
+  sub.querySelectorAll('[data-canc-nom]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm('¿Cancelar tu solicitud?')) return;
+    await atender('cancelarNominaEspecial', { id: b.dataset.cancNom }, 'Solicitud cancelada.')();
+  })));
 }

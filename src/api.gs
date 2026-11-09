@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-09.2';
+var VERSION = '2026-11-09.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
 
@@ -48,6 +48,8 @@ var HOJAS = {
   RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   PINES: ['clave', 'sal', 'hash', 'creado'],
   OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
+  NOMINAS_ESPECIALES: ['id', 'concepto', 'moneda', 'fechaPago', 'observacion', 'items', 'personas', 'total', 'estado', 'solicitadaPor', 'solicitadaPorNombre', 'solicitada',
+    'atendidaPor', 'atendidaPorNombre', 'atendida', 'referencia', 'motivo'],
   OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
   OMEGA_CONFIG: ['clave', 'valor'],
   OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada'],
@@ -147,6 +149,11 @@ var RUTAS_RRHH = {
   listarPlanificacionesVac: function (repo, ctx, d) { return Servicio.listarPlanificacionesVac(repo, ctx, d.token); },
   panelPlanificacionVac: function (repo, ctx, d) { return Servicio.panelPlanificacionVac(repo, ctx, d.token, d.ciclo); },
   recordarPlanificacionVac: function (repo, ctx, d) { return Servicio.recordarPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  solicitarNominaEspecial: function (repo, ctx, d) { return Servicio.solicitarNominaEspecial(repo, ctx, d.token, d); },
+  listarNominasEspeciales: function (repo, ctx, d) { return Servicio.listarNominasEspeciales(repo, ctx, d.token); },
+  registrarNominaEspecial: function (repo, ctx, d) { return Servicio.registrarNominaEspecial(repo, ctx, d.token, d.id, d.referencia); },
+  rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
+  cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
   omegaInicio: function (repo, ctx, d) { return Servicio.omegaInicio(repo, ctx, d.token); },
   omegaGuardarConfig: function (repo, ctx, d) { return Servicio.omegaGuardarConfig(repo, ctx, d.token, d); },
   omegaTarjetas: function (repo, ctx, d) { return Servicio.omegaTarjetas(repo, ctx, d.token); },
@@ -188,7 +195,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -711,6 +718,20 @@ function crearRepo_() {
       var copia = Object.assign({}, b); delete copia._fila; if (ya) copia._fila = ya._fila;
       escribirFila_('OMEGA_BENEFICIOS', copia);
     },
+    nominasEspeciales: function () { asegurarHoja_('NOMINAS_ESPECIALES'); return leer_('NOMINAS_ESPECIALES').filter(function (f) { return texto_(f.id); }).map(nominaEsp_); },
+    nominaEspecialPorId: function (id) {
+      asegurarHoja_('NOMINAS_ESPECIALES');
+      var f = leer_('NOMINAS_ESPECIALES').filter(function (x) { return texto_(x.id) === id; })[0];
+      return f ? nominaEsp_(f) : null;
+    },
+    guardarNominaEspecial: function (n) {
+      asegurarHoja_('NOMINAS_ESPECIALES');
+      var copia = Object.assign({}, n, { items: JSON.stringify(n.items || []) });
+      if (!copia._fila) { var h = hoja_('NOMINAS_ESPECIALES'); h.getRange(h.getLastRow() + 1, 1, 1, 4).setNumberFormat('@'); }
+      escribirFila_('NOMINAS_ESPECIALES', copia);
+      n._fila = copia._fila;
+    },
+    nuevoIdNominaEsp: function () { return 'NE-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     omegaSinTarjeta: function () {
       asegurarHoja_('OMEGA_SIN_TARJETA');
       var r = {}; leer_('OMEGA_SIN_TARJETA').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = { nombre: texto_(f.nombre), desde: Number(f.desde) || 0, por: texto_(f.por) }; });
@@ -783,6 +804,14 @@ function plan_(f) {
   return { _fila: f._fila, id: texto_(f.id), ciclo: texto_(f.ciclo), clave: texto_(f.clave), estado: texto_(f.estado), bloques: b,
     requeridos: Number(f.requeridos) || 0, planificados: Number(f.planificados) || 0, jefe: texto_(f.jefe), enviada: Number(f.enviada) || 0,
     decidida: Number(f.decidida) || 0, decididaPor: texto_(f.decididaPor), motivo: texto_(f.motivo), actualizada: Number(f.actualizada) || 0 };
+}
+
+function nominaEsp_(f) {
+  var it = []; try { it = f.items ? JSON.parse(f.items) : []; } catch (e) { /* vacío */ }
+  return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), moneda: texto_(f.moneda) || 'Bs.', fechaPago: texto_(f.fechaPago), observacion: texto_(f.observacion),
+    items: it, personas: Number(f.personas) || it.length, total: Number(f.total) || 0, estado: texto_(f.estado), solicitadaPor: texto_(f.solicitadaPor),
+    solicitadaPorNombre: texto_(f.solicitadaPorNombre), solicitada: Number(f.solicitada) || 0, atendidaPor: texto_(f.atendidaPor), atendidaPorNombre: texto_(f.atendidaPorNombre),
+    atendida: Number(f.atendida) || 0, referencia: texto_(f.referencia), motivo: texto_(f.motivo) };
 }
 
 function omegaQuincena_(f) {

@@ -1790,7 +1790,90 @@
     return ok(b);
   }
 
+  /* ---------- Nóminas especiales: el jefe solicita un pago especial y Gestión Humana lo registra en la nómina ---------- */
+
+  var MONEDAS_NOMINA = ['Bs.', '$'];
+  function vistaNominaEsp(n) {
+    return { id: n.id, concepto: n.concepto, moneda: n.moneda, fechaPago: n.fechaPago, observacion: n.observacion, items: n.items, total: n.total, personas: n.personas,
+      estado: n.estado, solicitadaPor: n.solicitadaPor, solicitadaPorNombre: n.solicitadaPorNombre, solicitada: n.solicitada,
+      atendidaPor: n.atendidaPor, atendidaPorNombre: n.atendidaPorNombre, atendida: n.atendida, referencia: n.referencia, motivo: n.motivo };
+  }
+  function nombreUsuario(repo, clave) {
+    var d = digitos(clave), e = repo.empleadoPorClave('V' + d) || repo.empleadoPorClave('E' + d);
+    if (e) return e.nombre;
+    var u = repo.todosUsuarios().filter(function (x) { return digitos(x.cedula) === d; })[0];
+    return u ? u.nombre : d;
+  }
+
+  /** Solicitud de una nómina de pago especial. datos: { concepto, moneda, fechaPago, observacion, items: [{ clave, monto }] } */
+  function solicitarNominaEspecial(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    datos = datos || {};
+    var concepto = String(datos.concepto || '').trim().slice(0, 120);
+    if (!concepto) return err('VALIDACION', 'Escribe el concepto del pago (por ejemplo, «Bono por cierre de inventario»).');
+    var moneda = MONEDAS_NOMINA.indexOf(datos.moneda) !== -1 ? datos.moneda : 'Bs.';
+    var fechaPago = /^\d{4}-\d{2}-\d{2}$/.test(String(datos.fechaPago || '')) ? datos.fechaPago : '';
+    var vistos = {}, items = [], errores = [];
+    (datos.items || []).forEach(function (it) {
+      var e = repo.empleadoPorClave(it.clave), monto = Math.round((Number(it.monto) || 0) * 100) / 100;
+      if (!e) { errores.push('No encontramos a ' + (it.clave || 'una persona') + '.'); return; }
+      var clave = Empleados.claveCedula(e);
+      if (vistos[clave]) { errores.push(e.nombre + ' está repetido.'); return; }
+      vistos[clave] = true;
+      if (!(monto > 0)) { errores.push('Falta el monto de ' + e.nombre + '.'); return; }
+      if (e.estado === 'Inactivo') { errores.push(e.nombre + ' ya no está activo.'); return; }
+      items.push({ clave: clave, cedula: e.cedulaNumero, cedulaLetra: e.cedulaLetra, nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e), organizacion: e.organizacion || '', monto: monto });
+    });
+    if (errores.length) return err('VALIDACION', errores[0]);
+    if (!items.length) return err('VALIDACION', 'Agrega al menos una persona con su monto.');
+    var n = { id: repo.nuevoIdNominaEsp(), concepto: concepto, moneda: moneda, fechaPago: fechaPago, observacion: String(datos.observacion || '').trim().slice(0, 500),
+      items: items, personas: items.length, total: Math.round(items.reduce(function (t, x) { return t + x.monto; }, 0) * 100) / 100,
+      estado: 'SOLICITADA', solicitadaPor: s.clave, solicitadaPorNombre: nombreUsuario(repo, s.clave), solicitada: ctx.ahora() };
+    repo.guardarNominaEspecial(n);
+    repo.log('NOMINA_ESP_SOLICITUD', s.clave, n.id + ' · ' + n.personas + ' · ' + n.total);
+    var destinos = repo.todosUsuarios().map(function (u) { return digitos(u.cedula); }).filter(function (d) { return d && d !== digitos(s.clave); }).map(function (d) { return 'V' + d; });
+    notificar(repo, ctx, destinos, { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial por registrar', texto: n.solicitadaPorNombre + ' solicitó «' + concepto + '» para ' + n.personas + ' persona' + (n.personas === 1 ? '' : 's') + '.', ruta: 'nominas' });
+    return ok(vistaNominaEsp(n));
+  }
+
+  function listarNominasEspeciales(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var lista = repo.nominasEspeciales().sort(function (a, b) { return b.solicitada - a.solicitada; }).map(vistaNominaEsp);
+    return ok({ yo: digitos(s.clave), solicitudes: lista });
+  }
+
+  function atenderNominaEspecial(repo, ctx, token, id, estado, extra) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var n = repo.nominaEspecialPorId(id);
+    if (!n) return err('NO_ENCONTRADO', 'No existe esa solicitud.');
+    if (n.estado !== 'SOLICITADA') return err('TRANSICION', 'Esa solicitud ya fue atendida.');
+    if (estado === 'CANCELADA' && digitos(n.solicitadaPor) !== digitos(s.clave)) return err('PERMISO', 'Solo quien la solicitó puede cancelarla.');
+    n.estado = estado; n.atendidaPor = s.clave; n.atendidaPorNombre = nombreUsuario(repo, s.clave); n.atendida = ctx.ahora();
+    Object.assign(n, extra || {});
+    repo.guardarNominaEspecial(n);
+    repo.log('NOMINA_ESP_' + estado, s.clave, n.id);
+    if (estado !== 'CANCELADA' && digitos(n.solicitadaPor) !== digitos(s.clave)) {
+      notificar(repo, ctx, ['V' + digitos(n.solicitadaPor)], estado === 'REGISTRADA'
+        ? { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial registrada', texto: '«' + n.concepto + '» quedó registrada en la nómina' + (n.referencia ? ' (' + n.referencia + ')' : '') + '.', ruta: 'nominas' }
+        : { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial rechazada', texto: '«' + n.concepto + '»: ' + n.motivo, ruta: 'nominas' });
+    }
+    return ok(vistaNominaEsp(n));
+  }
+  function registrarNominaEspecial(repo, ctx, token, id, referencia) {
+    return atenderNominaEspecial(repo, ctx, token, id, 'REGISTRADA', { referencia: String(referencia || '').trim().slice(0, 80) });
+  }
+  function rechazarNominaEspecial(repo, ctx, token, id, motivo) {
+    if (!String(motivo || '').trim()) return err('VALIDACION', 'Escribe el motivo.');
+    return atenderNominaEspecial(repo, ctx, token, id, 'RECHAZADA', { motivo: String(motivo).trim().slice(0, 300) });
+  }
+  function cancelarNominaEspecial(repo, ctx, token, id) { return atenderNominaEspecial(repo, ctx, token, id, 'CANCELADA', {}); }
+
   var api = {
+    solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
+    rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial,
     omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
     omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
     omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,

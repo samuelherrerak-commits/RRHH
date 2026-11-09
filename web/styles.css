@@ -344,3 +344,11 @@ input.pin { letter-spacing: .6em; font-size: 22px; text-align: center; max-width
 .cifras-lote div { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--linea-suave); padding-bottom: 6px; }
 .cifras-lote b { font-size: 17px; color: var(--carbon); font-variant-numeric: tabular-nums; order: 2; }
 .cifras-lote span { font-size: 13px; color: var(--tinta-2); }
+/* Nóminas especiales */
+.buscador-nom { position: relative; }
+.resultados-nom { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin-top: 4px; background: #fff; border: 1px solid var(--linea); border-radius: var(--radio-sm); box-shadow: var(--sombra); max-height: 340px; overflow: auto; padding: 4px; font-weight: 400; }
+.opcion-nom { display: grid; gap: 2px; width: 100%; text-align: left; background: none; border: 0; padding: 10px 12px; border-radius: 8px; cursor: pointer; }
+.opcion-nom:hover:not(:disabled), .opcion-nom:focus-visible { background: var(--fondo); }
+.opcion-nom:disabled { opacity: .5; cursor: default; }
+.opcion-nom span { font-size: 13px; color: var(--tinta-2); }
+.tabla-nom td:first-child { min-width: 0; width: 1%; white-space: nowrap; }
