@@ -6,9 +6,9 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-09.3';
+var VERSION = '2026-11-10.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -19,6 +19,7 @@ function modulosCargados_() {
     Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
     Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
     Omega: typeof Omega !== 'undefined' && !!Omega,
+    Comisiones: typeof Comisiones !== 'undefined' && !!Comisiones,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -49,7 +50,8 @@ var HOJAS = {
   PINES: ['clave', 'sal', 'hash', 'creado'],
   OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
   NOMINAS_ESPECIALES: ['id', 'concepto', 'moneda', 'fechaPago', 'observacion', 'items', 'personas', 'total', 'estado', 'solicitadaPor', 'solicitadaPorNombre', 'solicitada',
-    'atendidaPor', 'atendidaPorNombre', 'atendida', 'referencia', 'motivo'],
+    'atendidaPor', 'atendidaPorNombre', 'atendida', 'referencia', 'motivo', 'verificacion'],
+  ALIAS_COMISIONES: ['alias', 'clave', 'actualizado'],
   OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
   OMEGA_CONFIG: ['clave', 'valor'],
   OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada'],
@@ -154,6 +156,8 @@ var RUTAS_RRHH = {
   registrarNominaEspecial: function (repo, ctx, d) { return Servicio.registrarNominaEspecial(repo, ctx, d.token, d.id, d.referencia); },
   rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
   cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
+  datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
+  guardarVerificacionNomina: function (repo, ctx, d) { return Servicio.guardarVerificacionNomina(repo, ctx, d.token, d.id, d.resumen); },
   omegaInicio: function (repo, ctx, d) { return Servicio.omegaInicio(repo, ctx, d.token); },
   omegaGuardarConfig: function (repo, ctx, d) { return Servicio.omegaGuardarConfig(repo, ctx, d.token, d); },
   omegaTarjetas: function (repo, ctx, d) { return Servicio.omegaTarjetas(repo, ctx, d.token); },
@@ -195,7 +199,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -726,10 +730,23 @@ function crearRepo_() {
     },
     guardarNominaEspecial: function (n) {
       asegurarHoja_('NOMINAS_ESPECIALES');
-      var copia = Object.assign({}, n, { items: JSON.stringify(n.items || []) });
+      var copia = Object.assign({}, n, { items: JSON.stringify(n.items || []), verificacion: n.verificacion ? JSON.stringify(n.verificacion) : '' });
       if (!copia._fila) { var h = hoja_('NOMINAS_ESPECIALES'); h.getRange(h.getLastRow() + 1, 1, 1, 4).setNumberFormat('@'); }
       escribirFila_('NOMINAS_ESPECIALES', copia);
       n._fila = copia._fila;
+    },
+    aliasComisiones: function () {
+      asegurarHoja_('ALIAS_COMISIONES');
+      var m = {}; leer_('ALIAS_COMISIONES').forEach(function (f) { if (texto_(f.alias)) m[texto_(f.alias)] = texto_(f.clave); });
+      return m;
+    },
+    guardarAliasComisiones: function (mapa) {
+      asegurarHoja_('ALIAS_COMISIONES');
+      var filas = leer_('ALIAS_COMISIONES'), ahora = Date.now();
+      Object.keys(mapa).forEach(function (k) {
+        var ya = filas.filter(function (f) { return texto_(f.alias) === k; })[0];
+        escribirFila_('ALIAS_COMISIONES', { _fila: ya ? ya._fila : undefined, alias: k, clave: mapa[k], actualizado: ahora });
+      });
     },
     nuevoIdNominaEsp: function () { return 'NE-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     omegaSinTarjeta: function () {
@@ -811,7 +828,7 @@ function nominaEsp_(f) {
   return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), moneda: texto_(f.moneda) || 'Bs.', fechaPago: texto_(f.fechaPago), observacion: texto_(f.observacion),
     items: it, personas: Number(f.personas) || it.length, total: Number(f.total) || 0, estado: texto_(f.estado), solicitadaPor: texto_(f.solicitadaPor),
     solicitadaPorNombre: texto_(f.solicitadaPorNombre), solicitada: Number(f.solicitada) || 0, atendidaPor: texto_(f.atendidaPor), atendidaPorNombre: texto_(f.atendidaPorNombre),
-    atendida: Number(f.atendida) || 0, referencia: texto_(f.referencia), motivo: texto_(f.motivo) };
+    atendida: Number(f.atendida) || 0, referencia: texto_(f.referencia), motivo: texto_(f.motivo), verificacion: (function () { try { return f.verificacion ? JSON.parse(f.verificacion) : null; } catch (e) { return null; } })() };
 }
 
 function omegaQuincena_(f) {

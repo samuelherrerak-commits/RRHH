@@ -21,6 +21,7 @@
   var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
   var Planificacion = isNode ? require('./planificacion.js') : dependencia(raiz, 'Planificacion');
   var Omega = isNode ? require('./omega.js') : dependencia(raiz, 'Omega');
+  var Comisiones = isNode ? require('./comisiones.js') : dependencia(raiz, 'Comisiones');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
@@ -1795,7 +1796,7 @@
   var MONEDAS_NOMINA = ['Bs.', '$'];
   function vistaNominaEsp(n) {
     return { id: n.id, concepto: n.concepto, moneda: n.moneda, fechaPago: n.fechaPago, observacion: n.observacion, items: n.items, total: n.total, personas: n.personas,
-      estado: n.estado, solicitadaPor: n.solicitadaPor, solicitadaPorNombre: n.solicitadaPorNombre, solicitada: n.solicitada,
+      verificacion: n.verificacion || null, estado: n.estado, solicitadaPor: n.solicitadaPor, solicitadaPorNombre: n.solicitadaPorNombre, solicitada: n.solicitada,
       atendidaPor: n.atendidaPor, atendidaPorNombre: n.atendidaPorNombre, atendida: n.atendida, referencia: n.referencia, motivo: n.motivo };
   }
   function nombreUsuario(repo, clave) {
@@ -1815,9 +1816,20 @@
     var moneda = MONEDAS_NOMINA.indexOf(datos.moneda) !== -1 ? datos.moneda : 'Bs.';
     var fechaPago = /^\d{4}-\d{2}-\d{2}$/.test(String(datos.fechaPago || '')) ? datos.fechaPago : '';
     var vistos = {}, items = [], errores = [];
+    var alias = {};
     (datos.items || []).forEach(function (it) {
-      var e = repo.empleadoPorClave(it.clave), monto = Math.round((Number(it.monto) || 0) * 100) / 100;
+      var e = it.clave ? repo.empleadoPorClave(it.clave) : null, monto = Math.round((Number(it.monto) || 0) * 100) / 100;
+      if (!e && !it.clave && it.cedula) {   // persona que no está en el CAC (la escribe Gestión Humana)
+        var ced = Empleados.numeroDeCedulaTexto(it.cedula), nom = String(it.nombre || '').trim().toUpperCase();
+        if (!ced || !nom) { errores.push('Falta la cédula o el nombre de una persona escrita a mano.'); return; }
+        if (vistos['V' + ced]) { errores.push(nom + ' está repetido.'); return; }
+        vistos['V' + ced] = true;
+        if (!(monto > 0)) { errores.push('Falta el monto de ' + nom + '.'); return; }
+        items.push({ clave: 'V' + ced, cedula: ced, cedulaLetra: 'V', nombre: nom, empresa: '', organizacion: '', monto: monto, manual: true });
+        return;
+      }
       if (!e) { errores.push('No encontramos a ' + (it.clave || 'una persona') + '.'); return; }
+      (it.nombresReporte || []).forEach(function (n) { var k = Comisiones.clave(n); if (k && k !== Comisiones.clave(e.nombre)) alias[k] = Empleados.claveCedula(e); });
       var clave = Empleados.claveCedula(e);
       if (vistos[clave]) { errores.push(e.nombre + ' está repetido.'); return; }
       vistos[clave] = true;
@@ -1831,6 +1843,7 @@
       items: items, personas: items.length, total: Math.round(items.reduce(function (t, x) { return t + x.monto; }, 0) * 100) / 100,
       estado: 'SOLICITADA', solicitadaPor: s.clave, solicitadaPorNombre: nombreUsuario(repo, s.clave), solicitada: ctx.ahora() };
     repo.guardarNominaEspecial(n);
+    if (Object.keys(alias).length && repo.guardarAliasComisiones) repo.guardarAliasComisiones(alias);
     repo.log('NOMINA_ESP_SOLICITUD', s.clave, n.id + ' · ' + n.personas + ' · ' + n.total);
     var destinos = repo.todosUsuarios().map(function (u) { return digitos(u.cedula); }).filter(function (d) { return d && d !== digitos(s.clave); }).map(function (d) { return 'V' + d; });
     notificar(repo, ctx, destinos, { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial por registrar', texto: n.solicitadaPorNombre + ' solicitó «' + concepto + '» para ' + n.personas + ' persona' + (n.personas === 1 ? '' : 's') + '.', ruta: 'nominas' });
@@ -1862,6 +1875,28 @@
     }
     return ok(vistaNominaEsp(n));
   }
+  /** Empleados (activos e inactivos) y los nombres ya aprendidos, para cruzar el Excel de comisiones en el navegador. */
+  function datosCruceNomina(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    return ok({
+      empleados: repo.todosEmpleados().map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', estado: e.estado, empresa: Empleados.empresaFideicomiso(e) }; }),
+      alias: repo.aliasComisiones ? repo.aliasComisiones() : {},
+    });
+  }
+
+  /** Guarda el resultado de comparar la solicitud con el Resumen de Pago (resumen: { ok, mayor, menor, no, archivo, detalle }). */
+  function guardarVerificacionNomina(repo, ctx, token, id, resumen) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var n = repo.nominaEspecialPorId(id);
+    if (!n) return err('NO_ENCONTRADO', 'No existe esa solicitud.');
+    var r = resumen || {}, cuenta = function (k) { return Math.max(0, Math.round(Number(r[k]) || 0)); };
+    n.verificacion = { cuando: ctx.ahora(), por: s.clave, archivo: String(r.archivo || '').slice(0, 120), ok: cuenta('ok'), mayor: cuenta('mayor'), menor: cuenta('menor'), no: cuenta('no'),
+      detalle: (r.detalle || []).slice(0, 300).map(function (d) { return { clave: String(d.clave || ''), estado: String(d.estado || ''), otras: Math.round((Number(d.otras) || 0) * 100) / 100 }; }) };
+    repo.guardarNominaEspecial(n);
+    return ok(vistaNominaEsp(n));
+  }
+
   function registrarNominaEspecial(repo, ctx, token, id, referencia) {
     return atenderNominaEspecial(repo, ctx, token, id, 'REGISTRADA', { referencia: String(referencia || '').trim().slice(0, 80) });
   }
@@ -1873,7 +1908,7 @@
 
   var api = {
     solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
-    rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial,
+    rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarVerificacionNomina: guardarVerificacionNomina,
     omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
     omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
     omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,

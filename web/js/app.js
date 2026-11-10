@@ -2347,9 +2347,11 @@ function pintarSolicitarNomina(panel, sub) {
           <label>Fecha de pago (opcional) <input type="date" name="fechaPago" value="${esc(b.fechaPago)}"></label>
         </div>
         <label>Observación (opcional) <textarea name="observacion" maxlength="500">${esc(b.observacion)}</textarea></label>
+        <div class="carga-nom"><label class="grow">¿Te enviaron un Excel de comisiones? Cárgalo y el sistema busca a cada persona <input type="file" id="xls-nom" accept=".xlsx,.xls"></label></div>
+        <div id="cruce-nom"></div>
         <label class="buscador-nom">Agregar persona <input id="busca-nom" placeholder="Escribe el nombre o la cédula" autocomplete="off"><div id="res-nom" class="resultados-nom" hidden></div></label>
         <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th>Empresa</th><th class="num">Monto (${esc(b.moneda)})</th><th></th></tr></thead><tbody>
-          ${b.items.map((x, i) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.puesto || '')}</span></td><td class="num">${esc(x.clave.slice(1))}</td><td>${esc(x.empresa)}</td>
+          ${b.items.map((x, i) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.manual ? 'No está en el CAC: escrita a mano' : x.puesto || '')}${x.nombresReporte && x.nombresReporte.length ? ' · en el Excel: ' + esc(x.nombresReporte.join(', ')) : ''}</span></td><td class="num">${esc(x.manual ? x.cedula : x.clave.slice(1))}</td><td>${esc(x.empresa || '')}</td>
             <td class="num"><input class="monto-om" data-monto-nom="${i}" value="${x.monto === '' || x.monto == null ? '' : Number(x.monto).toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" placeholder="0,00" aria-label="Monto"></td>
             <td><button class="btn btn-sec btn-chico" type="button" data-quitar-nom="${i}">Quitar</button></td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Todavía no has agregado personas.</td></tr>'}
           </tbody>${b.items.length ? `<tfoot><tr class="fila-total"><td colspan="3"><b>${b.items.length} persona${b.items.length === 1 ? '' : 's'}</b></td><td class="num"><b>${montoNom(total, b.moneda)}</b></td><td></td></tr></tfoot>` : ''}</table></div>
@@ -2377,7 +2379,9 @@ function pintarSolicitarNomina(panel, sub) {
       const m = sub.querySelector(`[data-monto-nom="${b.items.length - 1}"]`); if (m) m.focus();
     }));
   }, 300); });
+  activarCruceNomina(panel, sub);
   f.addEventListener('submit', (e) => { e.preventDefault(); errorEn(err, '');
+    if (cruceNom) return errorEn(err, 'Termina de revisar el Excel: toca «Agregar a la solicitud» o descártalo.');
     ['concepto', 'moneda', 'fechaPago', 'observacion'].forEach((k) => { b[k] = f[k].value; });
     sub.querySelectorAll('[data-monto-nom]').forEach((i) => { b.items[Number(i.dataset.montoNom)].monto = numVe(i.value); });
     if (!b.concepto.trim()) return errorEn(err, 'Escribe el concepto del pago.');
@@ -2387,7 +2391,8 @@ function pintarSolicitarNomina(panel, sub) {
     const tot = b.items.reduce((t, x) => t + Number(x.monto), 0);
     if (!confirm(`¿Solicitar «${b.concepto}» para ${b.items.length} persona${b.items.length === 1 ? '' : 's'} por ${montoNom(tot, b.moneda)}?`)) return;
     conBoton(f.querySelector('button[type=submit]'), async () => {
-      const x = await llamar('solicitarNominaEspecial', { concepto: b.concepto, moneda: b.moneda, fechaPago: b.fechaPago, observacion: b.observacion, items: b.items.map((y) => ({ clave: y.clave, monto: y.monto })) });
+      const x = await llamar('solicitarNominaEspecial', { concepto: b.concepto, moneda: b.moneda, fechaPago: b.fechaPago, observacion: b.observacion,
+        items: b.items.map((y) => (y.manual ? { cedula: y.cedula, nombre: y.nombre, monto: y.monto } : { clave: y.clave, monto: y.monto, nombresReporte: y.nombresReporte || [] })) });
       if (!x.ok) return errorEn(err, x.message);
       borradorNomina = { concepto: '', moneda: 'Bs.', fechaPago: '', observacion: '', items: [] };
       toast('Solicitud enviada a Gestión Humana.'); subNom = 'historial'; panelNominas(panel);
@@ -2405,11 +2410,14 @@ function pintarListaNominas(panel, sub, lista, yo, pendientes) {
       <div class="tabla-caja"><table class="tabla-omega tabla-nom"><thead><tr><th class="num">Cédula</th><th>Nombre</th><th>Empresa</th><th class="num">Monto (${esc(n.moneda)})</th></tr></thead><tbody>
         ${n.items.map((x) => `<tr><td class="num">${esc(x.cedula)}</td><td>${esc(x.nombre)}</td><td>${esc(x.empresa)}</td><td class="num">${montoNom(x.monto, n.moneda)}</td></tr>`).join('')}
       </tbody><tfoot><tr class="fila-total"><td colspan="3"><b>${n.personas} persona${n.personas === 1 ? '' : 's'}</b></td><td class="num"><b>${montoNom(n.total, n.moneda)}</b></td></tr></tfoot></table></div>
+      ${n.verificacion ? `<p class="${n.verificacion.menor || n.verificacion.no ? 'error-msg' : 'aviso'}">Verificada con «${esc(n.verificacion.archivo)}» el ${esc(fechaHoraMin(n.verificacion.cuando))}: ${n.verificacion.ok} correctas${n.verificacion.mayor ? `, ${n.verificacion.mayor} con otras asignaciones mayores` : ''}${n.verificacion.menor ? `, <b>${n.verificacion.menor} con monto menor</b>` : ''}${n.verificacion.no ? `, <b>${n.verificacion.no} sin registrar</b>` : ''}.</p>` : ''}
+      <div id="verif-${esc(n.id)}"></div>
       ${n.estado === 'REGISTRADA' ? `<p class="suave">Registrada por ${esc(n.atendidaPorNombre)} · ${esc(fechaHoraMin(n.atendida))}${n.referencia ? ` · referencia ${esc(n.referencia)}` : ''}</p>` : ''}
       ${n.estado === 'RECHAZADA' ? `<p class="error-msg">Rechazada por ${esc(n.atendidaPorNombre)}: ${esc(n.motivo)}</p>` : ''}
       <div class="fila">
         <button class="btn btn-sec btn-chico" data-copiar-nom="${esc(n.id)}">Copiar cédula, nombre y monto</button>
         <button class="btn btn-sec btn-chico" data-xls-nom="${esc(n.id)}">Descargar Excel</button>
+        <button class="btn btn-sec btn-chico" data-verif-nom="${esc(n.id)}">Verificar con el Resumen de Pago (PDF)</button>
         ${n.estado === 'SOLICITADA' ? `<button class="btn btn-chico" data-reg-nom="${esc(n.id)}">Marcar como registrada</button><button class="btn btn-sec btn-chico" data-rech-nom="${esc(n.id)}">Rechazar</button>` : ''}
         ${n.estado === 'SOLICITADA' && mia ? `<button class="btn btn-sec btn-chico" data-canc-nom="${esc(n.id)}">Cancelar mi solicitud</button>` : ''}
       </div></section>`;
@@ -2430,6 +2438,14 @@ function pintarListaNominas(panel, sub, lista, yo, pendientes) {
     if (!x.ok) { toast(x.message); return x; }
     toast(mensaje); panelNominas(panel); return x;
   };
+  sub.querySelectorAll('[data-verif-nom]').forEach((b) => b.addEventListener('click', () => {
+    const n = porId(b.dataset.verifNom), inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'application/pdf,.pdf' });
+    inp.addEventListener('change', () => conBoton(b, async () => {
+      const archivo = inp.files[0]; if (!archivo) return;
+      try { await verificarNominaPdf(panel, sub, n, archivo, b); } catch (ex) { toast(ex.message || 'No se pudo leer el PDF.'); }
+    }));
+    inp.click();
+  }));
   sub.querySelectorAll('[data-reg-nom]').forEach((b) => b.addEventListener('click', () => {
     const n = porId(b.dataset.regNom);
     dlg.innerHTML = `<form id="freg" novalidate><h2>Marcar como registrada</h2><p class="suave">«${esc(n.concepto)}»: ${n.personas} persona${n.personas === 1 ? '' : 's'} por ${montoNom(n.total, n.moneda)}. Se le avisa a ${esc(n.solicitadaPorNombre)}.</p>
@@ -2449,4 +2465,135 @@ function pintarListaNominas(panel, sub, lista, yo, pendientes) {
     if (!confirm('¿Cancelar tu solicitud?')) return;
     await atender('cancelarNominaEspecial', { id: b.dataset.cancNom }, 'Solicitud cancelada.')();
   })));
+}
+
+/* ---- Cargar el Excel de comisiones de la gerencia: nombres sin cédula → empleados del CAC ---- */
+let cruceNom = null;   // { archivo, filas: [{ hoja, sucursal, nombre, monto, nota, clave, estado, candidatos, incluir, manual }], empleados }
+const ESTADO_CRUCE = { alias: ['Ya conocido', 'ok'], exacto: ['Coincide', 'ok'], sugerido: ['Sugerido', 'austral'], ambiguo: ['Elige', 'espera'], sin: ['No encontrado', 'error'], manual: ['A mano', 'neutro'], elegido: ['Elegido', 'ok'] };
+
+function activarCruceNomina(panel, sub) {
+  const inp = sub.querySelector('#xls-nom'), caja = sub.querySelector('#cruce-nom');
+  inp.addEventListener('change', async () => {
+    const archivo = inp.files[0]; if (!archivo) return;
+    caja.innerHTML = '<p class="suave">Leyendo el Excel…</p>';
+    try {
+      const XLSX = await cargarXlsx(), libro = await leerLibro(archivo);
+      const hojas = libro.SheetNames.map((nombre) => ({ nombre, matriz: XLSX.utils.sheet_to_json(libro.Sheets[nombre], { header: 1, defval: null, raw: true }) }));
+      const filas = window.Comisiones.leerExcelComisiones(hojas);
+      if (!filas.length) { caja.innerHTML = '<p class="error-msg">No encontré la columna «Total a pagar» o «Monto a pagar» en ninguna hoja.</p>'; return; }
+      const r = await obtener('datosCruceNomina', {});
+      if (!r.ok) { caja.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+      const emp = r.data.empleados;
+      cruceNom = { archivo: archivo.name, empleados: emp, filas: filas.map((f) => {
+        const c = window.Comisiones.cruzarNombre(f.nombre, f.sucursal, emp, r.data.alias);
+        return { ...f, ...c, incluir: f.monto !== 0 && !!c.clave && !window.Comisiones.notaExcluye(f.nota) };
+      }) };
+      pintarCruceNomina(panel, sub);
+    } catch (ex) { caja.innerHTML = `<p class="error-msg">${esc(ex.message || 'No se pudo leer el Excel.')}</p>`; }
+  });
+  if (cruceNom) pintarCruceNomina(panel, sub);
+}
+
+function pintarCruceNomina(panel, sub) {
+  const caja = sub.querySelector('#cruce-nom'), c = cruceNom;
+  if (!c) { caja.innerHTML = ''; return; }
+  const emp = c.empleados.filter((e) => e.estado !== 'Inactivo').sort((a, b) => (a.nombre < b.nombre ? -1 : 1));
+  const porClave = Object.fromEntries(c.empleados.map((e) => [e.clave, e]));
+  const visibles = c.filas.map((f, i) => [f, i]).filter(([f]) => f.monto !== 0 || f.nota);
+  const ocultas = c.filas.length - visibles.length;
+  const revisar = c.filas.filter((f) => f.monto !== 0 && !f.clave && !f.manual && !window.Comisiones.notaExcluye(f.nota)).length;
+  const incluidas = c.filas.filter((f) => f.incluir), total = incluidas.reduce((t, f) => t + f.monto, 0);
+  const opciones = (f) => {
+    const cand = (f.candidatos || []).map((x) => x.clave);
+    const op = (e) => `<option value="${esc(e.clave)}"${e.clave === f.clave ? ' selected' : ''}>${esc(e.nombre)} · ${esc(e.clave)}${e.organizacion ? ' · ' + esc(e.organizacion.replace(/^SUCURSAL /i, '')) : ''}</option>`;
+    return `<option value="">— Elige a la persona —</option>${cand.length ? `<optgroup label="Sugeridos">${cand.map((k) => porClave[k]).filter(Boolean).map(op).join('')}</optgroup>` : ''}
+      <optgroup label="Todos los activos">${emp.filter((e) => !cand.includes(e.clave)).map(op).join('')}</optgroup>
+      <option value="__manual">Otra persona (no está en el CAC)…</option>`;
+  };
+  caja.innerHTML = `<div class="revision-nom">
+    <div class="item-cab"><div><b>Revisa el Excel «${esc(c.archivo)}»</b><p class="suave">${c.filas.length} filas${ocultas ? ` (${ocultas} en cero ocultas)` : ''}. El sistema buscó a cada persona por su nombre; confirma las sugeridas y elige las que falten. Lo que elijas aquí lo recordará la próxima vez.</p></div>
+      ${revisar ? `<span class="chip chip-espera">${revisar} por revisar</span>` : '<span class="chip chip-ok">Todo cruzado</span>'}</div>
+    <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>En el Excel</th><th class="num">Monto</th><th>Persona en el CAC</th><th>Incluir</th></tr></thead><tbody>
+    ${visibles.map(([f, i]) => { const [t, tono] = ESTADO_CRUCE[f.manual ? 'manual' : f.estado] || ['', 'neutro'];
+      return `<tr class="${f.incluir ? '' : 'inactivo'}"><td><b>${esc(f.nombre)}</b><br><span class="suave">${esc(f.sucursal.replace(/^SUCURSAL /i, ''))} · ${esc(f.hoja)}</span>
+        ${f.nota ? `<br><span class="chip chip-${window.Comisiones.notaExcluye(f.nota) ? 'error' : 'austral'}">${esc(f.nota)}</span>` : ''}${f.monto < 0 ? '<br><span class="chip chip-espera">Monto negativo: se resta</span>' : ''}</td>
+        <td class="num">${bs(f.monto)}</td>
+        <td>${f.manual ? `<b>${esc(f.manual.nombre)}</b> · ${esc(f.manual.cedula)} <button type="button" class="btn btn-sec btn-chico" data-quitar-manual="${i}">Cambiar</button>`
+          : `<select class="sel-nom" data-sel-nom="${i}">${opciones(f)}</select>`}<br><span class="chip chip-${tono}">${t}</span></td>
+        <td><input type="checkbox" data-incl-nom="${i}"${f.incluir ? ' checked' : ''} aria-label="Incluir"></td></tr>`; }).join('')}
+    </tbody><tfoot><tr class="fila-total"><td><b>${incluidas.length} filas incluidas</b></td><td class="num"><b>${bs(total)}</b></td><td colspan="2"></td></tr></tfoot></table></div>
+    <div class="error-msg" id="err-cruce" hidden></div>
+    <div class="fila"><button type="button" class="btn" id="agregar-cruce">Agregar a la solicitud</button><button type="button" class="btn btn-sec" id="descartar-cruce">Descartar el Excel</button></div></div>`;
+  const repintar = () => pintarCruceNomina(panel, sub);
+  caja.querySelectorAll('[data-incl-nom]').forEach((x) => x.addEventListener('change', () => { c.filas[Number(x.dataset.inclNom)].incluir = x.checked; repintar(); }));
+  caja.querySelectorAll('[data-quitar-manual]').forEach((x) => x.addEventListener('click', () => { const f = c.filas[Number(x.dataset.quitarManual)]; f.manual = null; f.clave = ''; repintar(); }));
+  caja.querySelectorAll('[data-sel-nom]').forEach((x) => x.addEventListener('change', () => {
+    const f = c.filas[Number(x.dataset.selNom)];
+    if (x.value === '__manual') {
+      const ced = prompt(`Cédula de «${f.nombre}» (solo números):`); if (!ced || !/\d{5,}/.test(ced)) { repintar(); return; }
+      const nom = prompt('Nombre y apellido como va en la nómina:', f.nombre.replace(/-\s*POS\b/i, '').trim()); if (!nom) { repintar(); return; }
+      f.manual = { cedula: ced.replace(/\D/g, ''), nombre: nom.trim().toUpperCase() }; f.clave = ''; f.incluir = f.monto !== 0;
+    } else { f.clave = x.value; f.estado = x.value ? 'elegido' : f.estado; f.incluir = !!x.value && f.monto !== 0; }
+    repintar();
+  }));
+  caja.querySelector('#descartar-cruce').addEventListener('click', () => { cruceNom = null; pintarSolicitarNomina(panel, sub); });
+  caja.querySelector('#agregar-cruce').addEventListener('click', () => {
+    const err = caja.querySelector('#err-cruce');
+    const sinPersona = c.filas.filter((f) => f.incluir && !f.clave && !f.manual);
+    if (sinPersona.length) return errorEn(err, `Elige la persona de: ${sinPersona.map((f) => f.nombre).join(', ')} (o desmárcalas).`);
+    const b = borradorNomina, avisos = [];
+    const grupos = {};
+    c.filas.filter((f) => f.incluir).forEach((f) => {
+      const k = f.manual ? 'M' + f.manual.cedula : f.clave;
+      if (!grupos[k]) {
+        const e = porClave[f.clave];
+        grupos[k] = f.manual ? { clave: '', manual: true, cedula: f.manual.cedula, nombre: f.manual.nombre, empresa: '', monto: 0, nombresReporte: [] }
+          : { clave: e.clave, nombre: e.nombre, empresa: e.empresa, puesto: e.puesto, monto: 0, nombresReporte: [] };
+      }
+      grupos[k].monto = Math.round((grupos[k].monto + f.monto) * 100) / 100;
+      if (!grupos[k].nombresReporte.includes(f.nombre)) grupos[k].nombresReporte.push(f.nombre);
+    });
+    Object.values(grupos).forEach((g) => {
+      if (!(g.monto > 0)) { avisos.push(`${g.nombre} suma ${bs(g.monto)} y no se agregó`); return; }
+      const ya = b.items.find((y) => (g.manual ? y.manual && y.cedula === g.cedula : y.clave === g.clave));
+      if (ya) { ya.monto = Math.round(((Number(ya.monto) || 0) + g.monto) * 100) / 100; ya.nombresReporte = [...new Set([...(ya.nombresReporte || []), ...g.nombresReporte])]; }
+      else b.items.push(g);
+    });
+    if (!b.concepto) b.concepto = c.archivo.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').slice(0, 120);
+    cruceNom = null;
+    pintarSolicitarNomina(panel, sub);
+    toast(avisos.length ? `Agregado. ${avisos.join('; ')}.` : 'Agregado a la solicitud. Revisa y toca «Solicitar».');
+  });
+}
+
+/* ---- Verificar una nómina especial contra el «Resumen de Pago» (PDF de la nómina): otras asignaciones por persona ---- */
+async function lineasPdf(archivo, progreso) {
+  const pdfjs = await cargarPdfJs(), doc = await pdfjs.getDocument({ data: new Uint8Array(await archivo.arrayBuffer()) }).promise, lineas = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const tc = await (await doc.getPage(i)).getTextContent(), filas = new Map();
+    tc.items.forEach((it) => { if (!it.str.trim()) return; const y = Math.round(it.transform[5] / 3); if (!filas.has(y)) filas.set(y, []); filas.get(y).push(it); });
+    [...filas.entries()].sort((a, b) => b[0] - a[0]).forEach(([, its]) => lineas.push(its.sort((a, b) => a.transform[4] - b.transform[4]).map((it) => it.str).join('  ')));
+    if (progreso) progreso(i, doc.numPages);
+  }
+  return lineas;
+}
+
+async function verificarNominaPdf(panel, sub, n, archivo, boton) {
+  const lineas = await lineasPdf(archivo, (i, t) => { boton.textContent = `Leyendo página ${i} de ${t}…`; });
+  const personas = window.Comisiones.leerResumenPago(lineas);
+  if (!personas.length) throw new Error('Ese PDF no parece un «Resumen de Pago» de la nómina (no encontré los «Total NOMBRE»).');
+  const v = window.Comisiones.verificar(n.items, personas);
+  const cuenta = (e) => v.filter((x) => x.estado === e).length;
+  const r = await llamar('guardarVerificacionNomina', { id: n.id, resumen: { archivo: archivo.name, ok: cuenta('ok'), mayor: cuenta('mayor'), menor: cuenta('menor'), no: cuenta('no'), detalle: v } });
+  if (r.ok) n.verificacion = r.data.verificacion;
+  const ETQ = { ok: ['Registrada', 'ok'], mayor: ['Registrada (otras asignaciones mayores)', 'austral'], menor: ['Monto menor', 'error'], no: ['No aparece en otras asignaciones', 'error'] };
+  const caja = sub.querySelector(`#verif-${CSS.escape(n.id)}`);
+  caja.innerHTML = `<div class="revision-nom"><b>Resultado con «${esc(archivo.name)}» (${personas.length} personas en el reporte)</b>
+    <p class="suave">${cuenta('ok')} correctas · ${cuenta('mayor')} con otras asignaciones mayores (pueden incluir otros pagos) · ${cuenta('menor')} con monto menor · ${cuenta('no')} sin registrar.</p>
+    <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Persona</th><th class="num">Solicitado</th><th class="num">Otras asignaciones</th><th class="num">Diferencia</th><th>Estado</th></tr></thead><tbody>
+    ${v.sort((a, b) => ['no', 'menor', 'mayor', 'ok'].indexOf(a.estado) - ['no', 'menor', 'mayor', 'ok'].indexOf(b.estado)).map((x) => `<tr><td><b>${esc(x.nombre)}</b>${x.enReporte && x.enReporte !== x.nombre ? `<br><span class="suave">En el reporte: ${esc(x.enReporte)}</span>` : ''}</td>
+      <td class="num">${montoNom(x.monto, n.moneda)}</td><td class="num">${x.enReporte ? bs(x.otras) : '—'}</td><td class="num">${x.estado === 'ok' ? '' : bs(x.diferencia)}</td>
+      <td><span class="chip chip-${ETQ[x.estado][1]}">${ETQ[x.estado][0]}</span></td></tr>`).join('')}</tbody></table></div>
+    ${n.estado === 'SOLICITADA' && !cuenta('no') && !cuenta('menor') ? '<p class="aviso">Todo quedó registrado: ya puedes marcarla como registrada.</p>' : ''}</div>`;
+  boton.textContent = 'Verificar con el Resumen de Pago (PDF)';
 }

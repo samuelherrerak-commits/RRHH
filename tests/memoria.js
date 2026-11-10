@@ -94,6 +94,8 @@ function crearRepo(empleadosFilas) {
     nominasEspeciales: () => Object.values(st.nominasEsp || {}).map((n) => JSON.parse(JSON.stringify(n))),
     nominaEspecialPorId: (id) => (st.nominasEsp && st.nominasEsp[id] ? JSON.parse(JSON.stringify(st.nominasEsp[id])) : null),
     guardarNominaEspecial: (n) => { st.nominasEsp = st.nominasEsp || {}; st.nominasEsp[n.id] = JSON.parse(JSON.stringify(n)); },
+    aliasComisiones: () => ({ ...(st.aliasCom || {}) }),
+    guardarAliasComisiones: (m) => { st.aliasCom = { ...(st.aliasCom || {}), ...m }; },
     nuevoIdNominaEsp: () => 'NE' + (++st.seq),
     omegaSinTarjeta: () => ({ ...(st.omegaSin || {}) }),
     marcarOmegaSinTarjeta: (clave, nombre, sin, por, cuando) => { st.omegaSin = st.omegaSin || {}; if (sin) st.omegaSin[clave] = { nombre, por, desde: cuando }; else delete st.omegaSin[clave]; },

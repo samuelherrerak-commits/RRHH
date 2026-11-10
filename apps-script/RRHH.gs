@@ -13,7 +13,7 @@ var ERRORES_CARGA = [];
 var Calculo = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Cálculo del aporte trimestral al fideicomiso.
        Funciones puras: sin hojas, sin DOM, sin fecha del sistema.
@@ -165,7 +165,7 @@ var Calculo = (function () {
 var Empleados = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Base de empleados y cruce del aporte. Funciones puras.
        ========================================================== */
@@ -572,7 +572,7 @@ var Empleados = (function () {
 var Prestaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Módulo 1 · Prestaciones sociales: lo que ve el trabajador y
        las reglas del anticipo. Funciones puras.
@@ -725,7 +725,7 @@ var Prestaciones = (function () {
 var Exportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Archivos para el banco. Funciones puras.
        Diseño NOMINA APORTES: FIDEICOMISO | Cedula (letra) | (número)
@@ -772,7 +772,7 @@ var Exportes = (function () {
 var Constancia = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Constancia de trabajo: textos, monto en letras y vigencia (30 días).
        Funciones puras; las usan el servidor, el navegador (PDF) y las pruebas.
@@ -900,7 +900,7 @@ var Constancia = (function () {
 var Vacaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Vacaciones: días hábiles, períodos, saldo y reglas de la solicitud.
        Funciones puras. Fechas como texto 'AAAA-MM-DD' (sin horas ni zonas).
@@ -1185,7 +1185,7 @@ var Vacaciones = (function () {
 var Aportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Aporte trimestral al fideicomiso: arma la vista previa a partir del Excel (nombre + monto).
        Función pura: recibe empleados, filas, días adicionales forzados y el aporte anterior.
@@ -1293,7 +1293,7 @@ var Aportes = (function () {
 var Recibos = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Recibos de pago: leer cada hoja del PDF de nómina (texto ya extraído),
        proponer el concepto y asignar cada hoja a su colaborador.
@@ -1387,7 +1387,7 @@ var Recibos = (function () {
 var Planificacion = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Planificación anual de vacaciones y su cumplimiento.
        Funciones puras. Fechas como texto 'AAAA-MM-DD'.
@@ -1535,7 +1535,7 @@ var Planificacion = (function () {
 var Omega = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Omega Capital: cestaticket y Omega Transferencia (complemento de alimentación
        y otros beneficios en $), por quincena y en 4 lotes:
@@ -1724,11 +1724,194 @@ var Omega = (function () {
   } catch (e) { ERRORES_CARGA.push('Omega: ' + (e && e.message)); return undefined; }
 })();
 
+// ===== core/comisiones.js =====
+var Comisiones = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Comisiones: leer el Excel de comisiones que envía la gerencia (nombres escritos a mano, sin cédula),
+       cruzar cada nombre con los empleados del CAC, y verificar contra el «Resumen de Pago» de la nómina
+       que las comisiones quedaron registradas en «Otras Asignaciones».
+       Funciones puras: las usan el navegador, Apps Script y las pruebas.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      var VACIAS = { DE: 1, DEL: 1, LA: 1, LAS: 1, LOS: 1, Y: 1, POS: 1, VENTAS: 1, PROPIAS: 1 };
+    
+      function sinTildes(s) { return String(s == null ? '' : s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+      /** Palabras significativas de un nombre: sin tildes, sin lo que va entre paréntesis ni sufijos como «-POS». */
+      function palabras(nombre) {
+        return sinTildes(nombre).replace(/\([^)]*\)/g, ' ').replace(/-\s*POS\b/g, ' ').replace(/[^A-ZÑ ]/g, ' ').split(/\s+/).filter(function (p) { return p && !VACIAS[p]; });
+      }
+      function clave(nombre) { return palabras(nombre).join(' '); }
+    
+      /** Distancia de edición con trasposición (Varela/Valera = 1). */
+      function distancia(a, b) {
+        var m = a.length, n = b.length, d = [];
+        for (var i = 0; i <= m; i++) { d[i] = [i]; }
+        for (var j = 0; j <= n; j++) d[0][j] = j;
+        for (i = 1; i <= m; i++) for (j = 1; j <= n; j++) {
+          var c = a[i - 1] === b[j - 1] ? 0 : 1;
+          d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+          if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+        }
+        return d[m][n];
+      }
+      /** ¿La palabra del reporte coincide con la del empleado? igual, abreviada (≥4 letras) o con un error de tipeo (≥5 letras). */
+      function parecida(p, q) {
+        if (p === q) return 2;
+        if (p.length >= 4 && q.indexOf(p) === 0) return 1.5;
+        if (p.length >= 5 && q.length >= 5 && distancia(p, q) <= 1) return 1;
+        if (p.length >= 6 && q.length >= 6 && distancia(p, q) <= 2) return 0.5;
+        return 0;
+      }
+      /** Puntaje de un nombre del reporte contra un empleado: todas sus palabras deben aparecer (en cualquier orden). */
+      function puntaje(rep, emp) {
+        if (!rep.length) return 0;
+        var usadas = {}, total = 0;
+        for (var i = 0; i < rep.length; i++) {
+          var mejor = 0, cual = -1;
+          for (var j = 0; j < emp.length; j++) { if (usadas[j]) continue; var s = parecida(rep[i], emp[j]); if (s > mejor) { mejor = s; cual = j; } }
+          if (!mejor) return 0;
+          usadas[cual] = true; total += mejor;
+        }
+        return total + (rep.length >= 2 ? 1 : 0);
+      }
+      function mismaSucursal(sucursal, emp) {
+        var s = palabras(String(sucursal || '').replace(/sucursal/i, '')), o = palabras(emp.organizacion);
+        return s.length > 0 && s.every(function (p) { return o.some(function (q) { return parecida(p, q) >= 1; }); });
+      }
+    
+      /**
+       * Cruza un nombre del reporte con los empleados. empleados: [{ clave, nombre, organizacion, estado }]; alias: { 'CLAVE DEL NOMBRE': claveEmpleado }.
+       * Devuelve { clave, estado: 'alias'|'exacto'|'sugerido'|'ambiguo'|'sin', candidatos: [{ clave, nombre, organizacion }] }.
+       */
+      function cruzarNombre(nombre, sucursal, empleados, alias) {
+        var k = clave(nombre), rep = palabras(nombre);
+        var activos = empleados.filter(function (e) { return e.estado !== 'Inactivo'; });
+        if (alias && alias[k] && empleados.some(function (e) { return e.clave === alias[k]; })) return { clave: alias[k], estado: 'alias', candidatos: [] };
+        var exactos = activos.filter(function (e) { return clave(e.nombre) === k; });
+        if (exactos.length === 1) return { clave: exactos[0].clave, estado: 'exacto', candidatos: [] };
+        var c = activos.map(function (e) { return { e: e, s: puntaje(rep, palabras(e.nombre)) + (mismaSucursal(sucursal, e) ? 0.5 : 0) }; })
+          .filter(function (x) { return x.s >= 2; }).sort(function (a, b) { return b.s - a.s; });
+        var cand = c.slice(0, 5).map(function (x) { return { clave: x.e.clave, nombre: x.e.nombre, organizacion: x.e.organizacion || '' }; });
+        if (!c.length) return { clave: '', estado: 'sin', candidatos: [] };
+        if (c.length === 1 || c[0].s > c[1].s) return { clave: c[0].e.clave, estado: 'sugerido', candidatos: cand };
+        return { clave: '', estado: 'ambiguo', candidatos: cand };
+      }
+    
+      function r2(x) { return Math.round((Number(x) || 0) * 100) / 100; }
+      function texto(v) { return v == null ? '' : String(v).trim(); }
+    
+      /**
+       * Lee las hojas del Excel de comisiones. hojas: [{ nombre, matriz }] (matriz = filas de celdas).
+       * En cada hoja busca la fila de encabezados con una columna «Total/Monto a pagar…»; la columna de nombres es la de «Sucursal».
+       * Las filas «SUCURSAL …» marcan la sucursal; las de «TOTAL» se ignoran. Un texto a la derecha del nombre es una nota
+       * (p. ej. «Pagar por Pago Especial»). Devuelve [{ hoja, fila, sucursal, nombre, monto, nota }].
+       */
+      function leerExcelComisiones(hojas) {
+        var out = [];
+        (hojas || []).forEach(function (h) {
+          var m = h.matriz || [], cab = -1, colNom = -1, colMonto = -1;
+          for (var f = 0; f < Math.min(15, m.length) && cab < 0; f++) {
+            var fila = (m[f] || []).map(function (v) { return sinTildes(v).trim(); });
+            var mon = -1, nom = -1;
+            fila.forEach(function (v, j) {
+              if (/PAGAR/.test(v) && /^(TOTAL|MONTO)/.test(v)) mon = j;
+              if (nom < 0 && /^SUCURSAL$|^NOMBRE|^COLABORADOR|^TRABAJADOR/.test(v)) nom = j;
+            });
+            if (mon >= 0 && nom >= 0) { cab = f; colMonto = mon; colNom = nom; }
+          }
+          if (cab < 0) return;
+          var sucursal = '';
+          for (var i = cab + 1; i < m.length; i++) {
+            var row = m[i] || [], nombre = texto(row[colNom]);
+            if (!nombre) continue;
+            var N = sinTildes(nombre);
+            if (/^SUCURSAL\b/.test(N)) { sucursal = nombre; continue; }
+            if (/^TOTAL\b/.test(N)) continue;
+            if (!palabras(nombre).length) continue;
+            var v = row[colMonto], monto = typeof v === 'number' ? r2(v) : (isFinite(Number(texto(v).replace(',', '.'))) && texto(v) ? r2(Number(texto(v).replace(',', '.'))) : 0);
+            var notas = [];
+            if (typeof v === 'string' && texto(v) && !isFinite(Number(texto(v).replace(',', '.')))) notas.push(texto(v));
+            for (var j = colMonto + 1; j < row.length; j++) if (typeof row[j] === 'string' && texto(row[j])) notas.push(texto(row[j]));
+            out.push({ hoja: h.nombre, fila: i + 1, sucursal: sucursal, nombre: nombre, monto: monto, nota: notas.join(' · ') });
+          }
+        });
+        return out;
+      }
+    
+      /** Suma por persona las filas cruzadas e incluidas. filas: [{ clave, monto, incluir }] → [{ clave, monto, filas }]. */
+      function consolidar(filas) {
+        var por = {}, orden = [];
+        filas.forEach(function (f) {
+          if (!f.incluir || !f.clave) return;
+          if (!por[f.clave]) { por[f.clave] = { clave: f.clave, monto: 0, filas: 0 }; orden.push(f.clave); }
+          por[f.clave].monto = r2(por[f.clave].monto + f.monto); por[f.clave].filas++;
+        });
+        return orden.map(function (k) { return por[k]; });
+      }
+    
+      /**
+       * Lee el «Resumen de Pago» (Detalle de Nómina) a partir de sus líneas de texto, en orden.
+       * Cada persona termina en «Total NOMBRE asignaciones deducciones total»; antes vienen sus conceptos.
+       * Devuelve [{ nombre, otrasAsignaciones, asignaciones }].
+       */
+      function leerResumenPago(lineas) {
+        var montoRe = /(-?\d{1,3}(?:\.\d{3})*,\d{2})/g, num = function (s) { return Number(s.replace(/\./g, '').replace(',', '.')); };
+        var out = [], otras = 0;
+        (lineas || []).forEach(function (l) {
+          var t = String(l).replace(/\s+/g, ' ').trim(), montos = t.match(montoRe) || [];
+          var tot = /\bTotal (.+?) -?\d{1,3}(?:\.\d{3})*,\d{2}/.exec(t);
+          if (tot && !/^(Total )?(N[oó]mina|Contrato|General)\b/i.test(tot[1]) && !/Total General/i.test(t)) {
+            out.push({ nombre: tot[1].trim(), otrasAsignaciones: r2(otras), asignaciones: montos.length ? r2(num(montos[0])) : 0 });
+            otras = 0; return;
+          }
+          if (/Otras Asignaciones/i.test(t) && montos.length) otras += num(montos[0]);
+        });
+        return out;
+      }
+    
+      /**
+       * Compara lo solicitado con el reporte. items: [{ clave, nombre, monto }]; personas: leerResumenPago(...).
+       * Estado: 'ok' (otras asignaciones = monto), 'mayor' (otras asignaciones > monto: puede incluir otros pagos),
+       * 'menor' (falta), 'no' (no aparece o sin otras asignaciones).
+       */
+      function verificar(items, personas) {
+        var usados = {};
+        return items.map(function (it) {
+          var rep = palabras(it.nombre), mejor = null, ms = 0;
+          personas.forEach(function (p, i) {
+            if (usados[i]) return;
+            var k1 = clave(p.nombre) === clave(it.nombre) ? 100 : 0;
+            var s = k1 || Math.max(puntaje(palabras(p.nombre), rep), puntaje(rep, palabras(p.nombre)));
+            if (s > ms) { ms = s; mejor = i; }
+          });
+          if (mejor == null || ms < 3) return { clave: it.clave, nombre: it.nombre, monto: it.monto, enReporte: '', otras: 0, estado: 'no', diferencia: -it.monto };
+          usados[mejor] = true;
+          var p = personas[mejor], dif = r2(p.otrasAsignaciones - it.monto);
+          var estado = !(p.otrasAsignaciones > 0) ? 'no' : Math.abs(dif) < 0.01 ? 'ok' : dif > 0 ? 'mayor' : 'menor';
+          return { clave: it.clave, nombre: it.nombre, monto: it.monto, enReporte: p.nombre, otras: p.otrasAsignaciones, estado: estado, diferencia: dif };
+        });
+      }
+    
+      var api = { palabras: palabras, clave: clave, distancia: distancia, cruzarNombre: cruzarNombre, leerExcelComisiones: leerExcelComisiones,
+        notaExcluye: function (n) { return /pago especial|liquidaci|no pagar|no se paga/i.test(String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '')); },
+        consolidar: consolidar, leerResumenPago: leerResumenPago, verificar: verificar, r2: r2 };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Comisiones = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Comisiones: ' + (e && e.message)); return undefined; }
+})();
+
 // ===== core/servicio.js =====
 var Servicio = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Casos de uso del módulo de prestaciones. No sabe de Sheets:
        recibe un `repo` (hojas en producción, memoria en pruebas) y
@@ -1752,6 +1935,7 @@ var Servicio = (function () {
       var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
       var Planificacion = isNode ? require('./planificacion.js') : dependencia(raiz, 'Planificacion');
       var Omega = isNode ? require('./omega.js') : dependencia(raiz, 'Omega');
+      var Comisiones = isNode ? require('./comisiones.js') : dependencia(raiz, 'Comisiones');
     
       var HORAS_SESION = 8;
       var MAX_FALLOS_CEDULA = 5;
@@ -3526,7 +3710,7 @@ var Servicio = (function () {
       var MONEDAS_NOMINA = ['Bs.', '$'];
       function vistaNominaEsp(n) {
         return { id: n.id, concepto: n.concepto, moneda: n.moneda, fechaPago: n.fechaPago, observacion: n.observacion, items: n.items, total: n.total, personas: n.personas,
-          estado: n.estado, solicitadaPor: n.solicitadaPor, solicitadaPorNombre: n.solicitadaPorNombre, solicitada: n.solicitada,
+          verificacion: n.verificacion || null, estado: n.estado, solicitadaPor: n.solicitadaPor, solicitadaPorNombre: n.solicitadaPorNombre, solicitada: n.solicitada,
           atendidaPor: n.atendidaPor, atendidaPorNombre: n.atendidaPorNombre, atendida: n.atendida, referencia: n.referencia, motivo: n.motivo };
       }
       function nombreUsuario(repo, clave) {
@@ -3546,9 +3730,20 @@ var Servicio = (function () {
         var moneda = MONEDAS_NOMINA.indexOf(datos.moneda) !== -1 ? datos.moneda : 'Bs.';
         var fechaPago = /^\d{4}-\d{2}-\d{2}$/.test(String(datos.fechaPago || '')) ? datos.fechaPago : '';
         var vistos = {}, items = [], errores = [];
+        var alias = {};
         (datos.items || []).forEach(function (it) {
-          var e = repo.empleadoPorClave(it.clave), monto = Math.round((Number(it.monto) || 0) * 100) / 100;
+          var e = it.clave ? repo.empleadoPorClave(it.clave) : null, monto = Math.round((Number(it.monto) || 0) * 100) / 100;
+          if (!e && !it.clave && it.cedula) {   // persona que no está en el CAC (la escribe Gestión Humana)
+            var ced = Empleados.numeroDeCedulaTexto(it.cedula), nom = String(it.nombre || '').trim().toUpperCase();
+            if (!ced || !nom) { errores.push('Falta la cédula o el nombre de una persona escrita a mano.'); return; }
+            if (vistos['V' + ced]) { errores.push(nom + ' está repetido.'); return; }
+            vistos['V' + ced] = true;
+            if (!(monto > 0)) { errores.push('Falta el monto de ' + nom + '.'); return; }
+            items.push({ clave: 'V' + ced, cedula: ced, cedulaLetra: 'V', nombre: nom, empresa: '', organizacion: '', monto: monto, manual: true });
+            return;
+          }
           if (!e) { errores.push('No encontramos a ' + (it.clave || 'una persona') + '.'); return; }
+          (it.nombresReporte || []).forEach(function (n) { var k = Comisiones.clave(n); if (k && k !== Comisiones.clave(e.nombre)) alias[k] = Empleados.claveCedula(e); });
           var clave = Empleados.claveCedula(e);
           if (vistos[clave]) { errores.push(e.nombre + ' está repetido.'); return; }
           vistos[clave] = true;
@@ -3562,6 +3757,7 @@ var Servicio = (function () {
           items: items, personas: items.length, total: Math.round(items.reduce(function (t, x) { return t + x.monto; }, 0) * 100) / 100,
           estado: 'SOLICITADA', solicitadaPor: s.clave, solicitadaPorNombre: nombreUsuario(repo, s.clave), solicitada: ctx.ahora() };
         repo.guardarNominaEspecial(n);
+        if (Object.keys(alias).length && repo.guardarAliasComisiones) repo.guardarAliasComisiones(alias);
         repo.log('NOMINA_ESP_SOLICITUD', s.clave, n.id + ' · ' + n.personas + ' · ' + n.total);
         var destinos = repo.todosUsuarios().map(function (u) { return digitos(u.cedula); }).filter(function (d) { return d && d !== digitos(s.clave); }).map(function (d) { return 'V' + d; });
         notificar(repo, ctx, destinos, { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial por registrar', texto: n.solicitadaPorNombre + ' solicitó «' + concepto + '» para ' + n.personas + ' persona' + (n.personas === 1 ? '' : 's') + '.', ruta: 'nominas' });
@@ -3593,6 +3789,28 @@ var Servicio = (function () {
         }
         return ok(vistaNominaEsp(n));
       }
+      /** Empleados (activos e inactivos) y los nombres ya aprendidos, para cruzar el Excel de comisiones en el navegador. */
+      function datosCruceNomina(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        return ok({
+          empleados: repo.todosEmpleados().map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', estado: e.estado, empresa: Empleados.empresaFideicomiso(e) }; }),
+          alias: repo.aliasComisiones ? repo.aliasComisiones() : {},
+        });
+      }
+    
+      /** Guarda el resultado de comparar la solicitud con el Resumen de Pago (resumen: { ok, mayor, menor, no, archivo, detalle }). */
+      function guardarVerificacionNomina(repo, ctx, token, id, resumen) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var n = repo.nominaEspecialPorId(id);
+        if (!n) return err('NO_ENCONTRADO', 'No existe esa solicitud.');
+        var r = resumen || {}, cuenta = function (k) { return Math.max(0, Math.round(Number(r[k]) || 0)); };
+        n.verificacion = { cuando: ctx.ahora(), por: s.clave, archivo: String(r.archivo || '').slice(0, 120), ok: cuenta('ok'), mayor: cuenta('mayor'), menor: cuenta('menor'), no: cuenta('no'),
+          detalle: (r.detalle || []).slice(0, 300).map(function (d) { return { clave: String(d.clave || ''), estado: String(d.estado || ''), otras: Math.round((Number(d.otras) || 0) * 100) / 100 }; }) };
+        repo.guardarNominaEspecial(n);
+        return ok(vistaNominaEsp(n));
+      }
+    
       function registrarNominaEspecial(repo, ctx, token, id, referencia) {
         return atenderNominaEspecial(repo, ctx, token, id, 'REGISTRADA', { referencia: String(referencia || '').trim().slice(0, 80) });
       }
@@ -3604,7 +3822,7 @@ var Servicio = (function () {
     
       var api = {
         solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
-        rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial,
+        rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarVerificacionNomina: guardarVerificacionNomina,
         omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
         omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
         omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,
@@ -3651,9 +3869,9 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-09.3';
+var VERSION = '2026-11-10.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -3664,6 +3882,7 @@ function modulosCargados_() {
     Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
     Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
     Omega: typeof Omega !== 'undefined' && !!Omega,
+    Comisiones: typeof Comisiones !== 'undefined' && !!Comisiones,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -3694,7 +3913,8 @@ var HOJAS = {
   PINES: ['clave', 'sal', 'hash', 'creado'],
   OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
   NOMINAS_ESPECIALES: ['id', 'concepto', 'moneda', 'fechaPago', 'observacion', 'items', 'personas', 'total', 'estado', 'solicitadaPor', 'solicitadaPorNombre', 'solicitada',
-    'atendidaPor', 'atendidaPorNombre', 'atendida', 'referencia', 'motivo'],
+    'atendidaPor', 'atendidaPorNombre', 'atendida', 'referencia', 'motivo', 'verificacion'],
+  ALIAS_COMISIONES: ['alias', 'clave', 'actualizado'],
   OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
   OMEGA_CONFIG: ['clave', 'valor'],
   OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada'],
@@ -3799,6 +4019,8 @@ var RUTAS_RRHH = {
   registrarNominaEspecial: function (repo, ctx, d) { return Servicio.registrarNominaEspecial(repo, ctx, d.token, d.id, d.referencia); },
   rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
   cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
+  datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
+  guardarVerificacionNomina: function (repo, ctx, d) { return Servicio.guardarVerificacionNomina(repo, ctx, d.token, d.id, d.resumen); },
   omegaInicio: function (repo, ctx, d) { return Servicio.omegaInicio(repo, ctx, d.token); },
   omegaGuardarConfig: function (repo, ctx, d) { return Servicio.omegaGuardarConfig(repo, ctx, d.token, d); },
   omegaTarjetas: function (repo, ctx, d) { return Servicio.omegaTarjetas(repo, ctx, d.token); },
@@ -3840,7 +4062,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -4371,10 +4593,23 @@ function crearRepo_() {
     },
     guardarNominaEspecial: function (n) {
       asegurarHoja_('NOMINAS_ESPECIALES');
-      var copia = Object.assign({}, n, { items: JSON.stringify(n.items || []) });
+      var copia = Object.assign({}, n, { items: JSON.stringify(n.items || []), verificacion: n.verificacion ? JSON.stringify(n.verificacion) : '' });
       if (!copia._fila) { var h = hoja_('NOMINAS_ESPECIALES'); h.getRange(h.getLastRow() + 1, 1, 1, 4).setNumberFormat('@'); }
       escribirFila_('NOMINAS_ESPECIALES', copia);
       n._fila = copia._fila;
+    },
+    aliasComisiones: function () {
+      asegurarHoja_('ALIAS_COMISIONES');
+      var m = {}; leer_('ALIAS_COMISIONES').forEach(function (f) { if (texto_(f.alias)) m[texto_(f.alias)] = texto_(f.clave); });
+      return m;
+    },
+    guardarAliasComisiones: function (mapa) {
+      asegurarHoja_('ALIAS_COMISIONES');
+      var filas = leer_('ALIAS_COMISIONES'), ahora = Date.now();
+      Object.keys(mapa).forEach(function (k) {
+        var ya = filas.filter(function (f) { return texto_(f.alias) === k; })[0];
+        escribirFila_('ALIAS_COMISIONES', { _fila: ya ? ya._fila : undefined, alias: k, clave: mapa[k], actualizado: ahora });
+      });
     },
     nuevoIdNominaEsp: function () { return 'NE-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     omegaSinTarjeta: function () {
@@ -4456,7 +4691,7 @@ function nominaEsp_(f) {
   return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), moneda: texto_(f.moneda) || 'Bs.', fechaPago: texto_(f.fechaPago), observacion: texto_(f.observacion),
     items: it, personas: Number(f.personas) || it.length, total: Number(f.total) || 0, estado: texto_(f.estado), solicitadaPor: texto_(f.solicitadaPor),
     solicitadaPorNombre: texto_(f.solicitadaPorNombre), solicitada: Number(f.solicitada) || 0, atendidaPor: texto_(f.atendidaPor), atendidaPorNombre: texto_(f.atendidaPorNombre),
-    atendida: Number(f.atendida) || 0, referencia: texto_(f.referencia), motivo: texto_(f.motivo) };
+    atendida: Number(f.atendida) || 0, referencia: texto_(f.referencia), motivo: texto_(f.motivo), verificacion: (function () { try { return f.verificacion ? JSON.parse(f.verificacion) : null; } catch (e) { return null; } })() };
 }
 
 function omegaQuincena_(f) {

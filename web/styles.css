@@ -352,3 +352,7 @@ input.pin { letter-spacing: .6em; font-size: 22px; text-align: center; max-width
 .opcion-nom:disabled { opacity: .5; cursor: default; }
 .opcion-nom span { font-size: 13px; color: var(--tinta-2); }
 .tabla-nom td:first-child { min-width: 0; width: 1%; white-space: nowrap; }
+.carga-nom { display: flex; gap: var(--s3); }
+.revision-nom { border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s4); display: grid; gap: var(--s3); background: var(--fondo); }
+.sel-nom { min-height: 38px; padding: 4px 8px; font-size: 13px; max-width: 360px; }
+.tabla-omega input[type=checkbox] { width: 20px; height: 20px; min-height: 0; padding: 0; }
