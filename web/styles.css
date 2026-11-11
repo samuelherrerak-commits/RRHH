@@ -356,3 +356,11 @@ input.pin { letter-spacing: .6em; font-size: 22px; text-align: center; max-width
 .revision-nom { border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s4); display: grid; gap: var(--s3); background: var(--fondo); }
 .sel-nom { min-height: 38px; padding: 4px 8px; font-size: 13px; max-width: 360px; }
 .tabla-omega input[type=checkbox] { width: 20px; height: 20px; min-height: 0; padding: 0; }
+/* Quincena */
+.pasos-q { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s2); }
+.pasos-q button { width: 100%; display: flex; align-items: center; gap: 8px; border: 1px solid var(--linea); background: #fff; border-radius: var(--radio-sm); padding: 10px 12px; font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; color: var(--tinta); }
+.pasos-q button[aria-current="step"] { border-color: var(--carbon); box-shadow: inset 0 0 0 1px var(--carbon); }
+.pasos-q .num-paso { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--marca-velo); font-size: 13px; }
+.pasos-q .hecho .num-paso { background: var(--ok); color: #fff; }
+.listo-q { justify-content: space-between; }
+@media (max-width: 900px) { .pasos-q { grid-template-columns: 1fr 1fr; } }

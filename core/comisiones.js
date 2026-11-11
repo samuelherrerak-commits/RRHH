@@ -166,9 +166,55 @@
     });
   }
 
+
+  /** Empleado de un nombre del reporte de nómina (nombres completos o abreviados). Devuelve el empleado o null. */
+  function empleadoDeNombre(nombre, empleados, usados, alias) {
+    var k = clave(nombre), rep = palabras(nombre), mejor = null, ms = 0, empate = false;
+    if (alias && alias[k]) { var a = empleados.filter(function (e) { return e.clave === alias[k] && !(usados && usados[e.clave]); })[0]; if (a) return a; }
+    empleados.forEach(function (e) {
+      if (usados && usados[e.clave]) return;
+      var pe = palabras(e.nombre), s = clave(e.nombre) === k ? 100 : Math.max(puntaje(rep, pe), puntaje(pe, rep));
+      if (s > ms) { ms = s; mejor = e; empate = false; } else if (s === ms && s > 0) empate = true;
+    });
+    return ms >= 3 && (!empate || ms === 100) ? mejor : null;
+  }
+
+  /**
+   * Revisa un reporte de nómina (personas: [{ nombre, asignaciones, otrasAsignaciones }]) contra los empleados del CAC.
+   * empleados: [{ clave, nombre, estado, empresa, fueraNomina, sinTarjeta, ingresoMes }].
+   * opciones: { empresas: ['PCA'] (si no, las del reporte), excluirFaltantes: fn(e) → motivo para no exigirlo (p. ej. sin tarjeta) }.
+   * Devuelve { empresas, ok: [...], egresados: [...], noEnCac: [...], faltan: [...], esperados: [...] }.
+   */
+  function revisarReporte(personas, empleados, opciones) {
+    opciones = opciones || {};
+    var usados = {}, ok = [], egresados = [], noEnCac = [], cuenta = {};
+    personas.forEach(function (p) {
+      var e = empleadoDeNombre(p.nombre, empleados, usados, opciones.alias);
+      if (!e) { noEnCac.push({ nombre: p.nombre, monto: p.asignaciones }); return; }
+      usados[e.clave] = true;
+      var x = { clave: e.clave, nombre: e.nombre, enReporte: p.nombre, empresa: e.empresa, monto: p.asignaciones, otras: p.otrasAsignaciones };
+      if (e.estado === 'Inactivo') egresados.push(x); else { ok.push(x); cuenta[e.empresa] = (cuenta[e.empresa] || 0) + 1; }
+    });
+    var empresas = opciones.empresas || Object.keys(cuenta).filter(function (k) { return cuenta[k] >= Math.max(3, ok.length * 0.1); });
+    var faltan = [], esperados = [];
+    empleados.forEach(function (e) {
+      if (e.estado === 'Inactivo' || e.fueraNomina || usados[e.clave] || empresas.indexOf(e.empresa) === -1) return;
+      var motivo = opciones.excluirFaltantes ? opciones.excluirFaltantes(e) : '';
+      (motivo ? esperados : faltan).push({ clave: e.clave, nombre: e.nombre, empresa: e.empresa, motivo: motivo || '' });
+    });
+    // nombres del reporte que no se encontraron: ¿será alguno de los que faltan? (2 palabras iguales o más)
+    noEnCac.forEach(function (n) {
+      var rp = palabras(n.nombre), mejor = null, ms = 1;
+      faltan.concat(esperados).forEach(function (f) { var c = palabras(f.nombre).filter(function (w) { return rp.indexOf(w) !== -1; }).length; if (c > ms) { ms = c; mejor = f; } });
+      if (mejor) n.posible = { clave: mejor.clave, nombre: mejor.nombre };
+    });
+    var otraEmpresa = ok.filter(function (x) { return empresas.indexOf(x.empresa) === -1; });
+    return { empresas: empresas, ok: ok, egresados: egresados, noEnCac: noEnCac, faltan: faltan, esperados: esperados, otraEmpresa: otraEmpresa };
+  }
+
   var api = { palabras: palabras, clave: clave, distancia: distancia, cruzarNombre: cruzarNombre, leerExcelComisiones: leerExcelComisiones,
     notaExcluye: function (n) { return /pago especial|liquidaci|no pagar|no se paga/i.test(String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '')); },
-    consolidar: consolidar, leerResumenPago: leerResumenPago, verificar: verificar, r2: r2 };
+    consolidar: consolidar, empleadoDeNombre: empleadoDeNombre, revisarReporte: revisarReporte, leerResumenPago: leerResumenPago, verificar: verificar, r2: r2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Comisiones = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

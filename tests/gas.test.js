@@ -518,3 +518,14 @@ test('Omega Capital sobre las hojas: quincena, lotes, validar y textos que Sheet
   assert.equal(e.llamar({ action: 'omegaReabrirLote', token: t, id: '2026-11-1', lote: 'TR-PCA' }).data.estado, 'PENDIENTE');
   assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[0] === '2026-11-1').length, 0);
 });
+
+test('Quincena sobre las hojas: los pasos se guardan y se leen', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const t = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  assert.equal(e.llamar({ action: 'quincenaAbrir', token: t, mes: '2026-11', quincena: 1, tasa: 910 }).data.id, '2026-11-1');
+  e.llamar({ action: 'quincenaPaso', token: t, id: '2026-11-1', paso: 'cestaticket', hecho: true, resumen: { PCA: { ok: 100, faltan: 2 } } });
+  const v = e.llamar({ action: 'quincenaVer', token: t, id: '2026-11-1' });
+  assert.equal(v.data.pasos.cestaticket.hecho, true); assert.equal(v.data.pasos.cestaticket.PCA.ok, 100);
+  assert.equal(e.llamar({ action: 'quincenaListar', token: t }).data[0].hechos, 1);
+});

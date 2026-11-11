@@ -175,10 +175,22 @@
     return { filas: [], faltan: ['cedula', 'complemento'], error: 'No encontré las columnas «Cédula» y «Monto de complemento de alimentación aprobado».' };
   }
 
+
+  /**
+   * Quincena en la que se paga una vacación con pago: la última quincena pagada antes de salir (o el mismo día).
+   * Sale del 16 al 31 → 1.ª quincena de ese mes (se paga el 15); sale del 1 al 15 → 2.ª quincena del mes anterior.
+   */
+  function quincenaDePagoVacaciones(inicio) {
+    var y = Number(inicio.slice(0, 4)), m = Number(inicio.slice(5, 7)), d = Number(inicio.slice(8, 10));
+    if (d >= 15) return idQuincena(y + '-' + ('0' + m).slice(-2), 1);
+    if (m === 1) { y--; m = 12; } else m--;
+    return idQuincena(y + '-' + ('0' + m).slice(-2), 2);
+  }
+
   var api = { PARAMETROS: PARAMETROS, EMPRESAS: EMPRESAS, LOTES: LOTES, ADICIONALES: ADICIONALES, r2: r2, esMes: esMes, idQuincena: idQuincena, lote: lote,
     diasCestaticket: diasCestaticket, ingresoEnElMes: ingresoEnElMes, ingresoTrasPrimeraQuincena: ingresoTrasPrimeraQuincena, montosDelMes: montosDelMes,
     montoQuincena: montoQuincena, lineasQuincena: lineasQuincena, totalesOmega: totalesOmega, revisarLinea: revisarLinea, archivoDeposito: archivoDeposito,
-    leerExcelBeneficios: leerExcelBeneficios, soloAlfanumerico: soloAlfanumerico };
+    leerExcelBeneficios: leerExcelBeneficios, soloAlfanumerico: soloAlfanumerico, quincenaDePagoVacaciones: quincenaDePagoVacaciones };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Omega = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

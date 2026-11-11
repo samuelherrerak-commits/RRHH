@@ -548,7 +548,7 @@ async function vistaRRHH() {
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Omega Capital'], ['nominas', 'Nóminas especiales'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Quincena'], ['nominas', 'Nóminas especiales'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel" class="contenido"></div></div>`;
@@ -1973,12 +1973,12 @@ const irOmega = (panel, cambios) => { Object.assign(omegaUI, cambios); panelOmeg
 async function panelOmega(panel) {
   panel.innerHTML = `<section class="tarjeta"><h2>Omega Capital</h2>${esqueleto(2)}</section>`;
   try {
-    if (omegaUI.vista === 'quincena') return await vistaQuincenaOmega(panel);
+    if (omegaUI.vista === 'quincena') return await vistaProcesoQuincena(panel);
     if (omegaUI.vista === 'lote') return await vistaLoteOmega(panel);
     if (omegaUI.vista === 'tarjetas') return await vistaTarjetasOmega(panel);
     if (omegaUI.vista === 'beneficios') return await vistaBeneficiosOmega(panel);
     if (omegaUI.vista === 'empresas') return await vistaEmpresasOmega(panel);
-    return await vistaInicioOmega(panel);
+    return await vistaInicioQuincena(panel);
   } catch (ex) { panel.innerHTML = `<p class="error-msg">${esc(ex.message || 'Error')}</p>`; }
 }
 function respuestaOmega(panel, r) {
@@ -1988,7 +1988,7 @@ function respuestaOmega(panel, r) {
   panel.querySelector('#om-volver').addEventListener('click', () => irOmega(panel, { vista: 'inicio' }));
   return null;
 }
-const volverOmega = (texto = 'Omega Capital') => `<button class="btn btn-sec btn-chico" data-om-volver>‹ ${esc(texto)}</button>`;
+const volverOmega = (texto = 'Quincenas') => `<button class="btn btn-sec btn-chico" data-om-volver>‹ ${esc(texto)}</button>`;
 
 async function vistaInicioOmega(panel) {
   const d = respuestaOmega(panel, await llamar('omegaInicio', {}));
@@ -2116,15 +2116,38 @@ function pintarLoteOmega(panel, d) {
         <label class="grow">Buscar <input id="q-om" value="${esc(omegaUI.buscar)}" placeholder="Nombre o cédula"></label>
         <label>Ver <select id="f-om"><option value="">Todas (${d.lineas.length})</option><option value="avisos"${omegaUI.filtro === 'avisos' ? ' selected' : ''}>Con avisos</option><option value="ajustadas"${omegaUI.filtro === 'ajustadas' ? ' selected' : ''}>Monto cambiado</option><option value="excluidas"${omegaUI.filtro === 'excluidas' ? ' selected' : ''}>Excluidas</option></select></label>
       </div>
-      <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th class="num">Mes en $</th>${q.quincena === 2 ? '<th class="num">Anticipo 1Q</th>' : ''}<th class="num">Monto Bs.</th>${validado ? '' : '<th>Incluir</th>'}</tr></thead>
+      <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th class="num">Mes en $</th>${q.quincena === 2 ? '<th class="num">Anticipo 1Q</th>' : ''}<th class="num">Monto Bs.</th>${l.tipo === 'TRANSFERENCIA' ? '<th class="num">Adicional Bs.</th>' : ''}${validado ? '' : '<th>Incluir</th>'}</tr></thead>
       <tbody>${lineas.map((x) => `<tr class="${x.excluida ? 'inactivo' : ''}">
         <td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(detalle(x))}${notas(x).length ? ' · ' + notas(x).map(esc).join(' · ') : ''}</span>
           ${x.avisos.map((a) => `<span class="chip chip-${a.tipo === 'error' ? 'error' : 'espera'}">${esc(a.texto)}</span>`).join(' ')}</td>
         <td class="num">${esc(x.cedula)}</td><td class="num">${usd(x.usd)}</td>${q.quincena === 2 ? `<td class="num">${bs(x.anticipoBs)}</td>` : ''}
-        <td class="num">${validado || x.excluida ? `<b>${bs(x.montoBs)}</b>` : `<input class="monto-om${x.ajustado ? ' ajustado' : ''}" data-monto="${esc(x.clave)}" value="${x.montoBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" aria-label="Monto en Bs.">`}</td>
-        ${validado ? '' : `<td><input type="checkbox" data-incluir="${esc(x.clave)}"${x.excluida ? '' : ' checked'} aria-label="Incluir en el lote"></td>`}</tr>`).join('') || '<tr><td colspan="6" class="vacio">Nadie coincide.</td></tr>'}</tbody></table></div>
+        <td class="num">${validado || x.excluida || x.agregada ? `<b>${bs(x.montoBs - (validado ? 0 : x.adicional || 0))}</b>` : `<input class="monto-om${x.ajustado ? ' ajustado' : ''}" data-monto="${esc(x.clave)}" value="${(x.montoBs - (x.adicional || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" aria-label="Monto en Bs.">`}</td>
+        ${l.tipo === 'TRANSFERENCIA' ? `<td class="num">${validado ? (x.detalle && x.detalle.adicionalBs ? `${bs(x.detalle.adicionalBs)}<br><span class="suave">${esc(x.detalle.notaAdicional || '')}</span>` : '') : `<input class="monto-om${x.adicional ? ' ajustado' : ''}" data-adic="${esc(x.clave)}" value="${x.adicional ? x.adicional.toLocaleString('es-VE', { minimumFractionDigits: 2 }) : ''}" placeholder="0,00" inputmode="decimal" aria-label="Monto adicional">${x.notaAdicional ? `<br><span class="suave">${esc(x.notaAdicional)}</span>` : ''}`}</td>` : ''}
+        ${validado ? '' : `<td><input type="checkbox" data-incluir="${esc(x.clave)}"${x.excluida ? '' : ' checked'} aria-label="Incluir en el lote"></td>`}</tr>`).join('') || '<tr><td colspan="7" class="vacio">Nadie coincide.</td></tr>'}</tbody></table></div>
+      ${l.tipo === 'TRANSFERENCIA' && !validado ? `<label class="buscador-nom">Agregar a alguien con un monto adicional en esta quincena <input id="busca-adic" placeholder="Nombre o cédula" autocomplete="off"><div id="res-adic" class="resultados-nom" hidden></div></label>` : ''}
     </section>`;
   panel.querySelector('[data-om-volver]').addEventListener('click', () => irOmega(panel, { vista: 'quincena' }));
+  panel.querySelectorAll('[data-adic]').forEach((i) => i.addEventListener('change', () => {
+    const v = numVe(i.value); if (v !== '' && !isFinite(v)) { toast('Monto no válido.'); return; }
+    const nota = v ? (prompt('¿Por qué es este monto adicional? (opcional)', (d.lineas.find((x) => x.clave === i.dataset.adic) || {}).notaAdicional || '') || '') : '';
+    ajustar(i.dataset.adic, { adicional: v === '' ? 0 : v, nota });
+  }));
+  const ba = panel.querySelector('#busca-adic');
+  if (ba) {
+    const ra = panel.querySelector('#res-adic'); let tb;
+    ba.addEventListener('input', () => { clearTimeout(tb); tb = setTimeout(async () => {
+      if (ba.value.trim().length < 2) { ra.hidden = true; return; }
+      const x = await llamar('listarEmpleados', { buscar: ba.value.trim() });
+      const lista = x.ok ? x.data.empleados.filter((e) => e.estado !== 'Inactivo' && e.empresa === l.empresa).slice(0, 8) : [];
+      ra.innerHTML = lista.map((e) => `<button type="button" class="opcion-nom" data-agr="${esc(e.clave)}"${d.lineas.some((y) => y.clave === e.clave) ? ' disabled' : ''}><b>${esc(e.nombre)}</b><span>${esc(e.clave)}${e.puesto ? ' · ' + esc(e.puesto) : ''}${d.lineas.some((y) => y.clave === e.clave) ? ' · ya está en el lote' : ''}</span></button>`).join('') || `<p class="suave">Nadie activo de ${esc(l.empresa)} coincide.</p>`;
+      ra.hidden = false;
+      ra.querySelectorAll('[data-agr]').forEach((o) => o.addEventListener('click', () => {
+        const monto = numVe(prompt('Monto adicional en Bs.:') || ''); if (!(monto > 0)) return;
+        const nota = prompt('¿Por qué? (opcional)') || '';
+        ajustar(o.dataset.agr, { adicional: monto, nota, agregar: true });
+      }));
+    }, 300); });
+  }
   const ajustar = async (clave, cambio) => {
     const x = await llamar('omegaAjustarLinea', { id: q.id, lote: l.id, clave, cambio });
     if (!x.ok) return toast(x.message);
@@ -2381,7 +2404,7 @@ function pintarSolicitarNomina(panel, sub) {
   }, 300); });
   activarCruceNomina(panel, sub);
   f.addEventListener('submit', (e) => { e.preventDefault(); errorEn(err, '');
-    if (cruceNom) return errorEn(err, 'Termina de revisar el Excel: toca «Agregar a la solicitud» o descártalo.');
+    if (cruceNom && cruceNom.origen === 'solicitar') return errorEn(err, 'Termina de revisar el Excel: toca «Agregar a la solicitud» o descártalo.');
     ['concepto', 'moneda', 'fechaPago', 'observacion'].forEach((k) => { b[k] = f[k].value; });
     sub.querySelectorAll('[data-monto-nom]').forEach((i) => { b.items[Number(i.dataset.montoNom)].monto = numVe(i.value); });
     if (!b.concepto.trim()) return errorEn(err, 'Escribe el concepto del pago.');
@@ -2473,8 +2496,27 @@ const ESTADO_CRUCE = { alias: ['Ya conocido', 'ok'], exacto: ['Coincide', 'ok'],
 
 function activarCruceNomina(panel, sub) {
   const inp = sub.querySelector('#xls-nom'), caja = sub.querySelector('#cruce-nom');
-  inp.addEventListener('change', async () => {
-    const archivo = inp.files[0]; if (!archivo) return;
+  const destino = { origen: 'solicitar', caja,
+    alDescartar: () => { cruceNom = null; pintarSolicitarNomina(panel, sub); },
+    alAgregar: (grupos, avisos) => {
+      const b = borradorNomina;
+      grupos.forEach((g) => {
+        const ya = b.items.find((y) => (g.manual ? y.manual && y.cedula === g.cedula : y.clave === g.clave));
+        if (ya) { ya.monto = Math.round(((Number(ya.monto) || 0) + g.monto) * 100) / 100; ya.nombresReporte = [...new Set([...(ya.nombresReporte || []), ...g.nombresReporte])]; }
+        else b.items.push(g);
+      });
+      if (!b.concepto) b.concepto = cruceNom.archivo.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').slice(0, 120);
+      cruceNom = null; pintarSolicitarNomina(panel, sub);
+      toast(avisos.length ? `Agregado. ${avisos.join('; ')}.` : 'Agregado a la solicitud. Revisa y toca «Solicitar».');
+    } };
+  inp.addEventListener('change', () => { const archivo = inp.files[0]; if (archivo) iniciarCruce(archivo, destino); });
+  if (cruceNom && cruceNom.origen === 'solicitar') { Object.assign(cruceNom, destino); pintarCruceNomina(); }
+}
+
+/** Lee el Excel de comisiones y prepara la revisión. destino: { origen, caja, alAgregar(grupos, avisos), alDescartar() } */
+async function iniciarCruce(archivo, destino) {
+  const caja = destino.caja;
+  {
     caja.innerHTML = '<p class="suave">Leyendo el Excel…</p>';
     try {
       const XLSX = await cargarXlsx(), libro = await leerLibro(archivo);
@@ -2484,19 +2526,19 @@ function activarCruceNomina(panel, sub) {
       const r = await obtener('datosCruceNomina', {});
       if (!r.ok) { caja.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
       const emp = r.data.empleados;
-      cruceNom = { archivo: archivo.name, empleados: emp, filas: filas.map((f) => {
+      cruceNom = { ...destino, archivo: archivo.name, empleados: emp, filas: filas.map((f) => {
         const c = window.Comisiones.cruzarNombre(f.nombre, f.sucursal, emp, r.data.alias);
         return { ...f, ...c, incluir: f.monto !== 0 && !!c.clave && !window.Comisiones.notaExcluye(f.nota) };
       }) };
-      pintarCruceNomina(panel, sub);
+      pintarCruceNomina();
     } catch (ex) { caja.innerHTML = `<p class="error-msg">${esc(ex.message || 'No se pudo leer el Excel.')}</p>`; }
-  });
-  if (cruceNom) pintarCruceNomina(panel, sub);
+  }
 }
 
-function pintarCruceNomina(panel, sub) {
-  const caja = sub.querySelector('#cruce-nom'), c = cruceNom;
-  if (!c) { caja.innerHTML = ''; return; }
+function pintarCruceNomina() {
+  const c = cruceNom;
+  if (!c) return;
+  const caja = c.caja;
   const emp = c.empleados.filter((e) => e.estado !== 'Inactivo').sort((a, b) => (a.nombre < b.nombre ? -1 : 1));
   const porClave = Object.fromEntries(c.empleados.map((e) => [e.clave, e]));
   const visibles = c.filas.map((f, i) => [f, i]).filter(([f]) => f.monto !== 0 || f.nota);
@@ -2524,7 +2566,7 @@ function pintarCruceNomina(panel, sub) {
     </tbody><tfoot><tr class="fila-total"><td><b>${incluidas.length} filas incluidas</b></td><td class="num"><b>${bs(total)}</b></td><td colspan="2"></td></tr></tfoot></table></div>
     <div class="error-msg" id="err-cruce" hidden></div>
     <div class="fila"><button type="button" class="btn" id="agregar-cruce">Agregar a la solicitud</button><button type="button" class="btn btn-sec" id="descartar-cruce">Descartar el Excel</button></div></div>`;
-  const repintar = () => pintarCruceNomina(panel, sub);
+  const repintar = () => pintarCruceNomina();
   caja.querySelectorAll('[data-incl-nom]').forEach((x) => x.addEventListener('change', () => { c.filas[Number(x.dataset.inclNom)].incluir = x.checked; repintar(); }));
   caja.querySelectorAll('[data-quitar-manual]').forEach((x) => x.addEventListener('click', () => { const f = c.filas[Number(x.dataset.quitarManual)]; f.manual = null; f.clave = ''; repintar(); }));
   caja.querySelectorAll('[data-sel-nom]').forEach((x) => x.addEventListener('change', () => {
@@ -2536,13 +2578,12 @@ function pintarCruceNomina(panel, sub) {
     } else { f.clave = x.value; f.estado = x.value ? 'elegido' : f.estado; f.incluir = !!x.value && f.monto !== 0; }
     repintar();
   }));
-  caja.querySelector('#descartar-cruce').addEventListener('click', () => { cruceNom = null; pintarSolicitarNomina(panel, sub); });
+  caja.querySelector('#descartar-cruce').addEventListener('click', () => c.alDescartar());
   caja.querySelector('#agregar-cruce').addEventListener('click', () => {
     const err = caja.querySelector('#err-cruce');
     const sinPersona = c.filas.filter((f) => f.incluir && !f.clave && !f.manual);
     if (sinPersona.length) return errorEn(err, `Elige la persona de: ${sinPersona.map((f) => f.nombre).join(', ')} (o desmárcalas).`);
-    const b = borradorNomina, avisos = [];
-    const grupos = {};
+    const avisos = [], grupos = {};
     c.filas.filter((f) => f.incluir).forEach((f) => {
       const k = f.manual ? 'M' + f.manual.cedula : f.clave;
       if (!grupos[k]) {
@@ -2553,16 +2594,8 @@ function pintarCruceNomina(panel, sub) {
       grupos[k].monto = Math.round((grupos[k].monto + f.monto) * 100) / 100;
       if (!grupos[k].nombresReporte.includes(f.nombre)) grupos[k].nombresReporte.push(f.nombre);
     });
-    Object.values(grupos).forEach((g) => {
-      if (!(g.monto > 0)) { avisos.push(`${g.nombre} suma ${bs(g.monto)} y no se agregó`); return; }
-      const ya = b.items.find((y) => (g.manual ? y.manual && y.cedula === g.cedula : y.clave === g.clave));
-      if (ya) { ya.monto = Math.round(((Number(ya.monto) || 0) + g.monto) * 100) / 100; ya.nombresReporte = [...new Set([...(ya.nombresReporte || []), ...g.nombresReporte])]; }
-      else b.items.push(g);
-    });
-    if (!b.concepto) b.concepto = c.archivo.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').slice(0, 120);
-    cruceNom = null;
-    pintarSolicitarNomina(panel, sub);
-    toast(avisos.length ? `Agregado. ${avisos.join('; ')}.` : 'Agregado a la solicitud. Revisa y toca «Solicitar».');
+    const lista = Object.values(grupos).filter((g) => { if (g.monto > 0) return true; avisos.push(`${g.nombre} suma ${bs(g.monto)} y no se agregó`); return false; });
+    c.alAgregar(lista, avisos);
   });
 }
 
@@ -2596,4 +2629,363 @@ async function verificarNominaPdf(panel, sub, n, archivo, boton) {
       <td><span class="chip chip-${ETQ[x.estado][1]}">${ETQ[x.estado][0]}</span></td></tr>`).join('')}</tbody></table></div>
     ${n.estado === 'SOLICITADA' && !cuenta('no') && !cuenta('menor') ? '<p class="aviso">Todo quedó registrado: ya puedes marcarla como registrada.</p>' : ''}</div>`;
   boton.textContent = 'Verificar con el Resumen de Pago (PDF)';
+}
+
+/* ======================= Quincena: proceso completo de nómina =======================
+ * 1 Detalle de empleado (ingresos y egresos) · 2 Vacaciones con pago · 3 Comisiones y Resumen de Pago
+ * 4 Cestaticket (reporte del sistema de nómina) · 5 Complemento de alimentación (Omega Transferencia) */
+const PASOS_Q = [['detalle', 'Detalle de empleado'], ['vacaciones', 'Vacaciones'], ['comisiones', 'Comisiones'], ['cestaticket', 'Cestaticket'], ['complemento', 'Complemento']];
+const repPdf = {};   // resultados de reportes PDF leídos en esta sesión, por quincena y paso
+
+async function vistaInicioQuincena(panel) {
+  const [lq, ini] = await Promise.all([llamar('quincenaListar', {}), llamar('omegaInicio', {})]);
+  const lista = respuestaOmega(panel, lq); if (!lista) return;
+  const d = respuestaOmega(panel, ini); if (!d) return;
+  const h = new Date(Date.now() - 4 * 3600e3), mesHoy = h.toISOString().slice(0, 7), qHoy = h.getUTCDate() <= 15 ? 1 : 2;
+  const faltaRif = Object.entries(d.config.empresas).filter(([, e]) => !e.rif).map(([k]) => k);
+  panel.innerHTML = `
+    <section class="tarjeta">
+      <div><h2>Quincena</h2><p class="suave">El proceso completo de la nómina quincenal: detalle de empleado (ingresos y egresos), vacaciones con pago, comisiones, cestaticket y complemento de alimentación, con los archivos para Omega.</p></div>
+      <form id="fq" class="form-vac" novalidate>
+        <div class="fila">
+          <label class="grow">Mes <input type="month" name="mes" value="${mesHoy}"></label>
+          <label class="grow">Quincena <select name="quincena"><option value="1"${qHoy === 1 ? ' selected' : ''}>1.ª quincena</option><option value="2"${qHoy === 2 ? ' selected' : ''}>2.ª quincena</option></select></label>
+          <label class="grow">Tasa estimada (Bs. por $) <input name="tasa" inputmode="decimal" placeholder="0,00"></label>
+        </div>
+        <div class="error-msg" id="err-q" hidden></div>
+        <div><button class="btn" type="submit">Abrir quincena</button></div>
+      </form>
+    </section>
+    <section class="tarjeta"><h2>Quincenas</h2>
+      ${lista.length ? `<div class="lista">${lista.map((q) => `<div class="item"><div class="item-cab"><div><b>${esc(etiquetaQ(q))}</b><p class="suave">Tasa Bs. ${q.tasa.toLocaleString('es-VE')} · ${q.hechos} de 5 pasos listos</p></div>
+        ${q.hechos === 5 ? '<span class="chip chip-ok">Completa</span>' : '<span class="chip chip-espera">En proceso</span>'}</div>
+        <div><button class="btn btn-chico" data-om-q="${esc(q.id)}">Abrir</button></div></div>`).join('')}</div>` : '<p class="vacio">Todavía no has abierto ninguna quincena.</p>'}
+    </section>
+    <section class="tarjeta"><h2>Configuración de Omega</h2>
+      <div class="accesos">
+        <button class="acceso acceso-azul" type="button" data-om-ir="tarjetas"><span class="acceso-texto"><b>Tarjetas de alimentación</b><span>${d.sinTarjeta} sin tarjeta: su cestaticket va por Transferencia.</span></span></button>
+        <button class="acceso acceso-rojo" type="button" data-om-ir="beneficios"><span class="acceso-texto"><b>Complemento de alimentación</b><span>${d.beneficiosCargados} personas con montos en $ (complemento, vehículo, bono, comisiones garantizadas).</span></span></button>
+        <button class="acceso acceso-carbon" type="button" data-om-ir="empresas"><span class="acceso-texto"><b>Empresas y porcentajes</b><span>Razón social y RIF para los archivos de Omega.</span>${faltaRif.length ? `<span class="chip chip-error">Falta el RIF de ${faltaRif.join(' y ')}</span>` : ''}</span></button>
+      </div></section>`;
+  panel.querySelectorAll('[data-om-ir]').forEach((b) => b.addEventListener('click', () => irOmega(panel, { vista: b.dataset.omIr, buscar: '', filtro: '' })));
+  panel.querySelectorAll('[data-om-q]').forEach((b) => b.addEventListener('click', () => irOmega(panel, { vista: 'quincena', id: b.dataset.omQ, paso: '' })));
+  const f = panel.querySelector('#fq'), err = panel.querySelector('#err-q');
+  f.addEventListener('submit', (e) => { e.preventDefault(); errorEn(err, ''); conBoton(f.querySelector('button'), async () => {
+    const x = await llamar('quincenaAbrir', { mes: f.mes.value, quincena: Number(f.quincena.value), tasa: numVe(f.tasa.value) });
+    if (!x.ok) {
+      if (x.code === 'DUPLICADO') return irOmega(panel, { vista: 'quincena', id: `${f.mes.value}-${f.quincena.value}`, paso: '' });
+      return errorEn(err, x.message);
+    }
+    irOmega(panel, { vista: 'quincena', id: x.data.id, paso: 'detalle' });
+  }); });
+}
+
+async function vistaProcesoQuincena(panel) {
+  const q = respuestaOmega(panel, await llamar('quincenaVer', { id: omegaUI.id }));
+  if (!q) return;
+  if (!omegaUI.paso) omegaUI.paso = (PASOS_Q.find(([k]) => !(q.pasos[k] && q.pasos[k].hecho)) || PASOS_Q[0])[0];
+  const hayValidados = q.lotes.some((l) => l.estado === 'VALIDADO');
+  panel.innerHTML = `<div>${volverOmega()}</div>
+    <section class="tarjeta">
+      <div class="item-cab"><div><h2>${esc(etiquetaQ(q))}</h2><p class="suave">${q.quincena === 1 ? `Cestaticket: anticipo de $20 a la tasa estimada.` : 'Cestaticket: $40 a la tasa estimada menos el anticipo de la 1.ª quincena.'}</p></div>
+        <form id="ft" class="fila" novalidate><label>Tasa estimada <input name="tasa" inputmode="decimal" value="${q.tasa.toLocaleString('es-VE')}" ${hayValidados ? 'disabled' : ''} style="max-width:140px"></label>${hayValidados ? '' : '<div><button class="btn btn-sec btn-chico" type="submit">Cambiar</button></div>'}</form></div>
+      <ol class="pasos-q">${PASOS_Q.map(([k, t], i) => `<li><button type="button" data-paso="${k}" aria-current="${k === omegaUI.paso ? 'step' : 'false'}" class="${q.pasos[k] && q.pasos[k].hecho ? 'hecho' : ''}"><span class="num-paso">${q.pasos[k] && q.pasos[k].hecho ? '✓' : i + 1}</span>${t}</button></li>`).join('')}</ol>
+    </section>
+    <div id="paso-q">${esqueleto(2)}</div>`;
+  panel.querySelector('[data-om-volver]').addEventListener('click', () => irOmega(panel, { vista: 'inicio' }));
+  panel.querySelectorAll('[data-paso]').forEach((b) => b.addEventListener('click', () => irOmega(panel, { paso: b.dataset.paso })));
+  const ft = panel.querySelector('#ft');
+  ft.addEventListener('submit', (e) => { e.preventDefault(); conBoton(ft.querySelector('button'), async () => {
+    const x = await llamar('omegaCambiarTasa', { id: q.id, tasa: numVe(ft.tasa.value) });
+    if (!x.ok) return toast(x.message);
+    toast('Tasa cambiada.'); panelOmega(panel);
+  }); });
+  const cont = panel.querySelector('#paso-q');
+  const ctx = { panel, cont, q, guardar: async (paso, datos) => { const x = await llamar('quincenaPaso', { id: q.id, paso, ...datos }); if (!x.ok) toast(x.message); return x; } };
+  const PINTA = { detalle: pasoDetalleQ, vacaciones: pasoVacacionesQ, comisiones: pasoComisionesQ, cestaticket: pasoCestaticketQ, complemento: pasoComplementoQ };
+  try { await PINTA[omegaUI.paso](ctx); } catch (ex) { cont.innerHTML = `<p class="error-msg">${esc(ex.message || 'Error')}</p>`; }
+}
+
+/** Botón «Marcar este paso como listo» (o «Reabrir»). */
+function botonListo(ctx, paso, texto = 'Marcar este paso como listo') {
+  const hecho = ctx.q.pasos[paso] && ctx.q.pasos[paso].hecho;
+  const sig = PASOS_Q[PASOS_Q.findIndex(([k]) => k === paso) + 1];
+  return `<div class="fila listo-q">${hecho ? `<span class="chip chip-ok">Listo · ${esc(fechaHoraMin(ctx.q.pasos[paso].cuando))}</span><button type="button" class="btn btn-sec btn-chico" data-listo="0">Reabrir este paso</button>`
+    : `<button type="button" class="btn" data-listo="1">${texto}</button>`}${sig ? `<button type="button" class="btn btn-sec" data-ir-paso="${sig[0]}">Siguiente: ${sig[1]} ›</button>` : ''}</div>`;
+}
+function activarListo(ctx, paso, resumen = () => ({})) {
+  ctx.cont.querySelectorAll('[data-listo]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const hecho = b.dataset.listo === '1', x = await ctx.guardar(paso, { hecho, resumen: hecho ? resumen() : {} });
+    if (!x.ok) return;
+    if (hecho) { const sig = PASOS_Q[PASOS_Q.findIndex(([k]) => k === paso) + 1]; omegaUI.paso = sig ? sig[0] : paso; }
+    panelOmega(ctx.panel);
+  })));
+  ctx.cont.querySelectorAll('[data-ir-paso]').forEach((b) => b.addEventListener('click', () => irOmega(ctx.panel, { paso: b.dataset.irPaso })));
+}
+
+/* ---- Paso 1: Detalle de empleado ---- */
+async function pasoDetalleQ(ctx) {
+  const { cont, q } = ctx, p = q.pasos.detalle || {};
+  const datos = await obtener('datosCruceNomina', {});
+  if (!datos.ok) { cont.innerHTML = `<p class="error-msg">${esc(datos.message)}</p>`; return; }
+  const emp = datos.data.empleados, porClave = Object.fromEntries(emp.map((e) => [e.clave, e]));
+  const ingresos = (p.ingresos || []).map((x) => porClave[x.clave] || x);
+  cont.innerHTML = `<section class="tarjeta">
+      <div><h2>1 · Detalle de empleado</h2><p class="suave">Sube el «Detalle de Empleado» de esta quincena tal como lo bajas del sistema de nómina (no hace falta limpiarlo: las filas de conteo y los números sueltos se ignoran). El CAC te muestra los <b>ingresos</b> y los <b>egresos</b> antes de guardar.</p></div>
+      <label>Detalle de empleado <input type="file" id="det-q" accept=".xlsx,.xls,.csv"></label>
+      <div id="previa-det"></div>
+    </section>
+    ${ingresos.length || (p.egresos || []).length ? `<section class="tarjeta"><h2>Cargado ${p.archivo ? `«${esc(p.archivo)}»` : ''}</h2>
+      ${ingresos.length ? `<h3>Ingresos (${ingresos.length})</h3><p class="suave">Asígnales el jefe directo. Los nuevos ingresos quedan <b>sin tarjeta</b> de alimentación: su cestaticket va por Omega Transferencia hasta que la tengan.</p>
+        <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th>Ingreso</th><th>Jefe directo</th><th>Sin tarjeta</th></tr></thead><tbody>
+        ${ingresos.map((e) => `<tr><td><b>${esc(e.nombre)}</b><br><span class="suave">${esc(e.clave)} · ${esc(e.organizacion || '')} · ${esc(e.puesto || '')}</span></td><td>${esc(e.fechaIngreso ? window.Vacaciones.corta(e.fechaIngreso) : e.ingreso || '')}</td>
+          <td>${e.jefe ? `${esc((porClave[e.jefe] || {}).nombre || e.jefe)} ` : '<span class="chip chip-espera">Sin jefe</span> '}<button class="btn btn-sec btn-chico" data-jefe-q="${esc(e.clave)}">${e.jefe ? 'Cambiar' : 'Asignar'}</button></td>
+          <td><input type="checkbox" data-tarj-q="${esc(e.clave)}"${e.sinTarjeta ? ' checked' : ''} aria-label="Sin tarjeta"></td></tr>`).join('')}</tbody></table></div>` : '<p class="suave">Sin ingresos.</p>'}
+      ${(p.egresos || []).length ? `<h3>Egresos (${p.egresos.length})</h3><p class="suave">Pasaron a inactivos: no cobran cestaticket ni complemento (se les paga en la liquidación).</p>
+        <div class="lista">${p.egresos.map((x) => `<div class="item"><b>${esc(x.nombre)}</b><span class="suave">${esc(x.clave)} · ${esc(x.organizacion || '')}</span></div>`).join('')}</div>` : '<p class="suave">Sin egresos.</p>'}
+      </section>` : ''}
+    ${botonListo(ctx, 'detalle')}`;
+  activarListo(ctx, 'detalle', () => ({ ingresos: p.ingresos || [], egresos: p.egresos || [], archivo: p.archivo || '' }));
+  cont.querySelectorAll('[data-jefe-q]').forEach((b) => b.addEventListener('click', () => elegirJefe(`Jefe de ${(porClave[b.dataset.jefeQ] || {}).nombre || ''}`, async (jefe) => {
+    const r = await llamar('asignarJefe', { claves: [b.dataset.jefeQ], jefe });
+    if (r.ok) { toast('Jefe asignado.'); panelOmega(ctx.panel); }
+    return r;
+  })));
+  cont.querySelectorAll('[data-tarj-q]').forEach((c) => c.addEventListener('change', async () => {
+    const x = await llamar('omegaMarcarTarjeta', { claves: [c.dataset.tarjQ], sinTarjeta: c.checked });
+    if (!x.ok) { toast(x.message); c.checked = !c.checked; } else toast(c.checked ? 'Sin tarjeta: cobra por Transferencia.' : 'Con tarjeta.');
+  }));
+  const previa = cont.querySelector('#previa-det');
+  cont.querySelector('#det-q').addEventListener('change', async (ev) => {
+    const archivo = ev.target.files[0]; if (!archivo) return;
+    previa.innerHTML = '<p class="suave">Leyendo…</p>';
+    try {
+      const m = window.Empleados.mapearDetalle(await leerArchivoExcel(archivo));
+      if (!m.filas.length || m.faltantes.includes('cedula')) { previa.innerHTML = '<p class="error-msg">No encontré las columnas Cédula y Nombre.</p>'; return; }
+      const r = await llamar('previaDetalle', { filas: m.filas });
+      if (!r.ok) { previa.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+      const x = r.data, lista = (arr) => arr.map((e) => `<div class="item"><b>${esc(e.nombre)}</b><span class="suave">${esc(e.clave)} · ${esc(e.organizacion)} · ${esc(e.puesto)}${e.ingreso ? ' · ingresó ' + esc(e.ingreso) : ''}</span></div>`).join('');
+      previa.innerHTML = `<div class="revision-nom"><b>${x.filas} empleados en el archivo</b>${m.omitidas ? `<span class="suave">${m.omitidas} filas de conteo o vacías ignoradas.</span>` : ''}
+        <h3>Ingresos (${x.ingresos.length})</h3>${lista(x.ingresos) || '<p class="suave">Ninguno.</p>'}
+        ${x.reingresos.length ? `<h3>Reingresos (${x.reingresos.length})</h3>${lista(x.reingresos)}` : ''}
+        <h3>Egresos (${x.egresos.length})</h3><p class="suave">Estaban activos y ya no vienen en el detalle.</p>${lista(x.egresos) || '<p class="suave">Ninguno.</p>'}
+        <p class="suave">${x.actualizados} personas se actualizan (cargo, organización, sueldo…).</p>
+        <div class="fila"><button class="btn" id="conf-det">Confirmar y cargar</button></div></div>`;
+      previa.querySelector('#conf-det').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+        const c = await llamar('cargarEmpleados', { filas: m.filas });
+        if (!c.ok) { toast(c.message); return; }
+        const nuevos = x.ingresos.concat(x.reingresos);
+        if (nuevos.length) await llamar('omegaMarcarTarjeta', { claves: nuevos.map((n) => n.clave), sinTarjeta: true });
+        await ctx.guardar('detalle', { resumen: { archivo: archivo.name, ingresos: nuevos.map((n) => ({ clave: n.clave, nombre: n.nombre })), egresos: x.egresos.map((n) => ({ clave: n.clave, nombre: n.nombre, organizacion: n.organizacion })) } });
+        toast('Detalle cargado.'); panelOmega(ctx.panel);
+      }));
+    } catch (ex) { previa.innerHTML = `<p class="error-msg">${esc(ex.message || 'No se pudo leer el archivo.')}</p>`; }
+  });
+}
+
+/* ---- Paso 2: Vacaciones con pago ---- */
+async function pasoVacacionesQ(ctx) {
+  const { cont, q } = ctx, r = await llamar('vacacionesQuincena', { id: q.id });
+  if (!r.ok) { cont.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const lista = r.data, ref = `Quincena ${etiquetaQ(q)}`;
+  cont.innerHTML = `<section class="tarjeta">
+    <div><h2>2 · Vacaciones con pago</h2><p class="suave">Solicitudes aprobadas de «Disfrute de días con pago» que se pagan en esta quincena (la última quincena antes de salir de vacaciones). Regístralas en la nómina y márcalas aquí.</p></div>
+    ${lista.length ? `<div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th>Sale · reintegro</th><th class="num">Días</th><th>Período que se paga</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${lista.map((x) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.empresa)}</span></td><td class="num">${esc(x.cedula)}</td>
+        <td>${esc(window.Vacaciones.corta(x.inicio))} · ${esc(x.reintegro ? window.Vacaciones.corta(x.reintegro) : '')}</td><td class="num">${x.dias}</td>
+        <td>${x.periodos.map((p) => `${esc(p.periodo)} (${p.dias} días)`).join('<br>')}</td>
+        <td>${x.estado === 'REGISTRADA' ? `<span class="chip chip-ok">Registrada</span><br><span class="suave">${esc(x.nomina)}</span>` : '<span class="chip chip-espera">Por registrar</span>'}</td>
+        <td>${x.estado === 'REGISTRADA' ? '' : `<button class="btn btn-chico" data-reg-vac-q="${esc(x.id)}">Registrada en nómina</button>`}</td></tr>`).join('')}</tbody></table></div>
+      <div class="fila"><button class="btn btn-sec btn-chico" id="copiar-vac-q">Copiar cédula, nombre y días</button></div>` : '<p class="vacio">No hay vacaciones con pago para esta quincena.</p>'}
+    </section>${botonListo(ctx, 'vacaciones')}`;
+  activarListo(ctx, 'vacaciones', () => ({ total: lista.length, registradas: lista.filter((x) => x.estado === 'REGISTRADA').length }));
+  cont.querySelectorAll('[data-reg-vac-q]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('registrarVacaciones', { id: b.dataset.regVacQ, nomina: ref });
+    if (!x.ok) return toast(x.message);
+    toast('Registrada.'); panelOmega(ctx.panel);
+  })));
+  cont.querySelector('#copiar-vac-q')?.addEventListener('click', async () => {
+    const t = ['Cédula\tNombre\tSale\tDías\tPeríodo pagado', ...lista.map((x) => `${x.cedula}\t${x.nombre}\t${window.Vacaciones.corta(x.inicio)}\t${x.dias}\t${x.periodos.map((p) => `${p.periodo} (${p.dias})`).join(', ')}`)].join('\n');
+    try { await navigator.clipboard.writeText(t); toast('Copiado.'); } catch { toast('No se pudo copiar.'); }
+  });
+}
+
+/** Lee un reporte PDF de la nómina y lo revisa contra los empleados del CAC. */
+async function revisarPdfNomina(archivo, opciones = {}, boton) {
+  const lineas = await lineasPdf(archivo, boton ? (i, t) => { boton.textContent = `Leyendo página ${i} de ${t}…`; } : null);
+  const personas = window.Comisiones.leerResumenPago(lineas);
+  if (!personas.length) throw new Error('Ese PDF no parece un reporte de la nómina (no encontré los «Total NOMBRE»).');
+  const d = await llamar('datosCruceNomina', {});
+  if (!d.ok) throw new Error(d.message);
+  const rev = window.Comisiones.revisarReporte(personas, d.data.empleados, { alias: d.data.alias, excluirFaltantes: opciones.excluir });
+  return { archivo: archivo.name, personas, rev, empleados: d.data.empleados };
+}
+
+/** Bloque con el resultado de un reporte: faltan, egresados, no están en el CAC, otra empresa. */
+function htmlRevision(r, extra = '') {
+  const v = r.rev, item = (x, t) => `<div class="item"><b>${esc(x.nombre)}</b><span class="suave">${t || ''}</span></div>`;
+  return `<div class="revision-nom"><div class="item-cab"><b>«${esc(r.archivo)}» · ${esc(v.empresas.join(', ') || 'empresa no identificada')} · ${r.personas.length} personas</b>
+      ${!v.faltan.length && !v.egresados.length && !v.noEnCac.length ? '<span class="chip chip-ok">Todo cuadra</span>' : '<span class="chip chip-espera">Hay diferencias</span>'}</div>
+    <p class="suave">${v.ok.length} activos en el reporte${v.esperados.length ? ` · ${v.esperados.length} activos no van en este reporte (${[...new Set(v.esperados.map((x) => x.motivo))].join(', ')})` : ''}.</p>
+    ${v.egresados.length ? `<h3>Egresados en el reporte (${v.egresados.length})</h3><p class="error-msg">No deberían cobrar: quítalos en el sistema de nómina.</p>${v.egresados.map((x) => item(x, `${x.clave} · en el reporte: ${x.enReporte}`)).join('')}` : ''}
+    ${v.faltan.length ? `<h3>Activos que faltan en el reporte (${v.faltan.length})</h3>${v.faltan.map((x) => `<div class="item"><div class="item-cab"><div><b>${esc(x.nombre)}</b><span class="suave"> ${esc(x.clave)} · ${esc(x.empresa)}</span></div>${extra === 'cesta' ? `<button class="btn btn-sec btn-chico" data-sin-tarjeta="${esc(x.clave)}">No tiene tarjeta: va por Transferencia</button>` : ''}</div></div>`).join('')}` : ''}
+    ${v.noEnCac.length ? `<h3>En el reporte pero no se encontraron en el CAC (${v.noEnCac.length})</h3>${v.noEnCac.map((x) => `<div class="item"><div class="item-cab"><div><b>${esc(x.nombre)}</b>${x.posible ? `<span class="suave"> ¿Es ${esc(x.posible.nombre)}?</span>` : '<span class="suave"> Puede ser un egresado o un nombre distinto en el CAC.</span>'}</div>
+      ${x.posible ? `<button class="btn btn-sec btn-chico" data-alias-nom="${esc(x.nombre)}" data-alias-clave="${esc(x.posible.clave)}">Sí, es la misma persona</button>` : ''}</div></div>`).join('')}` : ''}
+    ${v.otraEmpresa.length ? `<p class="suave">De otra empresa en el CAC: ${v.otraEmpresa.map((x) => `${esc(x.nombre)} (${esc(x.empresa)})`).join(', ')}.</p>` : ''}
+  </div>`;
+}
+function resumenRevision(r) { const v = r.rev; return { archivo: r.archivo, personas: r.personas.length, ok: v.ok.length, faltan: v.faltan.length, egresados: v.egresados.length, noEnCac: v.noEnCac.length }; }
+function activarRevision(ctx, caja, reabrir) {
+  caja.querySelectorAll('[data-alias-nom]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('guardarAliasNombre', { nombre: b.dataset.aliasNom, clave: b.dataset.aliasClave });
+    if (!x.ok) return toast(x.message);
+    toast('Listo: lo recordará la próxima vez.'); reabrir();
+  })));
+  caja.querySelectorAll('[data-sin-tarjeta]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('omegaMarcarTarjeta', { claves: [b.dataset.sinTarjeta], sinTarjeta: true });
+    if (!x.ok) return toast(x.message);
+    toast('Marcado sin tarjeta: cobra por Transferencia.'); reabrir();
+  })));
+}
+
+/* ---- Paso 3: Comisiones ---- */
+async function pasoComisionesQ(ctx) {
+  const { cont, q } = ctx, n = q.comisiones, guardados = (q.pasos.comisiones || {}).reportes || {};
+  const clave = q.id + ':comisiones', leidos = repPdf[clave] = repPdf[clave] || {};
+  cont.innerHTML = `<section class="tarjeta">
+      <div><h2>3 · Comisiones</h2><p class="suave">Sube el Excel de comisiones de la gerencia: el CAC busca a cada persona aunque el nombre esté incompleto o mal escrito. Regístralas en <b>Otras Asignaciones</b> y después valida con el «Resumen de Pago».</p></div>
+      ${n ? `<div class="aviso">Comisiones cargadas: <b>${n.personas} personas por ${bs(n.total)}</b> (${esc(ESTADOS_NOM[n.estado][0])}).</div>
+        <div class="tabla-caja"><table class="tabla-omega tabla-nom"><thead><tr><th class="num">Cédula</th><th>Nombre</th><th>Empresa</th><th class="num">Monto</th></tr></thead><tbody>
+          ${n.items.map((x) => `<tr><td class="num">${esc(x.cedula)}</td><td>${esc(x.nombre)}</td><td>${esc(x.empresa)}</td><td class="num">${bs(x.monto)}</td></tr>`).join('')}</tbody></table></div>
+        <div class="fila"><button class="btn btn-sec btn-chico" id="copiar-com-q">Copiar cédula, nombre y monto</button>${n.estado === 'SOLICITADA' ? '<button class="btn btn-sec btn-chico" id="otra-com-q">Cargar otro Excel</button>' : ''}</div>`
+        : `<label>Excel de comisiones <input type="file" id="xls-com-q" accept=".xlsx,.xls"></label>`}
+      <div id="cruce-com-q"></div>
+    </section>
+    <section class="tarjeta"><div><h2>Validar con el «Resumen de Pago»</h2><p class="suave">Sube el PDF del Resumen de Pago de cada empresa (después de registrar). El CAC revisa que las comisiones estén en Otras Asignaciones, que estén <b>todos los activos</b> de la empresa y que <b>no haya egresados</b>.</p></div>
+      <label>Resumen de Pago (PDF) <input type="file" id="pdf-com-q" accept="application/pdf,.pdf"></label>
+      <div id="res-com-q">${Object.keys(leidos).map((k) => leidos[k].html).join('') || Object.entries(guardados).map(([emp, x]) => `<p class="suave">${esc(emp)}: «${esc(x.archivo)}» · ${x.ok} activos · ${x.faltan} faltan · ${x.egresados} egresados · comisiones: ${x.comOk || 0} correctas, ${x.comMal || 0} por revisar.</p>`).join('')}</div>
+    </section>${botonListo(ctx, 'comisiones')}`;
+  activarListo(ctx, 'comisiones', () => ({ nomina: n ? n.id : '', reportes: { ...guardados, ...Object.fromEntries(Object.entries(leidos).map(([k, v]) => [k, v.resumen])) } }));
+  const copiar = cont.querySelector('#copiar-com-q');
+  if (copiar) copiar.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(['Cédula\tNombre\tMonto', ...n.items.map((x) => `${x.cedula}\t${x.nombre}\t${x.monto.toFixed(2).replace('.', ',')}`)].join('\n')); toast('Copiado.'); } catch { toast('No se pudo copiar.'); }
+  });
+  const iniciar = (archivo) => iniciarCruce(archivo, { origen: 'quincena', caja: cont.querySelector('#cruce-com-q'),
+    alDescartar: () => { cruceNom = null; panelOmega(ctx.panel); },
+    alAgregar: async (grupos) => {
+      if (n && n.estado === 'SOLICITADA') await llamar('cancelarNominaEspecial', { id: n.id });
+      const x = await llamar('solicitarNominaEspecial', { concepto: `Comisiones · ${etiquetaQ(q)}`, moneda: 'Bs.',
+        items: grupos.map((y) => (y.manual ? { cedula: y.cedula, nombre: y.nombre, monto: y.monto } : { clave: y.clave, monto: y.monto, nombresReporte: y.nombresReporte })) });
+      if (!x.ok) { toast(x.message); return; }
+      cruceNom = null;
+      await ctx.guardar('comisiones', { resumen: { nomina: x.data.id } });
+      toast('Comisiones guardadas.'); panelOmega(ctx.panel);
+    } });
+  cont.querySelector('#xls-com-q')?.addEventListener('change', (e) => { if (e.target.files[0]) iniciar(e.target.files[0]); });
+  cont.querySelector('#otra-com-q')?.addEventListener('click', () => {
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.xlsx,.xls' });
+    inp.addEventListener('change', () => { if (inp.files[0]) iniciar(inp.files[0]); }); inp.click();
+  });
+  if (cruceNom && cruceNom.origen === 'quincena') { cruceNom.caja = cont.querySelector('#cruce-com-q'); pintarCruceNomina(); }
+  const pdf = cont.querySelector('#pdf-com-q'), res = cont.querySelector('#res-com-q');
+  pdf.addEventListener('change', async () => {
+    const archivo = pdf.files[0]; if (!archivo) return;
+    res.insertAdjacentHTML('afterbegin', '<p class="suave" id="leyendo-q">Leyendo el PDF…</p>');
+    try {
+      const r = await revisarPdfNomina(archivo, { excluir: () => '' });
+      const emp = r.rev.empresas.join('+') || 'SIN EMPRESA';
+      let comHtml = '', comOk = 0, comMal = 0;
+      if (n) {
+        const deEmpresa = n.items.filter((x) => !x.empresa || r.rev.empresas.includes(x.empresa));
+        const v = window.Comisiones.verificar(deEmpresa, r.personas);
+        comOk = v.filter((x) => x.estado === 'ok').length; comMal = v.length - comOk;
+        await llamar('guardarVerificacionNomina', { id: n.id, resumen: { archivo: archivo.name, ok: comOk, mayor: v.filter((x) => x.estado === 'mayor').length, menor: v.filter((x) => x.estado === 'menor').length, no: v.filter((x) => x.estado === 'no').length, detalle: v } });
+        const ETQ = { ok: ['Correcta', 'ok'], mayor: ['Otras asignaciones mayores', 'austral'], menor: ['Monto menor', 'error'], no: ['No está en otras asignaciones', 'error'] };
+        comHtml = `<h3>Comisiones (${v.length})</h3><div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Persona</th><th class="num">Comisión</th><th class="num">Otras asignaciones</th><th>Estado</th></tr></thead><tbody>
+          ${v.sort((a, b) => (a.estado === 'ok') - (b.estado === 'ok')).map((x) => `<tr><td>${esc(x.nombre)}</td><td class="num">${bs(x.monto)}</td><td class="num">${x.enReporte ? bs(x.otras) : '—'}</td><td><span class="chip chip-${ETQ[x.estado][1]}">${ETQ[x.estado][0]}</span></td></tr>`).join('')}</tbody></table></div>`;
+      }
+      leidos[emp] = { html: htmlRevision(r).replace(/<\/div>$/, comHtml + '</div>'), resumen: { ...resumenRevision(r), comOk, comMal } };
+      await ctx.guardar('comisiones', { resumen: { reportes: { ...guardados, ...Object.fromEntries(Object.entries(leidos).map(([k, v]) => [k, v.resumen])) } } });
+      res.innerHTML = Object.values(leidos).map((x) => x.html).join('');
+      activarRevision(ctx, res, () => { delete leidos[emp]; toast('Vuelve a subir el PDF para revisar de nuevo.'); panelOmega(ctx.panel); });
+    } catch (ex) { cont.querySelector('#leyendo-q')?.remove(); toast(ex.message || 'No se pudo leer el PDF.'); }
+    pdf.value = '';
+  });
+  activarRevision(ctx, res, () => panelOmega(ctx.panel));
+}
+
+/* ---- Paso 4: Cestaticket ---- */
+async function pasoCestaticketQ(ctx) {
+  const { cont, q } = ctx, guardados = (q.pasos.cestaticket || {}).reportes || {};
+  const clave = q.id + ':cesta', leidos = repPdf[clave] = repPdf[clave] || {};
+  const lotes = q.lotes.filter((l) => l.tipo === 'CESTATICKET');
+  const esperado = q.quincena === 1 ? `$20 × ${q.tasa.toLocaleString('es-VE')} = ${bs(20 * q.tasa)}` : `$40 × ${q.tasa.toLocaleString('es-VE')} − el anticipo de la 1.ª quincena`;
+  cont.innerHTML = `<section class="tarjeta">
+      <div><h2>4 · Cestaticket</h2><p class="suave">Sube el reporte «Nómina Bono de Alimentación» (PDF) que bajas del sistema de nómina. El CAC revisa que estén <b>todos los activos con tarjeta</b>, que <b>no haya egresados</b> y el monto de cada persona (${esc(esperado)}). Los nuevos ingresos sin tarjeta no van aquí: cobran por Omega Transferencia.</p></div>
+      <label>Reporte de cestaticket (PDF) <input type="file" id="pdf-ct-q" accept="application/pdf,.pdf"></label>
+      <div id="res-ct-q">${Object.values(leidos).map((x) => x.html).join('') || Object.entries(guardados).map(([emp, x]) => `<p class="suave">${esc(emp)}: «${esc(x.archivo)}» · ${x.ok} activos · ${x.faltan} faltan · ${x.egresados} egresados · ${x.montosMal || 0} montos distintos.</p>`).join('')}</div>
+    </section>
+    <section class="tarjeta"><div><h2>Archivo para Omega</h2><p class="suave">Entra a cada lote, revisa, valida y genera el TXT.</p></div>
+      <div class="lotes-omega">${lotes.map(htmlLoteQ).join('')}</div></section>
+    ${botonListo(ctx, 'cestaticket')}`;
+  activarListo(ctx, 'cestaticket', () => ({ reportes: { ...guardados, ...Object.fromEntries(Object.entries(leidos).map(([k, v]) => [k, v.resumen])) } }));
+  activarLotesQ(ctx);
+  const pdf = cont.querySelector('#pdf-ct-q'), res = cont.querySelector('#res-ct-q');
+  pdf.addEventListener('change', async () => {
+    const archivo = pdf.files[0]; if (!archivo) return;
+    res.insertAdjacentHTML('afterbegin', '<p class="suave" id="leyendo-q">Leyendo el PDF…</p>');
+    try {
+      const mesIng = (e) => e.fechaIngreso && e.fechaIngreso.slice(0, 7) === q.mes;
+      const r = await revisarPdfNomina(archivo, { excluir: (e) => (e.sinTarjeta ? 'sin tarjeta' : mesIng(e) ? 'ingresó este mes' : '') });
+      const emp = r.rev.empresas.join('+') || 'SIN EMPRESA';
+      // montos: contra el lote de cestaticket del CAC
+      const montos = [], soloLote = [], soloReporte = [];
+      for (const e of r.rev.empresas) {
+        const l = await llamar('omegaLote', { id: q.id, lote: 'CT-' + e });
+        if (!l.ok) continue;
+        const porClave = Object.fromEntries(l.data.lineas.map((x) => [x.clave, x])), enRep = new Set(r.rev.ok.map((x) => x.clave));
+        l.data.lineas.filter((x) => !x.excluida && !enRep.has(x.clave)).forEach((x) => soloLote.push(x.nombre));
+        r.rev.ok.filter((x) => x.empresa === e && !porClave[x.clave]).forEach((x) => soloReporte.push(x.nombre));
+        r.rev.ok.filter((x) => x.empresa === e).forEach((x) => { const c = porClave[x.clave]; if (c && Math.abs(c.montoBs - x.monto) >= 0.01) montos.push({ nombre: x.nombre, reporte: x.monto, cac: c.montoBs }); });
+      }
+      const cambiar = r.rev.faltan.length || soloReporte.length;
+      const tarj = `<h3>Lote de cestaticket del CAC</h3><p class="suave">${soloLote.length ? `En el lote pero no en el reporte: ${soloLote.map(esc).join(', ')}. ` : ''}${soloReporte.length ? `En el reporte pero no en el lote (el CAC los tiene sin tarjeta): ${soloReporte.map(esc).join(', ')}. ` : ''}${!soloLote.length && !soloReporte.length ? 'El lote tiene a las mismas personas que el reporte.' : ''}</p>
+        ${cambiar ? `<div><button class="btn btn-sec btn-chico" id="usar-rep-ct">Usar este reporte para las tarjetas</button> <span class="suave">Quien sale en el reporte tiene tarjeta; los activos de ${esc(r.rev.empresas.join(', '))} que no salen, no (cobran por Transferencia).</span></div>` : ''}`;
+      const html = htmlRevision(r, 'cesta').replace(/<\/div>$/, tarj + (montos.length ? `<h3>Montos distintos al cálculo del CAC (${montos.length})</h3><div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Persona</th><th class="num">En el reporte</th><th class="num">Según el CAC</th></tr></thead><tbody>
+        ${montos.map((x) => `<tr><td>${esc(x.nombre)}</td><td class="num">${bs(x.reporte)}</td><td class="num">${bs(x.cac)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="suave">Los montos coinciden con el cálculo del CAC.</p>') + '</div>');
+      leidos[emp] = { html, resumen: { ...resumenRevision(r), montosMal: montos.length } };
+      await ctx.guardar('cestaticket', { resumen: { reportes: { ...guardados, ...Object.fromEntries(Object.entries(leidos).map(([k, v]) => [k, v.resumen])) } } });
+      res.innerHTML = Object.values(leidos).map((x) => x.html).join('');
+      activarRevision(ctx, res, () => { delete leidos[emp]; toast('Vuelve a subir el PDF para revisar de nuevo.'); panelOmega(ctx.panel); });
+      res.querySelector('#usar-rep-ct')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+        const con = r.rev.ok.map((x) => x.clave), sin = r.rev.faltan.map((x) => x.clave);
+        if (!confirm(`¿Marcar ${con.length} con tarjeta y ${sin.length} sin tarjeta según este reporte?`)) return;
+        if (con.length) await llamar('omegaMarcarTarjeta', { claves: con, sinTarjeta: false });
+        if (sin.length) await llamar('omegaMarcarTarjeta', { claves: sin, sinTarjeta: true });
+        delete leidos[emp]; toast('Tarjetas actualizadas. Vuelve a subir el reporte para confirmar.'); panelOmega(ctx.panel);
+      }));
+    } catch (ex) { cont.querySelector('#leyendo-q')?.remove(); toast(ex.message || 'No se pudo leer el PDF.'); }
+    pdf.value = '';
+  });
+}
+
+function htmlLoteQ(l) {
+  return `<section class="tarjeta lote-omega">
+    <div class="item-cab"><h3>${esc(l.nombre)}</h3>${l.estado === 'VALIDADO' ? '<span class="chip chip-ok">Validado</span>' : '<span class="chip chip-espera">Por validar</span>'}</div>
+    <div class="cifras-lote"><div><b>${l.personas}</b><span>personas</span></div><div><b>${bs(l.totales.subtotal)}</b><span>monto del lote</span></div><div><b>${bs(l.totales.totalPagar)}</b><span>a pagar a Omega</span></div></div>
+    ${l.falta1Q ? '<p class="aviso">Primero valida este lote en la 1.ª quincena.</p>' : ''}
+    <div><button class="btn btn-chico" data-om-lote="${l.id}">Entrar</button></div></section>`;
+}
+function activarLotesQ(ctx) { ctx.cont.querySelectorAll('[data-om-lote]').forEach((b) => b.addEventListener('click', () => irOmega(ctx.panel, { vista: 'lote', lote: b.dataset.omLote, buscar: '', filtro: '' }))); }
+
+/* ---- Paso 5: Complemento de alimentación (Omega Transferencia) ---- */
+async function pasoComplementoQ(ctx) {
+  const { cont, q } = ctx, lotes = q.lotes.filter((l) => l.tipo === 'TRANSFERENCIA');
+  cont.innerHTML = `<section class="tarjeta">
+      <div><h2>5 · Complemento de alimentación</h2><p class="suave">Omega Transferencia: complemento, ayuda de vehículo, bono especial, comisiones garantizadas y el cestaticket de quien no tiene tarjeta (los nuevos ingresos, proporcional a sus días). En cada lote puedes <b>añadir un monto adicional</b> que se pague en esta quincena, validar y generar el TXT.</p></div>
+      <div class="lotes-omega">${lotes.map(htmlLoteQ).join('')}</div>
+      <p class="suave">Los montos en $ por persona se editan en «Complemento de alimentación» (pantalla de Quincenas).</p>
+    </section>${botonListo(ctx, 'complemento')}`;
+  activarListo(ctx, 'complemento', () => ({ lotes: lotes.map((l) => ({ id: l.id, estado: l.estado, personas: l.personas, total: l.totales.subtotal })) }));
+  activarLotesQ(ctx);
 }

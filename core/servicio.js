@@ -1478,6 +1478,86 @@
     return ok({ id: x.r.id, visto: x.r.visto, conforme: x.r.conforme });
   }
 
+  /* ---------- Quincena: proceso completo de nómina (detalle, vacaciones, comisiones, cestaticket, complemento) ---------- */
+
+  var PASOS_QUINCENA = ['detalle', 'vacaciones', 'comisiones', 'cestaticket', 'complemento'];
+
+  function quincenaListar(repo, ctx, token) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    return ok(repo.omegaQuincenas().map(function (q) {
+      var pasos = q.pasos || {};
+      return { id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, creada: q.creada, hechos: PASOS_QUINCENA.filter(function (p) { return pasos[p] && pasos[p].hecho; }).length };
+    }).sort(function (a, b) { return a.id < b.id ? 1 : -1; }));
+  }
+
+  function quincenaVer(repo, ctx, token, id) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    var q = quincenaOmega(repo, id);
+    if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+    var v = vistaQuincena(repo, q, configOmega(repo)), pasos = q.pasos || {};
+    var com = pasos.comisiones && pasos.comisiones.nomina ? repo.nominaEspecialPorId(pasos.comisiones.nomina) : null;
+    return ok({ id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, pasos: pasos, orden: PASOS_QUINCENA, lotes: v.lotes, sin1Q: v.sin1Q,
+      comisiones: com ? vistaNominaEsp(com) : null });
+  }
+
+  function quincenaAbrir(repo, ctx, token, mes, quincena, tasa) {
+    var r = omegaAbrirQuincena(repo, ctx, token, mes, quincena, tasa);
+    if (!r.ok) return r;
+    return quincenaVer(repo, ctx, token, r.data.id);
+  }
+
+  /** Guarda el estado de un paso (hecho y un resumen corto que se muestra al volver). */
+  function quincenaPaso(repo, ctx, token, id, paso, datos) {
+    var s = sesionRRHH(ctx, token);
+    if (!s) return err('SESION', 'No autorizado.');
+    if (PASOS_QUINCENA.indexOf(paso) === -1) return err('VALIDACION', 'Paso desconocido.');
+    var q = quincenaOmega(repo, id);
+    if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+    q.pasos = q.pasos || {};
+    var previo = q.pasos[paso] || {}, d = datos || {};
+    var limpio = JSON.parse(JSON.stringify(d.resumen || {}));
+    if (JSON.stringify(limpio).length > 20000) return err('VALIDACION', 'El resumen es demasiado grande.');
+    q.pasos[paso] = Object.assign({}, previo, limpio, { hecho: d.hecho != null ? !!d.hecho : !!previo.hecho, cuando: ctx.ahora(), por: s.clave });
+    q.actualizada = ctx.ahora();
+    repo.guardarOmegaQuincena(q);
+    return quincenaVer(repo, ctx, token, id);
+  }
+
+  /** Lo que cambiaría al cargar el detalle: ingresos, egresos y actualizados (sin guardar nada). */
+  function previaDetalle(repo, ctx, token, filas) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    if (!Array.isArray(filas) || !filas.length) return err('VALIDACION', 'El archivo no trae empleados.');
+    var validas = filas.filter(function (f) { var c = Empleados.parsearCedula(f.cedula); return c.numero && c.numero.length >= 5; });
+    var antes = {}; repo.todosEmpleados().forEach(function (e) { antes[Empleados.claveCedula(e)] = e; });
+    var r = Empleados.fusionarDetalle(repo.todosEmpleados(), validas), fecha = function (f) { return f ? ('0' + f.d).slice(-2) + '/' + ('0' + f.m).slice(-2) + '/' + f.y : ''; };
+    var ingresos = [], reingresos = [], egresos = [];
+    r.empleados.forEach(function (e) {
+      var k = Empleados.claveCedula(e), a = antes[k], x = { clave: k, nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', empresa: Empleados.empresaFideicomiso(e), ingreso: fecha(e.fechaIngreso) };
+      if (!a) ingresos.push(x);
+      else if (a.estado === 'Inactivo' && e.estado !== 'Inactivo') reingresos.push(x);
+      else if (a.estado !== 'Inactivo' && e.estado === 'Inactivo') egresos.push(x);
+    });
+    return ok({ filas: validas.length, sinCedula: filas.length - validas.length, ingresos: ingresos, reingresos: reingresos, egresos: egresos, actualizados: r.resumen.actualizados });
+  }
+
+  /** Vacaciones con pago (aprobadas por el jefe o registradas) que se pagan en esta quincena. */
+  function vacacionesQuincena(repo, ctx, token, id) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    var lista = [];
+    ['APROBADA_JEFE', 'REGISTRADA'].forEach(function (est) {
+      repo.vacSolicitudesPorEstado(est).forEach(function (x) {
+        var pagos = (x.imputacion || []).filter(function (i) { return i.pagaPeriodo; });
+        if (!pagos.length || Omega.quincenaDePagoVacaciones(x.inicio) !== id) return;
+        var e = repo.empleadoPorClave(x.clave) || {};
+        lista.push({ id: x.id, clave: x.clave, cedula: e.cedulaNumero || x.clave.slice(1), nombre: e.nombre || x.clave, empresa: e.nombre ? Empleados.empresaFideicomiso(e) : '',
+          inicio: x.inicio, culminacion: x.culminacion, reintegro: x.reintegro, dias: x.dias, estado: x.estado, nomina: x.nomina || '',
+          periodos: pagos.map(function (i) { return { periodo: i.periodo, dias: i.diasDelPeriodo }; }) });
+      });
+    });
+    lista.sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; });
+    return ok(lista);
+  }
+
   /* ---------- Omega Capital: cestaticket y Omega Transferencia por quincena, en 4 lotes ---------- */
 
   function configOmega(repo) {
@@ -1512,7 +1592,7 @@
     if (!q1) return { existe: false, pagado: r, validados: {} };
     Omega.LOTES.forEach(function (l) {
       if (!q1.lotes[l.id] || q1.lotes[l.id].estado !== 'VALIDADO') return;
-      r[l.id] = {}; repo.omegaPagos(q1.id, l.id).forEach(function (x) { r[l.id][x.clave] = x.montoBs; });
+      r[l.id] = {}; repo.omegaPagos(q1.id, l.id).forEach(function (x) { r[l.id][x.clave] = Omega.r2(x.montoBs - ((x.detalle && x.detalle.adicionalBs) || 0)); });   // lo adicional de la 1Q no se descuenta
     });
     var val = {}; Omega.LOTES.forEach(function (l) { val[l.id] = !!(q1.lotes[l.id] && q1.lotes[l.id].estado === 'VALIDADO'); });
     return { existe: true, pagado: r, validados: val };
@@ -1529,11 +1609,21 @@
       cache.calc = Omega.lineasQuincena(personasOmega(repo), benef, q.mes, q.quincena, q.tasa, p1.pagado, cfg.parametros);
     }
     var aj = q.ajustes[loteId] || {};
-    return (cache.calc[loteId] || []).map(function (l) {
-      var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs });
+    var vistos = {};
+    var lineas = (cache.calc[loteId] || []).map(function (l) {
+      vistos[l.clave] = true;
+      var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs, adicional: Number(a.adicional) || 0, notaAdicional: a.nota || '' });
       if (a.monto != null && a.monto !== '') { x.montoBs = Omega.r2(a.monto); x.ajustado = true; }
+      if (x.adicional) x.montoBs = Omega.r2(x.montoBs + x.adicional);
       return x;
     });
+    // personas agregadas a mano en este lote (solo un monto adicional de esta quincena)
+    Object.keys(aj).forEach(function (k) {
+      var a = aj[k]; if (vistos[k] || !a.agregada) return;
+      lineas.push({ clave: k, cedula: a.cedula || k.slice(1), nombre: a.nombre || k, usd: 0, montoBs: Omega.r2(a.adicional), calculado: 0, adicional: Number(a.adicional) || 0,
+        notaAdicional: a.nota || '', agregada: true, excluida: !!a.excluir, anticipoBs: 0, dias: 0, detalle: {} });
+    });
+    return lineas;
   }
 
   function resumenLote(lineas, cfg) {
@@ -1687,6 +1777,17 @@
     if (q.lotes[loteId] && q.lotes[loteId].estado === 'VALIDADO') return err('VALIDADO', 'El lote ya está validado: reábrelo para cambiarlo.');
     var aj = q.ajustes[loteId] = q.ajustes[loteId] || {}, a = aj[clave] = aj[clave] || {};
     if (cambio && cambio.excluir != null) { if (cambio.excluir) a.excluir = true; else delete a.excluir; }
+    if (cambio && 'adicional' in cambio) {
+      var ad = cambio.adicional == null || cambio.adicional === '' ? 0 : Number(String(cambio.adicional).replace(/\./g, '').replace(',', '.'));
+      if (!isFinite(ad)) return err('VALIDACION', 'Monto adicional no válido.');
+      if (ad) { a.adicional = Omega.r2(ad); a.nota = String(cambio.nota || a.nota || '').slice(0, 120); } else { delete a.adicional; delete a.nota; }
+      if (cambio.agregar) {
+        var e = repo.empleadoPorClave(clave);
+        if (!e) return err('NO_ENCONTRADO', 'No encontramos a esa persona.');
+        a.agregada = true; a.nombre = e.nombre; a.cedula = e.cedulaNumero;
+      }
+      if (a.agregada && !a.adicional) delete aj[clave];
+    }
     if (cambio && 'monto' in cambio) {
       var m = cambio.monto == null || cambio.monto === '' ? null : Number(String(cambio.monto).replace(/\./g, '').replace(',', '.'));
       if (m == null) delete a.monto; else if (isFinite(m) && m >= 0) a.monto = Omega.r2(m); else return err('VALIDACION', 'Monto no válido.');
@@ -1716,7 +1817,7 @@
     repo.quitarOmegaPagos(id, loteId);
     repo.agregarOmegaPagos(lineas.map(function (x) {
       return { quincena: id, lote: loteId, clave: x.clave, cedula: x.cedula, nombre: x.nombre, usd: x.usd, montoBs: x.montoBs, anticipoBs: x.anticipoBs || 0,
-        dias: x.dias, detalle: x.detalle, validado: ahora };
+        dias: x.dias, detalle: Object.assign({}, x.detalle, x.adicional ? { adicionalBs: x.adicional, notaAdicional: x.notaAdicional } : {}), validado: ahora };
     }));
     var total = Omega.r2(lineas.reduce(function (t, x) { return t + x.montoBs; }, 0));
     q.lotes[loteId] = { estado: 'VALIDADO', cuando: ahora, por: s.clave, personas: lineas.length, total: total };
@@ -1879,9 +1980,26 @@
   function datosCruceNomina(repo, ctx, token) {
     if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
     return ok({
-      empleados: repo.todosEmpleados().map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', estado: e.estado, empresa: Empleados.empresaFideicomiso(e) }; }),
+      empleados: (function () {
+        var sin = repo.omegaSinTarjeta ? repo.omegaSinTarjeta() : {};
+        return repo.todosEmpleados().map(function (e) {
+          var k = Empleados.claveCedula(e), f = e.fechaIngreso;
+          return { clave: k, nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', estado: e.estado, empresa: Empleados.empresaFideicomiso(e),
+            fueraNomina: !!e.fueraNomina, sinTarjeta: !!sin[k], jefe: e.jefe || '', fechaIngreso: f ? f.y + '-' + ('0' + f.m).slice(-2) + '-' + ('0' + f.d).slice(-2) : '' };
+        });
+      })(),
       alias: repo.aliasComisiones ? repo.aliasComisiones() : {},
     });
+  }
+
+  /** Recuerda que un nombre (como viene en un reporte o Excel) es esta persona. */
+  function guardarAliasNombre(repo, ctx, token, nombre, claveEmp) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var e = repo.empleadoPorClave(claveEmp), k = Comisiones.clave(nombre);
+    if (!e || !k) return err('VALIDACION', 'Datos incompletos.');
+    var m = {}; m[k] = Empleados.claveCedula(e);
+    repo.guardarAliasComisiones(m);
+    return ok({ alias: k, clave: m[k] });
   }
 
   /** Guarda el resultado de comparar la solicitud con el Resumen de Pago (resumen: { ok, mayor, menor, no, archivo, detalle }). */
@@ -1908,7 +2026,8 @@
 
   var api = {
     solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
-    rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarVerificacionNomina: guardarVerificacionNomina,
+    rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
+    quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,
     omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
     omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
     omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,
