@@ -4053,7 +4053,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-11.1';
+var VERSION = '2026-11-12.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -4830,18 +4830,20 @@ function crearRepo_() {
     omegaQuincenas: function () { asegurarHoja_('OMEGA_QUINCENAS'); return leer_('OMEGA_QUINCENAS').filter(function (f) { return texto_(f.id); }).map(omegaQuincena_); },
     omegaQuincena: function (id) {
       asegurarHoja_('OMEGA_QUINCENAS');
-      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === id; })[0];
+      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return idQuincena_(x) === id; })[0];
       return f ? omegaQuincena_(f) : null;
     },
     guardarOmegaQuincena: function (q) {
       asegurarHoja_('OMEGA_QUINCENAS');
-      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === q.id; })[0];
+      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return idQuincena_(x) === q.id; })[0];
       var copia = Object.assign({}, q, { lotes: JSON.stringify(q.lotes || {}), ajustes: JSON.stringify(q.ajustes || {}), pasos: JSON.stringify(q.pasos || {}), _fila: ya ? ya._fila : undefined });
-      if (!copia._fila) { var h = hoja_('OMEGA_QUINCENAS'); h.getRange(h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@'); }
+      var h = hoja_('OMEGA_QUINCENAS');
+      // «2026-11-1» y «2026-11» los convierte Sheets en fecha si la celda no es de texto
+      h.getRange(copia._fila || h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@');
       escribirFila_('OMEGA_QUINCENAS', copia);
     },
     eliminarOmegaQuincena: function (id) {
-      quitarFilas_('OMEGA_QUINCENAS', function (f) { return texto_(f.id) === id; });
+      quitarFilas_('OMEGA_QUINCENAS', function (f) { return idQuincena_(f) === id; });
       quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === id; });
     },
     omegaPagos: function (q, lote) {
@@ -4885,9 +4887,23 @@ function nominaEsp_(f) {
     atendida: Number(f.atendida) || 0, referencia: texto_(f.referencia), motivo: texto_(f.motivo), verificacion: (function () { try { return f.verificacion ? JSON.parse(f.verificacion) : null; } catch (e) { return null; } })() };
 }
 
+/** Mes «2026-11» de una celda (texto, o fecha si Sheets la convirtió). */
+function mesTexto_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, 'America/Caracas', 'yyyy-MM');
+  var m = /^(\d{4})-(\d{1,2})/.exec(texto_(v));
+  return m ? m[1] + '-' + ('0' + m[2]).slice(-2) : texto_(v);
+}
+/** Id de una quincena («2026-11-1») aunque la celda se haya convertido en fecha. */
+function idQuincena_(f) {
+  var t = texto_(f.id);
+  if (/^\d{4}-\d{2}-[12]$/.test(t)) return t;
+  var mes = mesTexto_(f.mes), q = Number(f.quincena);
+  return /^\d{4}-\d{2}$/.test(mes) && (q === 1 || q === 2) ? mes + '-' + q : t;
+}
+
 function omegaQuincena_(f) {
   var j = function (v) { try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } };
-  return { _fila: f._fila, id: texto_(f.id), mes: texto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes), pasos: j(f.pasos),
+  return { _fila: f._fila, id: idQuincena_(f), mes: mesTexto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes), pasos: j(f.pasos),
     creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
 }
 

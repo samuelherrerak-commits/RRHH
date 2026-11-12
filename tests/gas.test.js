@@ -529,3 +529,17 @@ test('Quincena sobre las hojas: los pasos se guardan y se leen', () => {
   assert.equal(v.data.pasos.cestaticket.hecho, true); assert.equal(v.data.pasos.cestaticket.PCA.ok, 100);
   assert.equal(e.llamar({ action: 'quincenaListar', token: t }).data[0].hechos, 1);
 });
+
+test('Quincena: aunque Sheets convierta el id y el mes en fecha, la quincena se encuentra', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const t = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  assert.equal(e.llamar({ action: 'quincenaAbrir', token: t, mes: '2026-11', quincena: 1, tasa: 910 }).ok, true);
+  const fila = e.hojas.OMEGA_QUINCENAS.filas[1];
+  fila[0] = new Date(Date.UTC(2026, 10, 1, 12)); fila[1] = new Date(Date.UTC(2026, 10, 1, 12));   // como lo deja Google Sheets
+  const v = e.llamar({ action: 'quincenaVer', token: t, id: '2026-11-1' });
+  assert.equal(v.ok, true, JSON.stringify(v)); assert.equal(v.data.mes, '2026-11');
+  assert.equal(e.llamar({ action: 'quincenaPaso', token: t, id: '2026-11-1', paso: 'detalle', hecho: true }).ok, true);
+  assert.equal(e.hojas.OMEGA_QUINCENAS.filas.filter((f) => f && f[0]).length, 2);   // actualizó la misma fila, no duplicó
+  assert.equal(e.llamar({ action: 'quincenaListar', token: t }).data[0].id, '2026-11-1');
+});
