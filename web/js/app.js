@@ -141,7 +141,7 @@ function vistaLogin() {
 // así funcionan los botones Atrás/Adelante del navegador y del celular.
 let cuenta = { cont: app, token: '', seccion: 'inicio' };
 const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
-const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'equipo'];
+const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'perfil', 'equipo'];
 // Fideicomiso queda en «Próximamente» para los trabajadores hasta que esté la pantalla de aportes (cambiar a true para abrirlo).
 const FIDEICOMISO_ACTIVO = true;
 const seccionDesdeHash = () => { const m = /^#\/(\w+)$/.exec(location.hash); return m && SECCIONES.includes(m[1]) ? m[1] : 'inicio'; };
@@ -168,6 +168,7 @@ const ICONOS = {
   equipo: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   inicio: '<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/>',
   recibos: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+  perfil: '<circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/>',
   campana: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   volver: '<path d="m15 18-6-6 6-6"/>',
   ir: '<path d="m9 18 6-6-6-6"/>',
@@ -175,7 +176,7 @@ const ICONOS = {
 const icono = (n, clase = 'icono') => `<svg class="${clase}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[n]}</svg>`;
 const volver = () => `<button class="volver" type="button" data-ir="inicio">${icono('volver')} Volver al inicio</button>`;
 
-const MENU_TRABAJADOR = [['inicio', 'Inicio', 'inicio'], ['constancia', 'Constancia de trabajo', 'constancia'], ['vacaciones', 'Vacaciones', 'vacaciones'], ['fideicomiso', 'Fideicomiso', 'fideicomiso'], ['recibos', 'Recibos de pago', 'recibos']];
+const MENU_TRABAJADOR = [['inicio', 'Inicio', 'inicio'], ['constancia', 'Constancia de trabajo', 'constancia'], ['vacaciones', 'Vacaciones', 'vacaciones'], ['fideicomiso', 'Fideicomiso', 'fideicomiso'], ['recibos', 'Recibos de pago', 'recibos'], ['perfil', 'Mi perfil', 'perfil']];
 
 /** Sitio del trabajador: en computadora, menú lateral fijo; en el celular, el inicio con tarjetas y «Volver». */
 function marcoTrabajador() {
@@ -213,6 +214,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   else if (seccion === 'vacaciones') await seccionVacaciones(destino);
   else if (seccion === 'equipo') await seccionEquipo(destino);
   else if (seccion === 'recibos') await seccionRecibos(destino);
+  else if (seccion === 'perfil') await seccionPerfil(destino);
   else if (seccion === 'fideicomiso') await seccionFideicomiso(destino);
   else seccionInicio(destino);
   if (cont !== app && !token) destino.querySelectorAll('.volver').forEach((b) => b.remove());   // «Mi equipo» del panel de RRHH
@@ -222,7 +224,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
 /** Mientras la persona ve su inicio, se piden en segundo plano los datos de cada tarjeta. */
 async function precargarTrabajador(tk = {}) {
   // De una en una: así cada persona ocupa un solo cupo de Google a la vez (el límite es 30 simultáneas).
-  for (const accion of ['equipoVacaciones', 'misRecibos', 'datosVacaciones', 'misConstancias', 'datosAnticipo']) {
+  for (const accion of ['equipoVacaciones', 'misRecibos', 'miPerfil', 'datosVacaciones', 'misConstancias', 'datosAnticipo']) {
     await obtener(accion, tk).catch(() => {});
   }
 }
@@ -250,6 +252,7 @@ function seccionInicio(cont) {
       ${tarjeta('vacaciones', 'Vacaciones', 'Consulta tus días pendientes y solicita tus vacaciones; tu jefe directo las aprueba.', 'azul')}
       ${tarjeta('fideicomiso', 'Fideicomiso', 'Solicita un anticipo de tus prestaciones sociales.', 'carbon', FIDEICOMISO_ACTIVO ? '' : '<span class="chip chip-neutro">Próximamente</span>')}
       ${tarjeta('recibos', 'Recibos de pago', 'Consulta tus recibos y confirma «Recibí conforme».', 'oro')}
+      ${tarjeta('perfil', 'Mi perfil', 'Mantén al día tus datos de contacto, familia y tallas.', 'azul')}
     </nav>
     <div id="aviso-push"></div>`;
   // después de «Mi equipo» (en ese orden los precarga el inicio): así no se piden a la vez
@@ -258,7 +261,17 @@ function seccionInicio(cont) {
     const n = r.ok ? r.data.filter((x) => !x.conforme).length : 0;
     const t = cont.querySelector('[data-ir=recibos] .acceso-texto');
     if (n && t) t.insertAdjacentHTML('beforeend', `<span class="chip chip-espera">${n} por confirmar</span>`);
-  });
+  }).then(() => obtener('miPerfil', conToken())).then((r) => {
+    const t = cont.querySelector('[data-ir=perfil] .acceso-texto');
+    if (!r || !r.ok || !t) return;
+    const c = r.data.campanas[0];
+    if (c) {
+      t.insertAdjacentHTML('beforeend', '<span class="chip chip-espera">Actualiza tus datos</span>');
+      cont.querySelector('.bienvenida').insertAdjacentHTML('afterend', `<button type="button" class="aviso-campana aviso-inicio" data-ir="perfil">${icono('perfil')}
+        <span><b>${esc(c.titulo)}</b><span>Gestión Humana te pide actualizar tus datos antes del ${esc(V().corta(c.hasta))}.</span></span>${icono('ir')}</button>`);
+      cont.querySelector('.aviso-inicio').addEventListener('click', () => navegar('perfil'));
+    } else if (!r.data.actualizado) t.insertAdjacentHTML('beforeend', '<span class="chip chip-neutro">Sin completar</span>');
+  }).catch(() => {});
   if (!cuenta.token) pintarAvisoPush(cont.querySelector('#aviso-push'));
   // Si es jefe de alguien, aparece «Mi equipo» con las solicitudes por aprobar
   obtener('equipoVacaciones', conToken()).then((r) => {
@@ -548,7 +561,7 @@ async function vistaRRHH() {
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Quincena'], ['nominas', 'Nóminas especiales'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Quincena'], ['nominas', 'Nóminas especiales'], ['datos', 'Datos del personal'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel" class="contenido"></div></div>`;
@@ -558,6 +571,7 @@ async function vistaRRHH() {
   if (pestana === 'recibos') return panelRecibos(panel);
   if (pestana === 'omega') return panelOmega(panel);
   if (pestana === 'nominas') return panelNominas(panel);
+  if (pestana === 'datos') return panelDatosPersonal(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'vacaciones') return panelVacaciones(panel);
@@ -2995,4 +3009,246 @@ async function pasoComplementoQ(ctx) {
     </section>${botonListo(ctx, 'complemento')}`;
   activarListo(ctx, 'complemento', () => ({ lotes: lotes.map((l) => ({ id: l.id, estado: l.estado, personas: l.personas, total: l.totales.subtotal })) }));
   activarLotesQ(ctx);
+}
+
+/* ---------- Mi perfil (colaborador) ---------- */
+
+const PF = () => window.Perfil;
+const NOMBRE_SECCION = (id) => (PF().seccion(id) || {}).nombre || id;
+let borradorFamilia = null;   // filas de carga familiar mientras se edita (para agregar o quitar sin perder lo escrito)
+
+function campoPerfil(sec, c, valor, prefijo) {
+  const nombre = `${prefijo}.${c.id}`, v = esc(valor || ''), req = c.req ? ' <span class="req" aria-hidden="true">*</span>' : '';
+  let input;
+  if (c.tipo === 'lista') input = `<select name="${nombre}"><option value="">Elige…</option>${PF().LISTAS[c.lista].map((o) => `<option${o === valor ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  else if (c.tipo === 'fecha') input = `<input type="date" name="${nombre}" value="${v}">`;
+  else if (c.tipo === 'correo') input = `<input type="email" name="${nombre}" value="${v}" autocomplete="email" maxlength="120">`;
+  else if (c.tipo === 'telefono') input = `<input type="tel" name="${nombre}" value="${v}" inputmode="tel" placeholder="0414-1234567" maxlength="16">`;
+  else if (c.tipo === 'numero' || c.tipo === 'cuenta') input = `<input name="${nombre}" value="${v}" inputmode="numeric" maxlength="${c.tipo === 'cuenta' ? 24 : 15}">`;
+  else if (c.largo > 120) input = `<textarea name="${nombre}" maxlength="${c.largo}">${v}</textarea>`;
+  else input = `<input name="${nombre}" value="${v}" maxlength="120">`;
+  return `<label class="${c.largo > 120 ? 'ancho' : ''}"><span>${esc(c.nombre)}${req}</span> ${input}</label>`;
+}
+
+async function seccionPerfil(cont) {
+  cont.innerHTML = `${volver()}${esqueleto(3)}`;
+  const r = await obtener('miPerfil', conToken());
+  borradorFamilia = null;
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } cont.innerHTML = `${volver()}<p class="error-msg">${esc(r.message)}</p>`; return; }
+  pintarPerfil(cont, r.data);
+}
+
+function pintarPerfil(cont, d) {
+  const datos = d.datos || {}, n = d.nomina;
+  if (!borradorFamilia) borradorFamilia = (datos.familia || []).map((f) => ({ ...f }));
+  const chipSec = (id) => (PF().seccionCompleta(datos, id) ? '<span class="chip chip-ok">Completo</span>' : '<span class="chip chip-espera">Por completar</span>');
+  const filaFam = (f, i) => `<div class="familiar" data-fam="${i}"><div class="campos-perfil">${PF().seccion('familia').campos.map((c) => campoPerfil('familia', c, f[c.id], `familia.${i}`)).join('')}</div>
+    <button class="btn btn-sec btn-chico" type="button" data-quitar-fam="${i}">Quitar</button></div>`;
+  const seccionForm = (s) => s.lista ? `
+    <section class="tarjeta" id="sec-${s.id}"><div class="item-cab"><h2>${esc(s.nombre)}</h2>${chipSec(s.id)}</div>
+      <p class="suave">Hijos, cónyuge, padres u otras personas que dependen de ti.</p>
+      <div id="familiares">${borradorFamilia.map(filaFam).join('')}</div>
+      <div class="fila"><button class="btn btn-sec btn-chico" type="button" id="agregar-fam">Agregar familiar</button>
+        <label class="check"><input type="checkbox" name="sinFamilia"${datos.sinFamilia && !borradorFamilia.length ? ' checked' : ''}${borradorFamilia.length ? ' disabled' : ''}> No tengo carga familiar</label></div>
+    </section>` : `
+    <section class="tarjeta" id="sec-${s.id}"><div class="item-cab"><h2>${esc(s.nombre)}</h2>${chipSec(s.id)}</div>
+      <div class="campos-perfil">${s.campos.map((c) => campoPerfil(s.id, c, (datos[s.id] || {})[c.id], s.id)).join('')}</div>
+    </section>`;
+  cont.innerHTML = `${volver()}
+    ${d.campanas.map((c) => `<section class="tarjeta aviso-campana">
+      <h2>${esc(c.titulo)}</h2>${c.mensaje ? `<p>${esc(c.mensaje)}</p>` : ''}
+      <p class="suave">Gestión Humana te pide revisar y completar: <b>${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. Tienes hasta el <b>${esc(V().corta(c.hasta))}</b>.
+      ${c.faltan.length ? `Te falta: ${c.faltan.map(NOMBRE_SECCION).map(esc).join(', ')}.` : 'Ya tienes todo completo: revisa que esté al día y pulsa «Guardar y confirmar».'}</p></section>`).join('')}
+    <section class="tarjeta">
+      <div class="item-cab"><div><h2>Mi perfil</h2><p class="suave">Mantén al día tus datos: así Gestión Humana puede contactarte y tomarte en cuenta en beneficios y dotaciones.${d.actualizado ? ` Última actualización: ${fechaHoraMin(d.actualizado)}` : ''}</p></div></div>
+      <dl class="datos-nomina">
+        <div><dt>Nombre</dt><dd>${esc(n.nombre)}</dd></div><div><dt>Cédula</dt><dd>${esc(n.cedula.slice(1))}</dd></div>
+        <div><dt>Cargo</dt><dd>${esc(n.cargo || '—')}</dd></div><div><dt>Empresa</dt><dd>${n.empresa === 'AIV' ? 'Austral' : 'Prosein'}</dd></div>
+        <div><dt>Departamento</dt><dd>${esc(n.departamento || '—')}</dd></div><div><dt>Localidad</dt><dd>${esc(n.localidad || '—')}</dd></div>
+        <div><dt>Fecha de ingreso</dt><dd>${n.fechaIngreso ? esc(V().corta(n.fechaIngreso)) : '—'}</dd></div>
+      </dl>
+      <p class="suave">Estos datos vienen de la nómina. Si alguno está mal, avísale a Gestión Humana.</p>
+    </section>
+    <form id="fperfil" novalidate>
+      ${PF().SECCIONES.map(seccionForm).join('')}
+      <div class="error-msg" id="err-perfil" hidden></div>
+      <div class="fila barra-guardar"><button class="btn" type="submit">${d.campanas.length ? 'Guardar y confirmar' : 'Guardar mis datos'}</button><span class="suave">Los campos con * son obligatorios.</span></div>
+    </form>`;
+  cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+  const f = cont.querySelector('#fperfil'), err = cont.querySelector('#err-perfil');
+  const leerFamilia = () => { borradorFamilia = [...cont.querySelectorAll('.familiar')].map((x) => { const o = {}; PF().seccion('familia').campos.forEach((c) => { o[c.id] = x.querySelector(`[name="familia.${x.dataset.fam}.${c.id}"]`).value; }); return o; }); };
+  const repintar = () => { const vals = leerForm(); leerFamilia(); pintarPerfil(cont, { ...d, datos: { ...datos, ...vals, familia: borradorFamilia } }); };
+  const leerForm = () => {
+    const o = {};
+    PF().SECCIONES.filter((s) => !s.lista).forEach((s) => { o[s.id] = {}; s.campos.forEach((c) => { o[s.id][c.id] = f.elements[`${s.id}.${c.id}`].value; }); });
+    o.sinFamilia = !!(f.elements.sinFamilia && f.elements.sinFamilia.checked);
+    return o;
+  };
+  cont.querySelector('#agregar-fam').addEventListener('click', () => {
+    if (cont.querySelectorAll('.familiar').length >= PF().MAX_FAMILIA) return toast(`Puedes registrar hasta ${PF().MAX_FAMILIA} familiares.`);
+    leerFamilia(); borradorFamilia.push({}); const vals = leerForm(); vals.sinFamilia = false;
+    pintarPerfil(cont, { ...d, datos: { ...datos, ...vals, familia: borradorFamilia } });
+  });
+  cont.querySelectorAll('[data-quitar-fam]').forEach((b) => b.addEventListener('click', () => { leerFamilia(); borradorFamilia.splice(Number(b.dataset.quitarFam), 1); repintar(); }));
+  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(e.submitter || f.querySelector('button[type=submit]'), async () => {
+    errorEn(err, ''); leerFamilia();
+    const enviar = { ...leerForm(), familia: borradorFamilia };
+    const x = await llamar('guardarMiPerfil', { datos: enviar, ...conToken() });
+    if (!x.ok) { if (x.code === 'SESION') { toast(x.message); return arrancar(); } return errorEn(err, x.message); }
+    borradorFamilia = null;
+    toast(x.data.confirmadas.length ? '¡Gracias! Tus datos quedaron actualizados.' : 'Datos guardados.');
+    pintarPerfil(cont, { ...d, datos: x.data.datos, actualizado: x.data.actualizado, campanas: x.data.campanas });
+    window.scrollTo(0, 0);
+  }); });
+}
+
+/* ---------- Datos del personal (Gestión Humana) ---------- */
+
+let subDatos = 'campanas', campanaAbierta = '', buscaDatos = '';
+
+async function panelDatosPersonal(panel) {
+  const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes']];
+  panel.innerHTML = `<div class="submodulos" role="tablist">${SUB.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subDatos}">${t}</button>`).join('')}</div><div id="sub">${esqueleto(2)}</div>`;
+  panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subDatos = b.dataset.sub; campanaAbierta = ''; panelDatosPersonal(panel); }));
+  const sub = panel.querySelector('#sub');
+  if (subDatos === 'campanas') return campanaAbierta ? pintarCampana(panel, sub, campanaAbierta) : pintarCampanas(panel, sub);
+  const r = await obtener('datosPersonal', {});
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  if (subDatos === 'cambios') return pintarCambiosPerfil(sub, r.data.cambios);
+  return pintarConsultaDatos(sub, r.data.filas);
+}
+
+const alcanceTexto = (a) => (a.tipo === 'empresas' ? a.empresas.map((e) => (e === 'AIV' ? 'Austral' : 'Prosein')).join(' y ') : a.tipo === 'personas' ? `${a.claves.length} persona${a.claves.length === 1 ? '' : 's'}` : 'Todo el personal');
+
+async function pintarCampanas(panel, sub) {
+  const r = await obtener('listarCampanasDatos', {});
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const hoy = new Date().toISOString().slice(0, 10), en15 = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+  sub.innerHTML = `<div class="dos-col"><div class="col"><section class="tarjeta">
+      <div><h2>Nueva campaña de actualización</h2><p class="suave">Cada colaborador recibe un aviso y ve en su inicio qué datos debe revisar. Lo que guardan queda registrado directo, y aquí ves quién completó.</p></div>
+      <form id="fcamp" class="form-vac" novalidate>
+        <label>Título <input name="titulo" maxlength="100" placeholder="Ej.: Actualización de datos diciembre 2026"></label>
+        <label>Mensaje para el colaborador (opcional) <textarea name="mensaje" maxlength="500" placeholder="Ej.: Necesitamos tus datos al día para la dotación de uniformes."></textarea></label>
+        <fieldset class="checks"><legend>¿Qué datos debe revisar?</legend>${PF().SECCIONES.map((s) => `<label class="check"><input type="checkbox" name="sec" value="${s.id}" checked> ${esc(s.nombre)}</label>`).join('')}</fieldset>
+        <div class="fila">
+          <label class="grow">¿A quién? <select name="alcance"><option value="todos">Todo el personal</option><option value="PCA">Solo Prosein</option><option value="AIV">Solo Austral</option></select></label>
+          <label class="grow">Fecha límite <input type="date" name="hasta" min="${hoy}" value="${en15}"></label>
+        </div>
+        <div class="error-msg" id="err-camp" hidden></div>
+        <div class="fila"><button class="btn" type="submit">Abrir campaña y avisar</button></div>
+      </form></section></div>
+    <div class="col"><section class="tarjeta"><h2>Campañas</h2>${r.data.length ? `<div class="lista">${r.data.map((c) => `
+      <div class="item"><div class="item-cab"><div><b>${esc(c.titulo)}</b><p class="suave">${alcanceTexto(c.alcance)} · hasta el ${esc(V().corta(c.hasta))} · ${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</p></div>
+        ${c.estado === 'CERRADA' ? '<span class="chip chip-neutro">Cerrada</span>' : c.vencida ? '<span class="chip chip-error">Vencida</span>' : '<span class="chip chip-ok">Abierta</span>'}</div>
+        <div class="barra-avance" title="${c.completos} de ${c.personas}"><span style="width:${c.personas ? Math.round((c.completos / c.personas) * 100) : 0}%"></span></div>
+        <p class="suave"><b>${c.completos}</b> de ${c.personas} completaron (${c.personas ? Math.round((c.completos / c.personas) * 100) : 0} %)</p>
+        <div class="fila"><button class="btn btn-sec btn-chico" data-ver-camp="${esc(c.id)}">Ver detalle</button></div></div>`).join('')}</div>` : '<p class="vacio">Todavía no hay campañas.</p>'}</section></div></div>`;
+  const f = sub.querySelector('#fcamp'), err = sub.querySelector('#err-camp');
+  sub.querySelectorAll('[data-ver-camp]').forEach((b) => b.addEventListener('click', () => { campanaAbierta = b.dataset.verCamp; panelDatosPersonal(panel); }));
+  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(e.submitter || f.querySelector('button[type=submit]'), async () => {
+    errorEn(err, '');
+    const al = f.alcance.value, secciones = [...f.querySelectorAll('[name=sec]:checked')].map((x) => x.value);
+    const datos = { titulo: f.titulo.value, mensaje: f.mensaje.value, secciones, hasta: f.hasta.value, alcance: al === 'todos' ? { tipo: 'todos' } : { tipo: 'empresas', empresas: [al] } };
+    if (!confirm(`¿Abrir la campaña «${datos.titulo}» y avisar a ${al === 'todos' ? 'todo el personal' : al === 'AIV' ? 'Austral' : 'Prosein'}?`)) return;
+    const x = await llamar('crearCampanaDatos', datos);
+    if (!x.ok) return errorEn(err, x.message);
+    toast(`Campaña abierta: se avisó a ${x.data.personas} persona${x.data.personas === 1 ? '' : 's'}.`);
+    campanaAbierta = x.data.id; panelDatosPersonal(panel);
+  }); });
+}
+
+async function pintarCampana(panel, sub, id) {
+  const r = await llamar('panelCampanaDatos', { id });
+  if (!r.ok) { sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const { campana: c, filas } = r.data, pend = filas.filter((x) => !x.completo);
+  let filtro = 'pendientes';
+  const pintar = () => {
+    const lista = filtro === 'pendientes' ? pend : filtro === 'completos' ? filas.filter((x) => x.completo) : filas;
+    sub.innerHTML = `<div><button class="btn btn-sec btn-chico" type="button" id="volver-camp">← Todas las campañas</button></div>
+      <section class="tarjeta"><div class="item-cab"><div><h2>${esc(c.titulo)}</h2>
+        <p class="suave">${alcanceTexto(c.alcance)} · hasta el ${esc(V().corta(c.hasta))} · ${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</p>${c.mensaje ? `<p>${esc(c.mensaje)}</p>` : ''}</div>
+        ${c.estado === 'CERRADA' ? '<span class="chip chip-neutro">Cerrada</span>' : '<span class="chip chip-ok">Abierta</span>'}</div>
+        <p><b>${filas.length - pend.length}</b> de ${filas.length} completaron · <b>${pend.length}</b> pendientes</p>
+        <div class="fila">
+          ${c.estado === 'ABIERTA' && pend.length ? `<button class="btn" id="recordar-camp">Recordar a los ${pend.length} pendientes</button>` : ''}
+          <button class="btn btn-sec" id="xls-camp">Descargar Excel</button>
+          ${c.estado === 'ABIERTA' ? '<button class="btn btn-sec" id="cerrar-camp">Cerrar campaña</button>' : ''}
+        </div></section>
+      <section class="tarjeta"><div class="fila">${[['pendientes', `Pendientes (${pend.length})`], ['completos', `Completaron (${filas.length - pend.length})`], ['todos', 'Todos']].map(([k, t]) =>
+        `<button class="btn btn-chico ${k === filtro ? '' : 'btn-sec'}" data-f="${k}">${t}</button>`).join('')}</div>
+        <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th>Empresa</th><th>Localidad</th><th>Estado</th><th>Actualizó</th></tr></thead><tbody>
+        ${lista.map((x) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.clave.slice(1))}</span></td><td>${esc(x.empresa)}</td><td>${esc(x.localidad)}</td>
+          <td>${x.completo ? '<span class="chip chip-ok">Completo</span>' : `<span class="chip chip-espera">Falta: ${x.faltan.map(NOMBRE_SECCION).map(esc).join(', ') || 'confirmar'}</span>`}</td>
+          <td>${x.actualizado ? fechaHoraMin(x.actualizado) : '—'}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie en esta lista.</td></tr>'}
+        </tbody></table></div></section>`;
+    sub.querySelector('#volver-camp').addEventListener('click', () => { campanaAbierta = ''; panelDatosPersonal(panel); });
+    sub.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { filtro = b.dataset.f; pintar(); }));
+    sub.querySelector('#recordar-camp')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+      const x = await llamar('recordarCampanaDatos', { id });
+      toast(x.ok ? `Recordatorio enviado a ${x.data.avisados} persona${x.data.avisados === 1 ? '' : 's'}.` : x.message);
+    }));
+    sub.querySelector('#cerrar-camp')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+      if (!confirm('¿Cerrar la campaña? Los colaboradores dejarán de verla como pendiente (sus datos guardados se mantienen).')) return;
+      const x = await llamar('cerrarCampanaDatos', { id });
+      if (!x.ok) return toast(x.message);
+      toast('Campaña cerrada.'); pintarCampana(panel, sub, id);
+    }));
+    sub.querySelector('#xls-camp').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+      const XLSX = await cargarXlsx(), libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(filas.map((x) => ({ 'Cédula': Number(x.clave.slice(1)), Nombre: x.nombre, Empresa: x.empresa, Departamento: x.departamento,
+        Localidad: x.localidad, Estado: x.completo ? 'Completo' : 'Pendiente', Falta: x.faltan.map(NOMBRE_SECCION).join(', '), 'Actualizó': x.actualizado ? fechaHoraMin(x.actualizado) : '' }))), 'Avance');
+      XLSX.writeFile(libro, `Campana-${c.titulo.replace(/[^\w\sáéíóúñÁÉÍÓÚÑ-]/g, '').replace(/\s+/g, '-').slice(0, 40)}.xlsx`);
+    }));
+  };
+  pintar();
+}
+
+/** Una fila plana por persona (y otra hoja con la carga familiar) para el Excel de datos del personal. */
+function filasExcelPerfil(filas) {
+  const plano = [], familia = [];
+  filas.forEach((x) => {
+    const d = x.datos || {}, o = { 'Cédula': Number(x.clave.slice(1)), Nombre: x.nombre, Empresa: x.empresa, Departamento: x.departamento, Localidad: x.localidad, Cargo: x.cargo, 'Fecha de ingreso': x.fechaIngreso };
+    PF().SECCIONES.filter((s) => !s.lista).forEach((s) => s.campos.forEach((c) => { o[`${s.nombre} · ${c.nombre}`] = (d[s.id] || {})[c.id] || ''; }));
+    o['Carga familiar'] = d.familia && d.familia.length ? d.familia.length : d.sinFamilia ? 'No tiene' : '';
+    o['Última actualización'] = x.actualizado ? fechaHoraMin(x.actualizado) : '';
+    plano.push(o);
+    (d.familia || []).forEach((f) => familia.push({ 'Cédula del colaborador': Number(x.clave.slice(1)), Colaborador: x.nombre, Empresa: x.empresa, Familiar: f.nombre, Parentesco: f.parentesco, 'Fecha de nacimiento': f.fechaNacimiento, 'Cédula del familiar': f.cedula || '' }));
+  });
+  return { plano, familia };
+}
+
+function pintarConsultaDatos(sub, filas) {
+  const conDatos = filas.filter((x) => x.actualizado).length;
+  const pintar = () => {
+    const q = buscaDatos.trim().toLowerCase(), lista = q ? filas.filter((x) => x.nombre.toLowerCase().includes(q) || x.clave.includes(q.replace(/\D/g, '') || '§')) : filas;
+    sub.querySelector('#lista-datos').innerHTML = lista.slice(0, 60).map((x) => {
+      const d = x.datos || {};
+      const linea = (s) => (s.lista ? (d.familia || []).map((f) => `${esc(f.nombre)} (${esc(f.parentesco)}, ${esc(f.fechaNacimiento ? V().corta(f.fechaNacimiento) : '')})`).join('<br>') || (d.sinFamilia ? 'No tiene carga familiar' : '—')
+        : s.campos.map((c) => ((d[s.id] || {})[c.id] ? `<span class="suave">${esc(c.nombre)}:</span> ${esc(d[s.id][c.id])}` : '')).filter(Boolean).join('<br>') || '—');
+      return `<details class="item"><summary class="item-cab"><div><b>${esc(x.nombre)}</b><p class="suave">${esc(x.clave.slice(1))} · ${esc(x.empresa)} · ${esc(x.localidad)}</p></div>
+        ${x.actualizado ? (x.faltan.length ? '<span class="chip chip-espera">Incompleto</span>' : '<span class="chip chip-ok">Completo</span>') : '<span class="chip chip-neutro">Sin datos</span>'}</summary>
+        <dl class="datos-nomina">${PF().SECCIONES.map((s) => `<div><dt>${esc(s.nombre)}</dt><dd>${linea(s)}</dd></div>`).join('')}</dl>
+        ${x.actualizado ? `<p class="suave">Actualizó el ${fechaHoraMin(x.actualizado)}</p>` : ''}</details>`;
+    }).join('') + (lista.length > 60 ? `<p class="suave">Mostrando 60 de ${lista.length}. Escribe para buscar.</p>` : '') || '<p class="vacio">Sin resultados.</p>';
+  };
+  sub.innerHTML = `<section class="tarjeta"><div class="item-cab"><div><h2>Datos del personal</h2><p class="suave"><b>${conDatos}</b> de ${filas.length} colaboradores activos han cargado sus datos.</p></div>
+      <button class="btn btn-sec" id="xls-datos">Descargar Excel</button></div>
+    <label>Buscar <input id="busca-datos" value="${esc(buscaDatos)}" placeholder="Nombre o cédula" autocomplete="off"></label>
+    <div class="lista" id="lista-datos"></div></section>`;
+  sub.querySelector('#busca-datos').addEventListener('input', (e) => { buscaDatos = e.target.value; pintar(); });
+  sub.querySelector('#xls-datos').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    const XLSX = await cargarXlsx(), libro = XLSX.utils.book_new(), { plano, familia } = filasExcelPerfil(filas);
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(plano), 'Personal');
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(familia.length ? familia : [{ Familiar: 'Sin registros' }]), 'Carga familiar');
+    XLSX.writeFile(libro, `Datos-del-personal-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }));
+  pintar();
+}
+
+function pintarCambiosPerfil(sub, cambios) {
+  sub.innerHTML = `<section class="tarjeta"><div><h2>Cambios recientes</h2><p class="suave">Lo que cada colaborador cambió en su perfil (los últimos 300 cambios).</p></div>
+    <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Fecha</th><th>Colaborador</th><th>Dato</th><th>Antes</th><th>Ahora</th></tr></thead><tbody>
+    ${cambios.map((c) => `<tr><td>${fechaHoraMin(c.cuando)}</td><td><b>${esc(c.nombre)}</b><br><span class="suave">${esc(c.clave.slice(1))}</span></td><td>${esc(c.campo)}</td>
+      <td class="suave">${esc(c.antes || '—')}</td><td>${esc(c.despues || '—')}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Todavía no hay cambios.</td></tr>'}
+    </tbody></table></div></section>`;
 }

@@ -107,6 +107,14 @@ function crearRepo(empleadosFilas) {
     eliminarOmegaQuincena: (id) => { delete st.omegaQ[id]; },
     omegaPagos: (q, lote) => (st.omegaPagos || []).filter((x) => x.quincena === q && x.lote === lote).map((x) => JSON.parse(JSON.stringify(x))),
     agregarOmegaPagos: (lista) => { st.omegaPagos = (st.omegaPagos || []).concat(lista.map((x) => JSON.parse(JSON.stringify(x)))); },
+    perfil: (c) => (st.perfiles && st.perfiles[c] ? JSON.parse(JSON.stringify(st.perfiles[c])) : null),
+    perfiles: () => Object.values(st.perfiles || {}).map((p) => JSON.parse(JSON.stringify(p))),
+    guardarPerfil: (p) => { st.perfiles = st.perfiles || {}; st.perfiles[p.clave] = JSON.parse(JSON.stringify(p)); },
+    cambiosPerfil: () => (st.cambiosPerfil || []).map((c) => ({ ...c })),
+    agregarCambiosPerfil: (lista) => { st.cambiosPerfil = (st.cambiosPerfil || []).concat(lista.map((c) => ({ ...c }))); },
+    campanasDatos: () => Object.values(st.campanas || {}).map((c) => JSON.parse(JSON.stringify(c))),
+    guardarCampanaDatos: (c) => { st.campanas = st.campanas || {}; st.campanas[c.id] = JSON.parse(JSON.stringify(c)); },
+    nuevoIdCampana: () => 'CAM' + (++st.seq),
     quitarOmegaPagos: (q, lote) => { st.omegaPagos = (st.omegaPagos || []).filter((x) => !(x.quincena === q && x.lote === lote)); },
   };
 }

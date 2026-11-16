@@ -364,3 +364,32 @@ input.pin { letter-spacing: .6em; font-size: 22px; text-align: center; max-width
 .pasos-q .hecho .num-paso { background: var(--ok); color: #fff; }
 .listo-q { justify-content: space-between; }
 @media (max-width: 900px) { .pasos-q { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Mi perfil y Datos del personal ---------- */
+.campos-perfil { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s3) var(--s4); }
+.campos-perfil .ancho { grid-column: 1 / -1; }
+.campos-perfil textarea { min-height: 64px; }
+.req { color: var(--rojo); }
+.familiar { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--linea-suave); border-radius: var(--radio-sm); background: var(--fondo); }
+.familiar > .btn { justify-self: start; }
+#familiares { display: grid; gap: var(--s3); }
+.check { display: inline-flex; grid-auto-flow: column; align-items: center; gap: var(--s2); font-weight: 500; }
+.check input { width: 20px; height: 20px; min-height: 20px; }
+.checks { border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin: 0; }
+.checks legend { font-weight: 500; font-size: 14px; padding: 0 var(--s1); }
+.datos-nomina { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s3) var(--s4); margin: 0; }
+.datos-nomina dt { font-size: 12px; color: var(--tinta-3); }
+.datos-nomina dd { margin: 0; font-weight: 500; color: var(--carbon); overflow-wrap: anywhere; }
+.aviso-campana { border-left: 4px solid var(--espera); background: var(--espera-velo); }
+.aviso-inicio { display: grid; grid-template-columns: 28px 1fr 20px; align-items: center; gap: var(--s3); width: 100%; text-align: left; font: inherit; color: var(--tinta);
+  border: 0; border-left: 4px solid var(--espera); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); cursor: pointer; }
+.aviso-inicio .icono { color: var(--espera); width: 26px; height: 26px; }
+.aviso-inicio span { display: grid; } .aviso-inicio b { color: var(--carbon); }
+.barra-guardar { position: sticky; bottom: 0; background: var(--fondo); padding: var(--s3) 0; z-index: 2; }
+#fperfil { display: grid; gap: var(--s4); }
+.barra-avance { height: 8px; border-radius: 999px; background: var(--linea-suave); overflow: hidden; }
+.barra-avance span { display: block; height: 100%; background: var(--ok); border-radius: inherit; }
+details.item > summary { list-style: none; cursor: pointer; }
+details.item > summary::-webkit-details-marker { display: none; }
+details.item[open] { gap: var(--s3); }
+.tabla-omega td .chip { white-space: normal; }

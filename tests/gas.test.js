@@ -543,3 +543,32 @@ test('Quincena: aunque Sheets convierta el id y el mes en fecha, la quincena se 
   assert.equal(e.hojas.OMEGA_QUINCENAS.filas.filter((f) => f && f[0]).length, 2);   // actualizó la misma fila, no duplicó
   assert.equal(e.llamar({ action: 'quincenaListar', token: t }).data[0].id, '2026-11-1');
 });
+
+test('perfil del trabajador y campaña de actualización sobre las hojas', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', departamento: 'RRHH', fechaInicio: '10/03/2022' },
+    { cedula: 'V123456789', nombre: 'ANA PROSEIN', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', fechaInicio: '01/01/2020' },
+  ] });
+  const hasta = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+  const c = e.llamar({ action: 'crearCampanaDatos', token: admin, titulo: 'Diciembre', secciones: ['contacto', 'emergencia'], alcance: { tipo: 'todos' }, hasta });
+  assert.equal(c.ok, true, JSON.stringify(c));
+  const ana = entrarTrabajador(e, '12345678').token;
+  const v = e.llamar({ action: 'miPerfil', token: ana }).data;
+  assert.equal(v.campanas[0].hasta, hasta);
+  const g = e.llamar({ action: 'guardarMiPerfil', token: ana, datos: {
+    contacto: { telefono: '04141234567', correo: 'ana@correo.com', estado: 'Lara', ciudad: 'Barquisimeto', direccion: 'Calle 1' },
+    emergencia: { nombre: 'Pedro', parentesco: 'Padre', telefono: '04241234567' } } });
+  assert.equal(g.ok, true, JSON.stringify(g));
+  assert.deepEqual(g.data.confirmadas, [c.data.id]);
+  const v2 = e.llamar({ action: 'miPerfil', token: ana }).data;
+  assert.equal(v2.datos.contacto.telefono, '0414-1234567');
+  assert.equal(v2.campanas.length, 0);
+  const l = e.llamar({ action: 'listarCampanasDatos', token: admin }).data[0];
+  assert.equal(l.completos, 1);
+  const p = e.llamar({ action: 'datosPersonal', token: admin }).data;
+  assert.equal(p.cambios.length, 8);
+  assert.equal(p.filas.find((f) => f.clave === 'V12345678').datos.emergencia.nombre, 'Pedro');
+});

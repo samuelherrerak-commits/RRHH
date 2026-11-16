@@ -22,6 +22,7 @@
   var Planificacion = isNode ? require('./planificacion.js') : dependencia(raiz, 'Planificacion');
   var Omega = isNode ? require('./omega.js') : dependencia(raiz, 'Omega');
   var Comisiones = isNode ? require('./comisiones.js') : dependencia(raiz, 'Comisiones');
+  var Perfil = isNode ? require('./perfil.js') : dependencia(raiz, 'Perfil');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
@@ -2025,7 +2026,158 @@
   }
   function cancelarNominaEspecial(repo, ctx, token, id) { return atenderNominaEspecial(repo, ctx, token, id, 'CANCELADA', {}); }
 
+  /* ---------- Perfil del trabajador y campañas de actualización de datos ---------- */
+
+  function fechaIso(f) { return f ? f.y + '-' + ('0' + f.m).slice(-2) + '-' + ('0' + f.d).slice(-2) : ''; }
+  function perfilVacio(clave) { return { clave: clave, datos: {}, confirmadas: {}, actualizado: 0, por: '' }; }
+  function activosConCedula(repo) { return repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }); }
+  function personaCampana(e) { return { clave: Empleados.claveCedula(e), empresa: Empleados.empresaFideicomiso(e) }; }
+
+  function vistaCampana(c, hoy) {
+    return { id: c.id, titulo: c.titulo, mensaje: c.mensaje || '', secciones: c.secciones || [], alcance: c.alcance || { tipo: 'todos' }, hasta: c.hasta,
+      estado: c.estado, creada: c.creada, por: c.por || '', vigente: c.estado === 'ABIERTA' && hoy <= c.hasta, vencida: c.estado === 'ABIERTA' && hoy > c.hasta };
+  }
+  /** Campañas abiertas que le tocan a esta persona y aún no completa. */
+  function pendientesDe(repo, emp, perfil, hoy) {
+    var p = personaCampana(emp);
+    return repo.campanasDatos().filter(function (c) { return c.estado === 'ABIERTA' && Perfil.enAlcance(c, p) && !Perfil.completo(c, perfil); })
+      .sort(function (a, b) { return a.hasta < b.hasta ? -1 : 1; }).map(function (c) { return Object.assign(vistaCampana(c, hoy), { faltan: Perfil.faltantes(perfil.datos, c.secciones) }); });
+  }
+
+  /** Lo que ve el colaborador en «Mi perfil»: sus datos de nómina (solo lectura), lo que él mantiene y las campañas pendientes. */
+  function miPerfil(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+    var perfil = repo.perfil(s.clave) || perfilVacio(s.clave), hoy = hoyCaracas(ctx);
+    return ok({
+      nomina: { nombre: emp.nombre, cedula: s.clave, cargo: emp.puesto || '', departamento: emp.departamento || '', localidad: emp.organizacion || '',
+        empresa: Empleados.empresaFideicomiso(emp), fechaIngreso: fechaIso(emp.fechaIngreso) },
+      datos: perfil.datos, actualizado: perfil.actualizado || 0, faltan: Perfil.faltantes(perfil.datos), campanas: pendientesDe(repo, emp, perfil, hoy),
+    });
+  }
+
+  /**
+   * El colaborador guarda sus datos (se guardan directo, sin aprobación). Solo cambian las secciones enviadas.
+   * Queda el registro de qué cambió, y cada campaña abierta que le toca queda confirmada si sus secciones están completas.
+   */
+  function guardarMiPerfil(repo, ctx, token, entrada) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+    var n = Perfil.normalizar(entrada || {});
+    if (n.errores.length) return err('VALIDACION', n.errores.slice(0, 6).join(' '));
+    var perfil = repo.perfil(s.clave) || perfilVacio(s.clave), ahora = ctx.ahora(), hoy = hoyCaracas(ctx);
+    var cambios = Perfil.diferencias(perfil.datos, n.datos);
+    var datos = Object.assign({}, perfil.datos, n.datos);
+    if (n.datos.familia && n.datos.familia.length) datos.sinFamilia = false;
+    var confirmadas = Object.assign({}, perfil.confirmadas), nuevas = [], p = personaCampana(emp);
+    repo.campanasDatos().forEach(function (c) {
+      if (c.estado !== 'ABIERTA' || confirmadas[c.id] || !Perfil.enAlcance(c, p)) return;
+      if (!Perfil.faltantes(datos, c.secciones).length) { confirmadas[c.id] = ahora; nuevas.push(c.id); }
+    });
+    perfil = { clave: s.clave, datos: datos, confirmadas: confirmadas, actualizado: ahora, por: s.clave };
+    repo.guardarPerfil(perfil);
+    if (cambios.length) repo.agregarCambiosPerfil(cambios.map(function (c) {
+      return { cuando: ahora, clave: s.clave, nombre: emp.nombre, seccion: c.seccion, campo: c.nombre, antes: String(c.antes).slice(0, 500), despues: String(c.despues).slice(0, 500) };
+    }));
+    repo.log('PERFIL_ACTUALIZADO', s.clave, cambios.length + ' cambios' + (nuevas.length ? ' · confirma ' + nuevas.join(',') : ''));
+    return ok({ datos: datos, actualizado: ahora, cambios: cambios.length, confirmadas: nuevas, faltan: Perfil.faltantes(datos), campanas: pendientesDe(repo, emp, perfil, hoy) });
+  }
+
+  /** RRHH abre una campaña de actualización: qué secciones, a quién, hasta cuándo y el mensaje. Avisa a cada persona. */
+  function crearCampanaDatos(repo, ctx, token, d) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    d = d || {};
+    var titulo = String(d.titulo || '').trim().slice(0, 100), hoy = hoyCaracas(ctx);
+    var secciones = (d.secciones || []).filter(function (x) { return Perfil.seccion(x); });
+    var a = d.alcance || { tipo: 'todos' }, alcance = { tipo: ['todos', 'empresas', 'personas'].indexOf(a.tipo) !== -1 ? a.tipo : 'todos' };
+    if (alcance.tipo === 'empresas') alcance.empresas = (a.empresas || []).filter(function (x) { return x === 'PCA' || x === 'AIV'; });
+    if (alcance.tipo === 'personas') alcance.claves = (a.claves || []).filter(function (k) { return repo.empleadoPorClave(k); });
+    if (!titulo) return err('VALIDACION', 'Escribe un título para la campaña.');
+    if (!secciones.length) return err('VALIDACION', 'Elige al menos una sección para actualizar.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d.hasta || '')) || d.hasta < hoy) return err('VALIDACION', 'La fecha límite debe ser hoy o una fecha futura.');
+    if ((alcance.tipo === 'empresas' && !alcance.empresas.length) || (alcance.tipo === 'personas' && !alcance.claves.length)) return err('VALIDACION', 'Elige a quién va dirigida.');
+    var c = { id: repo.nuevoIdCampana(), titulo: titulo, mensaje: String(d.mensaje || '').trim().slice(0, 500), secciones: secciones, alcance: alcance,
+      hasta: d.hasta, estado: 'ABIERTA', creada: ctx.ahora(), por: s.clave };
+    repo.guardarCampanaDatos(c);
+    var destinos = activosConCedula(repo).filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); }).map(function (e) { return Empleados.claveCedula(e); });
+    notificar(repo, ctx, alcance.tipo === 'todos' ? '*' : destinos, { tipo: 'PERFIL_CAMPANA', ruta: 'perfil', titulo: 'Actualiza tus datos: ' + titulo,
+      texto: (c.mensaje ? c.mensaje + ' ' : '') + 'Tienes hasta el ' + fechaCorta(c.hasta) + '.' });
+    repo.log('PERFIL_CAMPANA', s.clave, c.id + ' · ' + titulo + ' · ' + destinos.length);
+    return ok(Object.assign(vistaCampana(c, hoy), { personas: destinos.length }));
+  }
+
+  /** Avance de cada campaña: cuántas personas le tocan y cuántas la completaron. */
+  function listarCampanasDatos(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var hoy = hoyCaracas(ctx), perfiles = {}, gente = activosConCedula(repo);
+    repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+    return ok(repo.campanasDatos().sort(function (a, b) { return b.creada - a.creada; }).map(function (c) {
+      var en = gente.filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); });
+      var listos = en.filter(function (e) { return Perfil.completo(c, perfiles[Empleados.claveCedula(e)]); }).length;
+      return Object.assign(vistaCampana(c, hoy), { personas: en.length, completos: listos });
+    }));
+  }
+
+  /** Detalle de una campaña: cada persona, si la completó y qué le falta. */
+  function panelCampanaDatos(repo, ctx, token, id) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var c = repo.campanasDatos().filter(function (x) { return x.id === id; })[0];
+    if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+    var perfiles = {}; repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+    var filas = activosConCedula(repo).filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); }).map(function (e) {
+      var k = Empleados.claveCedula(e), p = perfiles[k];
+      return Object.assign({ clave: k, nombre: e.nombre, completo: Perfil.completo(c, p), confirmada: p && p.confirmadas && p.confirmadas[c.id] || 0,
+        faltan: Perfil.faltantes(p && p.datos, c.secciones), actualizado: p ? p.actualizado : 0 }, ubicacion(e));
+    }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+    return ok({ campana: vistaCampana(c, hoyCaracas(ctx)), filas: filas });
+  }
+
+  function recordarCampanaDatos(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var r = panelCampanaDatos(repo, ctx, token, id);
+    if (!r.ok) return r;
+    if (r.data.campana.estado !== 'ABIERTA') return err('TRANSICION', 'La campaña está cerrada.');
+    var faltan = r.data.filas.filter(function (f) { return !f.completo; }).map(function (f) { return f.clave; });
+    if (faltan.length) notificar(repo, ctx, faltan, { tipo: 'PERFIL_RECORDATORIO', ruta: 'perfil', titulo: 'Falta que actualices tus datos',
+      texto: r.data.campana.titulo + ': tienes hasta el ' + fechaCorta(r.data.campana.hasta) + '.' });
+    repo.log('PERFIL_RECORDATORIO', s.clave, id + ' · ' + faltan.length);
+    return ok({ avisados: faltan.length });
+  }
+
+  function cerrarCampanaDatos(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var c = repo.campanasDatos().filter(function (x) { return x.id === id; })[0];
+    if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+    if (c.estado !== 'ABIERTA') return err('TRANSICION', 'La campaña ya está cerrada.');
+    c.estado = 'CERRADA'; c.cerrada = ctx.ahora();
+    repo.guardarCampanaDatos(c);
+    repo.log('PERFIL_CAMPANA_CERRADA', s.clave, id);
+    return ok(vistaCampana(c, hoyCaracas(ctx)));
+  }
+
+  /** Datos de todo el personal activo (para consultar y exportar a Excel) y los cambios más recientes. */
+  function datosPersonal(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var perfiles = {}; repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+    var filas = activosConCedula(repo).map(function (e) {
+      var k = Empleados.claveCedula(e), p = perfiles[k];
+      return Object.assign({ clave: k, nombre: e.nombre, cargo: e.puesto || '', fechaIngreso: fechaIso(e.fechaIngreso), datos: p ? p.datos : {},
+        actualizado: p ? p.actualizado : 0, faltan: Perfil.faltantes(p && p.datos) }, ubicacion(e));
+    }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+    var cambios = repo.cambiosPerfil().sort(function (a, b) { return b.cuando - a.cuando; }).slice(0, 300);
+    return ok({ filas: filas, cambios: cambios });
+  }
+
   var api = {
+    miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
+    panelCampanaDatos: panelCampanaDatos, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
     solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
     rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
     quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,

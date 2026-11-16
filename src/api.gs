@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-16.2';
+var VERSION = '2026-11-16.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -56,6 +56,9 @@ var HOJAS = {
   OMEGA_CONFIG: ['clave', 'valor'],
   OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada', 'pasos'],
   OMEGA_PAGOS: ['quincena', 'lote', 'clave', 'cedula', 'nombre', 'usd', 'montoBs', 'anticipoBs', 'dias', 'detalle', 'validado'],
+  PERFILES: ['clave', 'datos', 'confirmadas', 'actualizado', 'por'],
+  CAMBIOS_PERFIL: ['cuando', 'clave', 'nombre', 'seccion', 'campo', 'antes', 'despues'],
+  CAMPANAS_DATOS: ['id', 'titulo', 'estado', 'creada', 'por', 'cerrada', 'detalle'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -157,6 +160,14 @@ var RUTAS_RRHH = {
   rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
   cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
   datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
+  miPerfil: function (repo, ctx, d) { return Servicio.miPerfil(repo, ctx, d.token); },
+  guardarMiPerfil: function (repo, ctx, d) { return Servicio.guardarMiPerfil(repo, ctx, d.token, d.datos); },
+  crearCampanaDatos: function (repo, ctx, d) { return Servicio.crearCampanaDatos(repo, ctx, d.token, d); },
+  listarCampanasDatos: function (repo, ctx, d) { return Servicio.listarCampanasDatos(repo, ctx, d.token); },
+  panelCampanaDatos: function (repo, ctx, d) { return Servicio.panelCampanaDatos(repo, ctx, d.token, d.id); },
+  recordarCampanaDatos: function (repo, ctx, d) { return Servicio.recordarCampanaDatos(repo, ctx, d.token, d.id); },
+  cerrarCampanaDatos: function (repo, ctx, d) { return Servicio.cerrarCampanaDatos(repo, ctx, d.token, d.id); },
+  datosPersonal: function (repo, ctx, d) { return Servicio.datosPersonal(repo, ctx, d.token); },
   guardarAliasNombre: function (repo, ctx, d) { return Servicio.guardarAliasNombre(repo, ctx, d.token, d.nombre, d.clave); },
   guardarVerificacionNomina: function (repo, ctx, d) { return Servicio.guardarVerificacionNomina(repo, ctx, d.token, d.id, d.resumen); },
   quincenaListar: function (repo, ctx, d) { return Servicio.quincenaListar(repo, ctx, d.token); },
@@ -206,7 +217,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -755,6 +766,32 @@ function crearRepo_() {
         escribirFila_('ALIAS_COMISIONES', { _fila: ya ? ya._fila : undefined, alias: k, clave: mapa[k], actualizado: ahora });
       });
     },
+    perfiles: function () { asegurarHoja_('PERFILES'); return leer_('PERFILES').filter(function (f) { return texto_(f.clave); }).map(perfil_); },
+    perfil: function (clave) {
+      asegurarHoja_('PERFILES');
+      var f = leer_('PERFILES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      return f ? perfil_(f) : null;
+    },
+    guardarPerfil: function (p) {
+      asegurarHoja_('PERFILES');
+      var ya = leer_('PERFILES').filter(function (x) { return texto_(x.clave) === p.clave; })[0];
+      escribirFila_('PERFILES', { _fila: ya ? ya._fila : undefined, clave: p.clave, datos: JSON.stringify(p.datos || {}), confirmadas: JSON.stringify(p.confirmadas || {}), actualizado: p.actualizado, por: p.por });
+    },
+    cambiosPerfil: function () {
+      asegurarHoja_('CAMBIOS_PERFIL');
+      return leer_('CAMBIOS_PERFIL').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { cuando: Number(f.cuando) || 0, clave: texto_(f.clave), nombre: texto_(f.nombre), seccion: texto_(f.seccion), campo: texto_(f.campo), antes: texto_(f.antes), despues: texto_(f.despues) };
+      });
+    },
+    agregarCambiosPerfil: function (lista) { asegurarHoja_('CAMBIOS_PERFIL'); agregarFilas_('CAMBIOS_PERFIL', lista); },
+    campanasDatos: function () { asegurarHoja_('CAMPANAS_DATOS'); return leer_('CAMPANAS_DATOS').filter(function (f) { return texto_(f.id); }).map(campana_); },
+    guardarCampanaDatos: function (c) {
+      asegurarHoja_('CAMPANAS_DATOS');
+      var ya = leer_('CAMPANAS_DATOS').filter(function (x) { return texto_(x.id) === c.id; })[0];
+      escribirFila_('CAMPANAS_DATOS', { _fila: ya ? ya._fila : undefined, id: c.id, titulo: c.titulo, estado: c.estado, creada: c.creada, por: c.por, cerrada: c.cerrada || '',
+        detalle: JSON.stringify({ mensaje: c.mensaje, secciones: c.secciones, alcance: c.alcance, hasta: c.hasta }) });
+    },
+    nuevoIdCampana: function () { return 'CD-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     nuevoIdNominaEsp: function () { return 'NE-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     omegaSinTarjeta: function () {
       asegurarHoja_('OMEGA_SIN_TARJETA');
@@ -830,6 +867,16 @@ function plan_(f) {
   return { _fila: f._fila, id: texto_(f.id), ciclo: texto_(f.ciclo), clave: texto_(f.clave), estado: texto_(f.estado), bloques: b,
     requeridos: Number(f.requeridos) || 0, planificados: Number(f.planificados) || 0, jefe: texto_(f.jefe), enviada: Number(f.enviada) || 0,
     decidida: Number(f.decidida) || 0, decididaPor: texto_(f.decididaPor), motivo: texto_(f.motivo), actualizada: Number(f.actualizada) || 0 };
+}
+
+function jsonSeguro_(t, def) { try { return t ? JSON.parse(t) : def; } catch (e) { return def; } }
+function perfil_(f) {
+  return { clave: texto_(f.clave), datos: jsonSeguro_(f.datos, {}), confirmadas: jsonSeguro_(f.confirmadas, {}), actualizado: Number(f.actualizado) || 0, por: texto_(f.por) };
+}
+function campana_(f) {
+  var d = jsonSeguro_(f.detalle, {});
+  return { id: texto_(f.id), titulo: texto_(f.titulo), estado: texto_(f.estado), creada: Number(f.creada) || 0, por: texto_(f.por), cerrada: Number(f.cerrada) || 0,
+    mensaje: d.mensaje || '', secciones: d.secciones || [], alcance: d.alcance || { tipo: 'todos' }, hasta: d.hasta || '' };
 }
 
 function nominaEsp_(f) {
