@@ -393,3 +393,25 @@ details.item > summary { list-style: none; cursor: pointer; }
 details.item > summary::-webkit-details-marker { display: none; }
 details.item[open] { gap: var(--s3); }
 .tabla-omega td .chip { white-space: normal; }
+/* Actualización de datos: una pregunta por pantalla */
+.asistente { gap: var(--s4); min-height: 360px; align-content: start; }
+.avance-asis { display: grid; gap: var(--s1); }
+.kicker-perfil { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--tinta-3); }
+.pregunta { font-size: 24px; line-height: 1.25; }
+.respuesta input, .respuesta select, .respuesta textarea { font-size: 18px; min-height: 52px; }
+.respuesta textarea { min-height: 96px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.opciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2); }
+.opcion { min-height: 52px; padding: var(--s2) var(--s4); border: 1.5px solid var(--linea); border-radius: var(--radio-sm); background: #fff; font: inherit; font-weight: 500; color: var(--carbon); cursor: pointer; text-align: left; }
+.opcion:hover { border-color: var(--tinta-3); }
+.opcion[aria-pressed="true"] { border-color: var(--carbon); background: var(--marca-velo); box-shadow: inset 0 0 0 1px var(--carbon); }
+.campos-familiar { display: grid; gap: var(--s3); }
+.nav-asis { justify-content: flex-end; margin-top: auto; }
+.nav-asis .btn { min-width: 120px; }
+.revisa { display: grid; border: 1px solid var(--linea-suave); border-radius: var(--radio-sm); }
+.revisa-fila { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--linea-suave); }
+.revisa-fila:last-child { border-bottom: 0; }
+.revisa-fila > div { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.revisa-fila .suave { font-size: 12px; }
+.enlace { background: none; border: 0; padding: var(--s1); color: var(--austral); font: inherit; font-weight: 600; cursor: pointer; flex: none; }
+.lista-simple { margin: 0; padding-left: var(--s5); display: grid; gap: var(--s1); }

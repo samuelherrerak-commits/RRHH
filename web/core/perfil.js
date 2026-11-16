@@ -20,17 +20,17 @@
   /** Secciones y campos. tipo: texto | telefono | correo | lista | numero | cuenta | fecha. req: obligatorio para dar la sección por completa. */
   var SECCIONES = [
     { id: 'contacto', nombre: 'Contacto', campos: [
-      { id: 'telefono', nombre: 'Teléfono celular', tipo: 'telefono', req: true },
-      { id: 'telefono2', nombre: 'Otro teléfono', tipo: 'telefono' },
-      { id: 'correo', nombre: 'Correo personal', tipo: 'correo', req: true },
-      { id: 'estado', nombre: 'Estado', tipo: 'lista', lista: 'estados', req: true },
-      { id: 'ciudad', nombre: 'Ciudad o municipio', tipo: 'texto', req: true },
-      { id: 'direccion', nombre: 'Dirección de habitación', tipo: 'texto', largo: 250, req: true },
+      { id: 'telefono', nombre: 'Teléfono celular', tipo: 'telefono', req: true, pregunta: '¿Cuál es tu número de celular?', ayuda: 'El número donde te podemos ubicar.' },
+      { id: 'telefono2', nombre: 'Otro teléfono', tipo: 'telefono', pregunta: '¿Tienes otro número de teléfono?', ayuda: 'De tu casa o un segundo celular.' },
+      { id: 'correo', nombre: 'Correo personal', tipo: 'correo', req: true, pregunta: '¿Cuál es tu correo personal?' },
+      { id: 'estado', nombre: 'Estado', tipo: 'lista', lista: 'estados', req: true, pregunta: '¿En qué estado vives?' },
+      { id: 'ciudad', nombre: 'Ciudad o municipio', tipo: 'texto', req: true, pregunta: '¿En qué ciudad o municipio?' },
+      { id: 'direccion', nombre: 'Dirección de habitación', tipo: 'texto', largo: 250, req: true, pregunta: '¿Cuál es tu dirección de habitación?', ayuda: 'Urbanización o sector, calle y número de casa o apartamento.' },
     ] },
     { id: 'emergencia', nombre: 'Contacto de emergencia', campos: [
-      { id: 'nombre', nombre: 'Nombre y apellido', tipo: 'texto', req: true },
-      { id: 'parentesco', nombre: 'Parentesco', tipo: 'lista', lista: 'parentescoEmergencia', req: true },
-      { id: 'telefono', nombre: 'Teléfono', tipo: 'telefono', req: true },
+      { id: 'nombre', nombre: 'Nombre y apellido', tipo: 'texto', req: true, pregunta: 'En caso de emergencia, ¿a quién llamamos?', ayuda: 'Nombre y apellido de esa persona.' },
+      { id: 'parentesco', nombre: 'Parentesco', tipo: 'lista', lista: 'parentescoEmergencia', req: true, pregunta: '¿Qué es esa persona para ti?' },
+      { id: 'telefono', nombre: 'Teléfono', tipo: 'telefono', req: true, pregunta: '¿A qué número la llamamos?' },
     ] },
     { id: 'familia', nombre: 'Carga familiar', lista: true, campos: [
       { id: 'nombre', nombre: 'Nombre y apellido', tipo: 'texto', req: true },
@@ -39,14 +39,14 @@
       { id: 'cedula', nombre: 'Cédula (si tiene)', tipo: 'numero' },
     ] },
     { id: 'personales', nombre: 'Datos personales y otros', campos: [
-      { id: 'estadoCivil', nombre: 'Estado civil', tipo: 'lista', lista: 'estadoCivil', req: true },
-      { id: 'estudios', nombre: 'Nivel de estudios', tipo: 'lista', lista: 'estudios', req: true },
-      { id: 'profesion', nombre: 'Profesión u oficio', tipo: 'texto' },
-      { id: 'camisa', nombre: 'Talla de camisa', tipo: 'lista', lista: 'tallaCamisa', req: true },
-      { id: 'pantalon', nombre: 'Talla de pantalón', tipo: 'numero', req: true },
-      { id: 'zapatos', nombre: 'Talla de zapatos', tipo: 'numero', req: true },
-      { id: 'banco', nombre: 'Banco de su cuenta nómina', tipo: 'texto' },
-      { id: 'cuenta', nombre: 'Número de cuenta (20 dígitos)', tipo: 'cuenta' },
+      { id: 'estadoCivil', nombre: 'Estado civil', tipo: 'lista', lista: 'estadoCivil', req: true, pregunta: '¿Cuál es tu estado civil?' },
+      { id: 'estudios', nombre: 'Nivel de estudios', tipo: 'lista', lista: 'estudios', req: true, pregunta: '¿Cuál es tu nivel de estudios?', ayuda: 'El más alto que hayas terminado.' },
+      { id: 'profesion', nombre: 'Profesión u oficio', tipo: 'texto', pregunta: '¿Cuál es tu profesión u oficio?' },
+      { id: 'camisa', nombre: 'Talla de camisa', tipo: 'lista', lista: 'tallaCamisa', req: true, pregunta: '¿Qué talla de camisa usas?', ayuda: 'Para la dotación de uniformes.' },
+      { id: 'pantalon', nombre: 'Talla de pantalón', tipo: 'numero', req: true, pregunta: '¿Qué talla de pantalón usas?', ayuda: 'Por ejemplo: 30, 32, 34.' },
+      { id: 'zapatos', nombre: 'Talla de zapatos', tipo: 'numero', req: true, pregunta: '¿Qué talla de zapatos usas?', ayuda: 'Por ejemplo: 38, 40, 42.' },
+      { id: 'banco', nombre: 'Banco de su cuenta nómina', tipo: 'texto', pregunta: '¿En qué banco cobras tu nómina?' },
+      { id: 'cuenta', nombre: 'Número de cuenta (20 dígitos)', tipo: 'cuenta', pregunta: '¿Cuál es el número de esa cuenta?', ayuda: 'Los 20 dígitos, sin guiones.' },
     ] },
   ];
   var MAX_FAMILIA = 15;

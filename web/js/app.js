@@ -3011,56 +3011,54 @@ async function pasoComplementoQ(ctx) {
   activarLotesQ(ctx);
 }
 
-/* ---------- Mi perfil (colaborador) ---------- */
+/* ---------- Mi perfil (colaborador): resumen y actualización pregunta por pregunta ---------- */
 
 const PF = () => window.Perfil;
 const NOMBRE_SECCION = (id) => (PF().seccion(id) || {}).nombre || id;
-let borradorFamilia = null;   // filas de carga familiar mientras se edita (para agregar o quitar sin perder lo escrito)
+let asistente = null;   // actualización en curso: { d, secciones, campana, i, datos, familia, tieneFamilia }
 
-function campoPerfil(sec, c, valor, prefijo) {
-  const nombre = `${prefijo}.${c.id}`, v = esc(valor || ''), req = c.req ? ' <span class="req" aria-hidden="true">*</span>' : '';
-  let input;
-  if (c.tipo === 'lista') input = `<select name="${nombre}"><option value="">Elige…</option>${PF().LISTAS[c.lista].map((o) => `<option${o === valor ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
-  else if (c.tipo === 'fecha') input = `<input type="date" name="${nombre}" value="${v}">`;
-  else if (c.tipo === 'correo') input = `<input type="email" name="${nombre}" value="${v}" autocomplete="email" maxlength="120">`;
-  else if (c.tipo === 'telefono') input = `<input type="tel" name="${nombre}" value="${v}" inputmode="tel" placeholder="0414-1234567" maxlength="16">`;
-  else if (c.tipo === 'numero' || c.tipo === 'cuenta') input = `<input name="${nombre}" value="${v}" inputmode="numeric" maxlength="${c.tipo === 'cuenta' ? 24 : 15}">`;
-  else if (c.largo > 120) input = `<textarea name="${nombre}" maxlength="${c.largo}">${v}</textarea>`;
-  else input = `<input name="${nombre}" value="${v}" maxlength="120">`;
-  return `<label class="${c.largo > 120 ? 'ancho' : ''}"><span>${esc(c.nombre)}${req}</span> ${input}</label>`;
+function controlCampo(c, valor, nombre, foco) {
+  const v = esc(valor || ''), af = foco ? ' autofocus' : '';
+  if (c.tipo === 'lista') return `<select name="${nombre}"${af}><option value="">Elige…</option>${PF().LISTAS[c.lista].map((o) => `<option${o === valor ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  if (c.tipo === 'fecha') return `<input type="date" name="${nombre}" value="${v}"${af}>`;
+  if (c.tipo === 'correo') return `<input type="email" name="${nombre}" value="${v}" autocomplete="email" maxlength="120" placeholder="nombre@correo.com"${af}>`;
+  if (c.tipo === 'telefono') return `<input type="tel" name="${nombre}" value="${v}" inputmode="tel" placeholder="0414-1234567" maxlength="16"${af}>`;
+  if (c.tipo === 'numero' || c.tipo === 'cuenta') return `<input name="${nombre}" value="${v}" inputmode="numeric" maxlength="${c.tipo === 'cuenta' ? 24 : 15}"${af}>`;
+  if (c.largo > 120) return `<textarea name="${nombre}" maxlength="${c.largo}"${af}>${v}</textarea>`;
+  return `<input name="${nombre}" value="${v}" maxlength="120"${af}>`;
 }
 
 async function seccionPerfil(cont) {
   cont.innerHTML = `${volver()}${esqueleto(3)}`;
   const r = await obtener('miPerfil', conToken());
-  borradorFamilia = null;
   if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } cont.innerHTML = `${volver()}<p class="error-msg">${esc(r.message)}</p>`; return; }
+  if (asistente && asistente.d.nomina.cedula === r.data.nomina.cedula) { asistente.d = r.data; return pintarAsistente(cont); }
+  asistente = null;
   pintarPerfil(cont, r.data);
 }
 
+const valorTexto = (c, v) => (!v ? '' : c.tipo === 'fecha' ? V().corta(v) : v);
+const textoFamiliar = (f) => `${esc(f.nombre)} · ${esc(f.parentesco)}${f.fechaNacimiento ? ` · ${esc(V().corta(f.fechaNacimiento))}` : ''}`;
+
+/** Resumen: datos de nómina, lo que tiene cargado y el botón para actualizar (una pregunta a la vez). */
 function pintarPerfil(cont, d) {
   const datos = d.datos || {}, n = d.nomina;
-  if (!borradorFamilia) borradorFamilia = (datos.familia || []).map((f) => ({ ...f }));
   const chipSec = (id) => (PF().seccionCompleta(datos, id) ? '<span class="chip chip-ok">Completo</span>' : '<span class="chip chip-espera">Por completar</span>');
-  const filaFam = (f, i) => `<div class="familiar" data-fam="${i}"><div class="campos-perfil">${PF().seccion('familia').campos.map((c) => campoPerfil('familia', c, f[c.id], `familia.${i}`)).join('')}</div>
-    <button class="btn btn-sec btn-chico" type="button" data-quitar-fam="${i}">Quitar</button></div>`;
-  const seccionForm = (s) => s.lista ? `
-    <section class="tarjeta" id="sec-${s.id}"><div class="item-cab"><h2>${esc(s.nombre)}</h2>${chipSec(s.id)}</div>
-      <p class="suave">Hijos, cónyuge, padres u otras personas que dependen de ti.</p>
-      <div id="familiares">${borradorFamilia.map(filaFam).join('')}</div>
-      <div class="fila"><button class="btn btn-sec btn-chico" type="button" id="agregar-fam">Agregar familiar</button>
-        <label class="check"><input type="checkbox" name="sinFamilia"${datos.sinFamilia && !borradorFamilia.length ? ' checked' : ''}${borradorFamilia.length ? ' disabled' : ''}> No tengo carga familiar</label></div>
-    </section>` : `
-    <section class="tarjeta" id="sec-${s.id}"><div class="item-cab"><h2>${esc(s.nombre)}</h2>${chipSec(s.id)}</div>
-      <div class="campos-perfil">${s.campos.map((c) => campoPerfil(s.id, c, (datos[s.id] || {})[c.id], s.id)).join('')}</div>
-    </section>`;
+  const preguntas = (secs) => secs.reduce((t, id) => t + (PF().seccion(id).lista ? 1 : PF().seccion(id).campos.length), 0);
+  const cuerpo = (s) => (s.lista
+    ? ((datos.familia || []).length ? `<ul class="lista-simple">${datos.familia.map((f) => `<li>${textoFamiliar(f)}</li>`).join('')}</ul>` : `<p class="suave">${datos.sinFamilia ? 'No tienes carga familiar registrada.' : 'Sin responder.'}</p>`)
+    : `<dl class="datos-nomina">${s.campos.map((c) => `<div><dt>${esc(c.nombre)}</dt><dd>${esc(valorTexto(c, (datos[s.id] || {})[c.id])) || '<span class="suave">—</span>'}</dd></div>`).join('')}</dl>`);
   cont.innerHTML = `${volver()}
-    ${d.campanas.map((c) => `<section class="tarjeta aviso-campana">
+    ${d.campanas.map((c, k) => `<section class="tarjeta aviso-campana">
       <h2>${esc(c.titulo)}</h2>${c.mensaje ? `<p>${esc(c.mensaje)}</p>` : ''}
-      <p class="suave">Gestión Humana te pide revisar y completar: <b>${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. Tienes hasta el <b>${esc(V().corta(c.hasta))}</b>.
-      ${c.faltan.length ? `Te falta: ${c.faltan.map(NOMBRE_SECCION).map(esc).join(', ')}.` : 'Ya tienes todo completo: revisa que esté al día y pulsa «Guardar y confirmar».'}</p></section>`).join('')}
+      <p class="suave">Gestión Humana te pide revisar: <b>${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. Tienes hasta el <b>${esc(V().corta(c.hasta))}</b>.
+        Son ${preguntas(c.secciones)} preguntas cortas, una a la vez.</p>
+      <div><button class="btn" type="button" data-empezar="${k}">Empezar</button></div></section>`).join('')}
+    ${!d.campanas.length && d.faltan.length ? `<section class="tarjeta aviso-campana"><h2>Completa tu perfil</h2>
+      <p class="suave">Te falta: <b>${d.faltan.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. Son ${preguntas(d.faltan)} preguntas cortas.</p>
+      <div><button class="btn" type="button" id="completar">Completar ahora</button></div></section>` : ''}
     <section class="tarjeta">
-      <div class="item-cab"><div><h2>Mi perfil</h2><p class="suave">Mantén al día tus datos: así Gestión Humana puede contactarte y tomarte en cuenta en beneficios y dotaciones.${d.actualizado ? ` Última actualización: ${fechaHoraMin(d.actualizado)}` : ''}</p></div></div>
+      <div><h2>Mi perfil</h2><p class="suave">Mantén al día tus datos: así Gestión Humana puede contactarte y tomarte en cuenta en beneficios y dotaciones.${d.actualizado ? ` Última actualización: ${fechaHoraMin(d.actualizado)}` : ''}</p></div>
       <dl class="datos-nomina">
         <div><dt>Nombre</dt><dd>${esc(n.nombre)}</dd></div><div><dt>Cédula</dt><dd>${esc(n.cedula.slice(1))}</dd></div>
         <div><dt>Cargo</dt><dd>${esc(n.cargo || '—')}</dd></div><div><dt>Empresa</dt><dd>${n.empresa === 'AIV' ? 'Austral' : 'Prosein'}</dd></div>
@@ -3069,37 +3067,125 @@ function pintarPerfil(cont, d) {
       </dl>
       <p class="suave">Estos datos vienen de la nómina. Si alguno está mal, avísale a Gestión Humana.</p>
     </section>
-    <form id="fperfil" novalidate>
-      ${PF().SECCIONES.map(seccionForm).join('')}
-      <div class="error-msg" id="err-perfil" hidden></div>
-      <div class="fila barra-guardar"><button class="btn" type="submit">${d.campanas.length ? 'Guardar y confirmar' : 'Guardar mis datos'}</button><span class="suave">Los campos con * son obligatorios.</span></div>
-    </form>`;
+    ${PF().SECCIONES.map((s) => `<section class="tarjeta" id="sec-${s.id}"><div class="item-cab"><h2>${esc(s.nombre)}</h2>${chipSec(s.id)}</div>
+      ${cuerpo(s)}<div><button class="btn btn-sec btn-chico" type="button" data-editar="${s.id}">${PF().seccionCompleta(datos, s.id) ? 'Actualizar' : 'Completar'}</button></div></section>`).join('')}`;
   cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
-  const f = cont.querySelector('#fperfil'), err = cont.querySelector('#err-perfil');
-  const leerFamilia = () => { borradorFamilia = [...cont.querySelectorAll('.familiar')].map((x) => { const o = {}; PF().seccion('familia').campos.forEach((c) => { o[c.id] = x.querySelector(`[name="familia.${x.dataset.fam}.${c.id}"]`).value; }); return o; }); };
-  const repintar = () => { const vals = leerForm(); leerFamilia(); pintarPerfil(cont, { ...d, datos: { ...datos, ...vals, familia: borradorFamilia } }); };
-  const leerForm = () => {
-    const o = {};
-    PF().SECCIONES.filter((s) => !s.lista).forEach((s) => { o[s.id] = {}; s.campos.forEach((c) => { o[s.id][c.id] = f.elements[`${s.id}.${c.id}`].value; }); });
-    o.sinFamilia = !!(f.elements.sinFamilia && f.elements.sinFamilia.checked);
-    return o;
+  const empezar = (secciones, campana) => {
+    const fam = (datos.familia || []).map((f) => ({ ...f }));
+    asistente = { d, secciones, campana, i: 0, datos: JSON.parse(JSON.stringify(datos)), familia: fam, tieneFamilia: fam.length ? true : datos.sinFamilia ? false : null };
+    PF().SECCIONES.forEach((s) => { if (!s.lista) asistente.datos[s.id] = asistente.datos[s.id] || {}; });
+    pintarAsistente(cont);
   };
-  cont.querySelector('#agregar-fam').addEventListener('click', () => {
-    if (cont.querySelectorAll('.familiar').length >= PF().MAX_FAMILIA) return toast(`Puedes registrar hasta ${PF().MAX_FAMILIA} familiares.`);
-    leerFamilia(); borradorFamilia.push({}); const vals = leerForm(); vals.sinFamilia = false;
-    pintarPerfil(cont, { ...d, datos: { ...datos, ...vals, familia: borradorFamilia } });
+  cont.querySelectorAll('[data-empezar]').forEach((b) => b.addEventListener('click', () => { const c = d.campanas[Number(b.dataset.empezar)]; empezar(c.secciones, c); }));
+  cont.querySelector('#completar')?.addEventListener('click', () => empezar(d.faltan, null));
+  cont.querySelectorAll('[data-editar]').forEach((b) => b.addEventListener('click', () => empezar([b.dataset.editar], null)));
+}
+
+/** Los pasos de la actualización: una pregunta por pantalla (cada familiar es un paso) y al final, revisar. */
+function pasosAsistente(a) {
+  const p = [];
+  PF().SECCIONES.filter((s) => a.secciones.includes(s.id)).forEach((s) => {
+    if (s.lista) { p.push({ tipo: 'tieneFamilia', s }); if (a.tieneFamilia) a.familia.forEach((_, k) => p.push({ tipo: 'familiar', s, k })); }
+    else s.campos.forEach((c) => p.push({ tipo: 'campo', s, c }));
   });
-  cont.querySelectorAll('[data-quitar-fam]').forEach((b) => b.addEventListener('click', () => { leerFamilia(); borradorFamilia.splice(Number(b.dataset.quitarFam), 1); repintar(); }));
-  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(e.submitter || f.querySelector('button[type=submit]'), async () => {
-    errorEn(err, ''); leerFamilia();
-    const enviar = { ...leerForm(), familia: borradorFamilia };
-    const x = await llamar('guardarMiPerfil', { datos: enviar, ...conToken() });
-    if (!x.ok) { if (x.code === 'SESION') { toast(x.message); return arrancar(); } return errorEn(err, x.message); }
-    borradorFamilia = null;
-    toast(x.data.confirmadas.length ? '¡Gracias! Tus datos quedaron actualizados.' : 'Datos guardados.');
-    pintarPerfil(cont, { ...d, datos: x.data.datos, actualizado: x.data.actualizado, campanas: x.data.campanas });
-    window.scrollTo(0, 0);
-  }); });
+  p.push({ tipo: 'revisar' });
+  return p;
+}
+
+function pintarAsistente(cont) {
+  const a = asistente, pasos = pasosAsistente(a);
+  a.i = Math.max(0, Math.min(a.i, pasos.length - 1));
+  const paso = pasos[a.i], total = pasos.length - 1, ultimo = paso.tipo === 'revisar';
+  const opciones = (lista, actual, attr) => `<div class="opciones">${lista.map((o) => `<button type="button" class="opcion" ${attr}="${esc(o)}" aria-pressed="${o === actual}">${esc(o)}</button>`).join('')}</div>`;
+  let cuerpo = '';
+  if (paso.tipo === 'campo') {
+    const { s, c } = paso, val = a.datos[s.id][c.id] || '';
+    cuerpo = `<p class="kicker-perfil">${esc(s.nombre)}</p><h2 class="pregunta">${esc(c.pregunta || c.nombre)}</h2>
+      ${c.ayuda || !c.req ? `<p class="suave">${esc(c.ayuda || '')}${c.req ? '' : `${c.ayuda ? ' ' : ''}<span class="chip chip-neutro">Opcional</span>`}</p>` : ''}
+      ${c.tipo === 'lista' && PF().LISTAS[c.lista].length <= 10 ? opciones(PF().LISTAS[c.lista], val, 'data-opcion') : `<label class="respuesta"><span class="sr">${esc(c.nombre)}</span>${controlCampo(c, val, 'resp', true)}</label>`}`;
+  } else if (paso.tipo === 'tieneFamilia') {
+    cuerpo = `<p class="kicker-perfil">${esc(paso.s.nombre)}</p><h2 class="pregunta">¿Tienes carga familiar?</h2>
+      <p class="suave">Hijos, cónyuge, padres u otras personas que dependen de ti.</p>
+      <div class="opciones"><button type="button" class="opcion" data-fam="si" aria-pressed="${a.tieneFamilia === true}">Sí</button>
+        <button type="button" class="opcion" data-fam="no" aria-pressed="${a.tieneFamilia === false}">No, no tengo carga familiar</button></div>`;
+  } else if (paso.tipo === 'familiar') {
+    const f = a.familia[paso.k] || {};
+    cuerpo = `<p class="kicker-perfil">${esc(paso.s.nombre)} · familiar ${paso.k + 1} de ${a.familia.length}</p><h2 class="pregunta">Cuéntanos de tu familiar</h2>
+      <div class="campos-familiar">${paso.s.campos.map((c, j) => `<label><span>${esc(c.nombre)}${c.req ? ' <span class="req" aria-hidden="true">*</span>' : ''}</span>${controlCampo(c, f[c.id], 'fam-' + c.id, j === 0)}</label>`).join('')}</div>
+      <div class="fila"><button type="button" class="btn btn-sec btn-chico" id="otro-fam">Agregar otro familiar</button>
+        <button type="button" class="btn btn-sec btn-chico" id="quitar-fam">Quitar este familiar</button></div>`;
+  } else {
+    const fila = (txt, valor, idx) => `<div class="revisa-fila"><div><span class="suave">${esc(txt)}</span><b>${valor || '<span class="suave">—</span>'}</b></div><button type="button" class="enlace" data-ir-paso="${idx}">Cambiar</button></div>`;
+    cuerpo = `<h2 class="pregunta">Revisa tus respuestas</h2><p class="suave">Si todo está bien, pulsa «Guardar». Puedes cambiar cualquier respuesta.</p>
+      <div class="revisa">${pasos.slice(0, -1).map((p, idx) => p.tipo === 'campo' ? fila(p.c.nombre, esc(valorTexto(p.c, a.datos[p.s.id][p.c.id])), idx)
+        : p.tipo === 'tieneFamilia' ? fila('Carga familiar', a.tieneFamilia ? `${a.familia.length} familiar${a.familia.length === 1 ? '' : 'es'}` : 'No tengo carga familiar', idx)
+        : fila(`Familiar ${p.k + 1}`, textoFamiliar(a.familia[p.k]), idx)).join('')}</div>`;
+  }
+  cont.innerHTML = `<div><button class="btn btn-sec btn-chico" type="button" id="salir-asis">✕ Salir sin guardar</button></div>
+    <form class="tarjeta asistente" id="fpaso" novalidate>
+      ${a.campana ? `<p class="suave">${esc(a.campana.titulo)}</p>` : ''}
+      <div class="avance-asis"><div class="barra-avance"><span style="width:${Math.round((a.i / total) * 100)}%"></span></div>
+        <span class="suave">${ultimo ? 'Último paso' : `Pregunta ${a.i + 1} de ${total}`}</span></div>
+      ${cuerpo}
+      <div class="error-msg" id="err-paso" hidden></div>
+      <div class="fila nav-asis">${a.i > 0 ? '<button class="btn btn-sec" type="button" id="atras">Atrás</button>' : ''}
+        <button class="btn" type="submit">${ultimo ? 'Guardar' : 'Siguiente'}</button></div>
+    </form>`;
+  window.scrollTo(0, 0);
+  const f = cont.querySelector('#fpaso'), err = cont.querySelector('#err-paso');
+  const ir = (i) => { a.i = i; pintarAsistente(cont); };
+  /** Toma la respuesta de la pantalla; devuelve el error a mostrar o ''. */
+  const tomar = () => {
+    if (paso.tipo === 'campo') {
+      const { s, c } = paso, el = f.elements.resp, r = PF().limpiarCampo(c, el ? el.value : a.datos[s.id][c.id]);
+      if (r.error) return r.error.replace(/^[^:]+: /, '');
+      if (c.req && !r.valor) return 'Responde esta pregunta para continuar.';
+      a.datos[s.id][c.id] = r.valor; return '';
+    }
+    if (paso.tipo === 'tieneFamilia') return a.tieneFamilia == null ? 'Elige una opción.' : '';
+    if (paso.tipo === 'familiar') {
+      const o = {}, errores = [];
+      paso.s.campos.forEach((c) => { const r = PF().limpiarCampo(c, f.elements['fam-' + c.id].value); o[c.id] = r.valor; if (r.error) errores.push(r.error); else if (c.req && !r.valor) errores.push(`Falta: ${c.nombre.toLowerCase()}.`); });
+      a.familia[paso.k] = o;
+      return errores.join(' ');
+    }
+    return '';
+  };
+  const siguiente = () => { const e = tomar(); if (e) return errorEn(err, e); ir(a.i + 1); };
+  cont.querySelector('#salir-asis').addEventListener('click', () => { if (confirm('¿Salir sin guardar? Se perderán las respuestas de esta actualización.')) { const d = a.d; asistente = null; pintarPerfil(cont, d); } });
+  cont.querySelector('#atras')?.addEventListener('click', () => { if (paso.tipo === 'campo' || paso.tipo === 'familiar') tomar(); ir(a.i - 1); });
+  cont.querySelectorAll('[data-opcion]').forEach((b) => b.addEventListener('click', () => { a.datos[paso.s.id][paso.c.id] = b.dataset.opcion; ir(a.i + 1); }));
+  cont.querySelectorAll('[data-fam]').forEach((b) => b.addEventListener('click', () => {
+    a.tieneFamilia = b.dataset.fam === 'si';
+    if (a.tieneFamilia && !a.familia.length) a.familia.push({});
+    ir(a.i + 1);
+  }));
+  cont.querySelector('#otro-fam')?.addEventListener('click', () => {
+    const e = tomar(); if (e) return errorEn(err, e);
+    if (a.familia.length >= PF().MAX_FAMILIA) return errorEn(err, `Puedes registrar hasta ${PF().MAX_FAMILIA} familiares.`);
+    a.familia.push({}); ir(pasosAsistente(a).findIndex((p) => p.tipo === 'familiar' && p.k === a.familia.length - 1));
+  });
+  cont.querySelector('#quitar-fam')?.addEventListener('click', () => {
+    a.familia.splice(paso.k, 1);
+    if (!a.familia.length) { a.tieneFamilia = null; return ir(pasosAsistente(a).findIndex((p) => p.tipo === 'tieneFamilia')); }
+    const k = Math.min(paso.k, a.familia.length - 1);
+    ir(pasosAsistente(a).findIndex((p) => p.tipo === 'familiar' && p.k === k));
+  });
+  cont.querySelectorAll('[data-ir-paso]').forEach((b) => b.addEventListener('click', () => ir(Number(b.dataset.irPaso))));
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!ultimo) return siguiente();
+    conBoton(e.submitter || f.querySelector('button[type=submit]'), async () => {
+      const envio = {};
+      a.secciones.forEach((id) => { if (PF().seccion(id).lista) { envio.familia = a.tieneFamilia ? a.familia : []; envio.sinFamilia = a.tieneFamilia === false; } else envio[id] = a.datos[id]; });
+      const x = await llamar('guardarMiPerfil', { datos: envio, ...conToken() });
+      if (!x.ok) { if (x.code === 'SESION') { toast(x.message); return arrancar(); } return errorEn(err, x.message); }
+      const d = { ...a.d, datos: x.data.datos, actualizado: x.data.actualizado, campanas: x.data.campanas, faltan: x.data.faltan };
+      asistente = null;
+      toast(x.data.confirmadas.length ? '¡Gracias! Tus datos quedaron actualizados.' : 'Datos guardados.');
+      pintarPerfil(cont, d); window.scrollTo(0, 0);
+    });
+  });
 }
 
 /* ---------- Datos del personal (Gestión Humana) ---------- */
