@@ -2030,6 +2030,18 @@ var Perfil = (function () {
       ];
       var MAX_FAMILIA = 15;
     
+      /** Plan sugerido: el perfil en 4 campañas cortas (una sección cada una) que Gestión Humana lanza de una en una. */
+      var PLAN_CAMPANAS = [
+        { titulo: 'Actualización de datos (1 de 4): tu contacto', secciones: ['contacto'],
+          mensaje: 'Queremos tener al día tu teléfono, tu correo y tu dirección para poder comunicarnos contigo.' },
+        { titulo: 'Actualización de datos (2 de 4): contacto de emergencia', secciones: ['emergencia'],
+          mensaje: 'Si te pasa algo en el trabajo, ¿a quién llamamos?' },
+        { titulo: 'Actualización de datos (3 de 4): tu carga familiar', secciones: ['familia'],
+          mensaje: 'Cuéntanos quiénes dependen de ti para tomarlos en cuenta en los beneficios y actividades para tu familia.' },
+        { titulo: 'Actualización de datos (4 de 4): tallas y datos personales', secciones: ['personales'],
+          mensaje: 'Tus tallas para la dotación de uniformes, tu estado civil, tus estudios y tu cuenta nómina. Con esta terminas tu perfil.' },
+      ];
+    
       function seccion(id) { return SECCIONES.filter(function (s) { return s.id === id; })[0]; }
       function texto(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
     
@@ -2122,7 +2134,7 @@ var Perfil = (function () {
         return !!(perfil && perfil.confirmadas && perfil.confirmadas[campana.id]) && !faltantes(perfil.datos, campana.secciones).length;
       }
     
-      var api = { LISTAS: LISTAS, SECCIONES: SECCIONES, MAX_FAMILIA: MAX_FAMILIA, seccion: seccion, limpiarCampo: limpiarCampo, normalizar: normalizar,
+      var api = { LISTAS: LISTAS, SECCIONES: SECCIONES, PLAN_CAMPANAS: PLAN_CAMPANAS, MAX_FAMILIA: MAX_FAMILIA, seccion: seccion, limpiarCampo: limpiarCampo, normalizar: normalizar,
         seccionCompleta: seccionCompleta, faltantes: faltantes, diferencias: diferencias, enAlcance: enAlcance, completo: completo };
       if (typeof module !== 'undefined' && module.exports) module.exports = api;
       else raiz.Perfil = api;
@@ -4173,7 +4185,7 @@ var Servicio = (function () {
     
       function vistaCampana(c, hoy) {
         return { id: c.id, titulo: c.titulo, mensaje: c.mensaje || '', secciones: c.secciones || [], alcance: c.alcance || { tipo: 'todos' }, hasta: c.hasta,
-          estado: c.estado, creada: c.creada, por: c.por || '', vigente: c.estado === 'ABIERTA' && hoy <= c.hasta, vencida: c.estado === 'ABIERTA' && hoy > c.hasta };
+          estado: c.estado, creada: c.creada, por: c.por || '', orden: c.orden || 0, lanzada: c.lanzada || 0, vigente: c.estado === 'ABIERTA' && hoy <= c.hasta, vencida: c.estado === 'ABIERTA' && hoy > c.hasta };
       }
       /** Campañas abiertas que le tocan a esta persona y aún no completa. */
       function pendientesDe(repo, emp, perfil, hoy) {
@@ -4225,28 +4237,102 @@ var Servicio = (function () {
         return ok({ datos: datos, actualizado: ahora, cambios: cambios.length, confirmadas: nuevas, faltan: Perfil.faltantes(datos), campanas: pendientesDe(repo, emp, perfil, hoy) });
       }
     
-      /** RRHH abre una campaña de actualización: qué secciones, a quién, hasta cuándo y el mensaje. Avisa a cada persona. */
-      function crearCampanaDatos(repo, ctx, token, d) {
-        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
-        if (!s) return err('SESION', 'No autorizado.');
+      /** Valida título, secciones, alcance y fecha límite de una campaña. Devuelve { error } o { c }. hasta es obligatoria si se abre ya. */
+      function datosCampana(repo, d, hoy, conFecha) {
         d = d || {};
-        var titulo = String(d.titulo || '').trim().slice(0, 100), hoy = hoyCaracas(ctx);
+        var titulo = String(d.titulo || '').trim().slice(0, 100);
         var secciones = (d.secciones || []).filter(function (x) { return Perfil.seccion(x); });
         var a = d.alcance || { tipo: 'todos' }, alcance = { tipo: ['todos', 'empresas', 'personas'].indexOf(a.tipo) !== -1 ? a.tipo : 'todos' };
         if (alcance.tipo === 'empresas') alcance.empresas = (a.empresas || []).filter(function (x) { return x === 'PCA' || x === 'AIV'; });
         if (alcance.tipo === 'personas') alcance.claves = (a.claves || []).filter(function (k) { return repo.empleadoPorClave(k); });
-        if (!titulo) return err('VALIDACION', 'Escribe un título para la campaña.');
-        if (!secciones.length) return err('VALIDACION', 'Elige al menos una sección para actualizar.');
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d.hasta || '')) || d.hasta < hoy) return err('VALIDACION', 'La fecha límite debe ser hoy o una fecha futura.');
-        if ((alcance.tipo === 'empresas' && !alcance.empresas.length) || (alcance.tipo === 'personas' && !alcance.claves.length)) return err('VALIDACION', 'Elige a quién va dirigida.');
-        var c = { id: repo.nuevoIdCampana(), titulo: titulo, mensaje: String(d.mensaje || '').trim().slice(0, 500), secciones: secciones, alcance: alcance,
-          hasta: d.hasta, estado: 'ABIERTA', creada: ctx.ahora(), por: s.clave };
+        var hasta = String(d.hasta || '');
+        if (!titulo) return { error: 'Escribe un título para la campaña.' };
+        if (!secciones.length) return { error: 'Elige al menos una sección para actualizar.' };
+        if ((conFecha || hasta) && (!/^\d{4}-\d{2}-\d{2}$/.test(hasta) || hasta < hoy)) return { error: 'La fecha límite debe ser hoy o una fecha futura.' };
+        if ((alcance.tipo === 'empresas' && !alcance.empresas.length) || (alcance.tipo === 'personas' && !alcance.claves.length)) return { error: 'Elige a quién va dirigida.' };
+        return { c: { titulo: titulo, mensaje: String(d.mensaje || '').trim().slice(0, 500), secciones: secciones, alcance: alcance, hasta: hasta } };
+      }
+    
+      /** Abre la campaña: avisa a cada persona a la que le toca. */
+      function lanzar(repo, ctx, s, c) {
+        c.estado = 'ABIERTA'; c.lanzada = ctx.ahora();
         repo.guardarCampanaDatos(c);
         var destinos = activosConCedula(repo).filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); }).map(function (e) { return Empleados.claveCedula(e); });
-        notificar(repo, ctx, alcance.tipo === 'todos' ? '*' : destinos, { tipo: 'PERFIL_CAMPANA', ruta: 'perfil', titulo: 'Actualiza tus datos: ' + titulo,
+        notificar(repo, ctx, c.alcance.tipo === 'todos' ? '*' : destinos, { tipo: 'PERFIL_CAMPANA', ruta: 'perfil', titulo: 'Actualiza tus datos: ' + c.titulo,
           texto: (c.mensaje ? c.mensaje + ' ' : '') + 'Tienes hasta el ' + fechaCorta(c.hasta) + '.' });
-        repo.log('PERFIL_CAMPANA', s.clave, c.id + ' · ' + titulo + ' · ' + destinos.length);
-        return ok(Object.assign(vistaCampana(c, hoy), { personas: destinos.length }));
+        repo.log('PERFIL_CAMPANA', s.clave, c.id + ' · ' + c.titulo + ' · ' + destinos.length);
+        return ok(Object.assign(vistaCampana(c, hoyCaracas(ctx)), { personas: destinos.length }));
+      }
+      function campanaPorId(repo, id) { return repo.campanasDatos().filter(function (x) { return x.id === id && x.estado !== 'ELIMINADA'; })[0]; }
+      function siguienteOrden(repo) { return repo.campanasDatos().reduce(function (m, c) { return Math.max(m, c.orden || 0); }, 0) + 1; }
+    
+      /**
+       * RRHH crea una campaña: qué secciones, a quién, hasta cuándo y el mensaje.
+       * Con d.planificada queda guardada sin avisar (se lanza después); si no, se abre y avisa a cada persona.
+       */
+      function crearCampanaDatos(repo, ctx, token, d) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var planificada = !!(d && d.planificada), v = datosCampana(repo, d, hoyCaracas(ctx), !planificada);
+        if (v.error) return err('VALIDACION', v.error);
+        var c = Object.assign(v.c, { id: repo.nuevoIdCampana(), estado: 'PLANIFICADA', creada: ctx.ahora(), por: s.clave, orden: siguienteOrden(repo) });
+        if (!planificada) return lanzar(repo, ctx, s, c);
+        repo.guardarCampanaDatos(c);
+        repo.log('PERFIL_CAMPANA_PLANIFICADA', s.clave, c.id + ' · ' + c.titulo);
+        return ok(vistaCampana(c, hoyCaracas(ctx)));
+      }
+    
+      /** Cambia una campaña planificada (todavía no lanzada). */
+      function editarCampanaDatos(repo, ctx, token, id, d) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = campanaPorId(repo, id);
+        if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+        if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Esa campaña ya fue lanzada: no se puede cambiar.');
+        var v = datosCampana(repo, d, hoyCaracas(ctx), false);
+        if (v.error) return err('VALIDACION', v.error);
+        Object.assign(c, v.c);
+        repo.guardarCampanaDatos(c);
+        return ok(vistaCampana(c, hoyCaracas(ctx)));
+      }
+    
+      /** Lanza una campaña planificada con su fecha límite: desde ese momento la ven los colaboradores y les llega el aviso. */
+      function lanzarCampanaDatos(repo, ctx, token, id, hasta) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = campanaPorId(repo, id);
+        if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+        if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Esa campaña ya fue lanzada.');
+        var v = datosCampana(repo, Object.assign({}, c, { hasta: hasta }), hoyCaracas(ctx), true);
+        if (v.error) return err('VALIDACION', v.error);
+        c.hasta = v.c.hasta;
+        return lanzar(repo, ctx, s, c);
+      }
+    
+      function eliminarCampanaDatos(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = campanaPorId(repo, id);
+        if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+        if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Solo se pueden eliminar campañas que no se han lanzado.');
+        c.estado = 'ELIMINADA'; repo.guardarCampanaDatos(c);
+        repo.log('PERFIL_CAMPANA_ELIMINADA', s.clave, c.id);
+        return ok({ id: id });
+      }
+    
+      /** Carga el plan sugerido (4 campañas, una por sección) como campañas planificadas, para todo el personal. */
+      function cargarPlanCampanas(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var ya = {}; repo.campanasDatos().forEach(function (c) { if (c.estado !== 'ELIMINADA') ya[c.titulo] = true; });
+        var creadas = Perfil.PLAN_CAMPANAS.filter(function (p) { return !ya[p.titulo]; }).map(function (p) {
+          var c = { id: repo.nuevoIdCampana(), titulo: p.titulo, mensaje: p.mensaje, secciones: p.secciones.slice(), alcance: { tipo: 'todos' }, hasta: '',
+            estado: 'PLANIFICADA', creada: ctx.ahora(), por: s.clave, orden: siguienteOrden(repo) };
+          repo.guardarCampanaDatos(c);
+          return c.id;
+        });
+        repo.log('PERFIL_PLAN_CAMPANAS', s.clave, creadas.join(','));
+        return ok({ creadas: creadas.length });
       }
     
       /** Avance de cada campaña: cuántas personas le tocan y cuántas la completaron. */
@@ -4254,7 +4340,10 @@ var Servicio = (function () {
         if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
         var hoy = hoyCaracas(ctx), perfiles = {}, gente = activosConCedula(repo);
         repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
-        return ok(repo.campanasDatos().sort(function (a, b) { return b.creada - a.creada; }).map(function (c) {
+        return ok(repo.campanasDatos().filter(function (c) { return c.estado !== 'ELIMINADA'; }).sort(function (a, b) {
+          var pa = a.estado === 'PLANIFICADA', pb = b.estado === 'PLANIFICADA';
+          return pa !== pb ? (pa ? -1 : 1) : pa ? (a.orden || 0) - (b.orden || 0) : (b.lanzada || b.creada) - (a.lanzada || a.creada);
+        }).map(function (c) {
           var en = gente.filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); });
           var listos = en.filter(function (e) { return Perfil.completo(c, perfiles[Empleados.claveCedula(e)]); }).length;
           return Object.assign(vistaCampana(c, hoy), { personas: en.length, completos: listos });
@@ -4264,7 +4353,7 @@ var Servicio = (function () {
       /** Detalle de una campaña: cada persona, si la completó y qué le falta. */
       function panelCampanaDatos(repo, ctx, token, id) {
         if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
-        var c = repo.campanasDatos().filter(function (x) { return x.id === id; })[0];
+        var c = campanaPorId(repo, id);
         if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
         var perfiles = {}; repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
         var filas = activosConCedula(repo).filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); }).map(function (e) {
@@ -4315,7 +4404,7 @@ var Servicio = (function () {
     
       var api = {
         miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
-        panelCampanaDatos: panelCampanaDatos, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
+        panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
         solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
         rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
         quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,
@@ -4365,7 +4454,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-16.3';
+var VERSION = '2026-11-16.4';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -4526,6 +4615,10 @@ var RUTAS_RRHH = {
   panelCampanaDatos: function (repo, ctx, d) { return Servicio.panelCampanaDatos(repo, ctx, d.token, d.id); },
   recordarCampanaDatos: function (repo, ctx, d) { return Servicio.recordarCampanaDatos(repo, ctx, d.token, d.id); },
   cerrarCampanaDatos: function (repo, ctx, d) { return Servicio.cerrarCampanaDatos(repo, ctx, d.token, d.id); },
+  editarCampanaDatos: function (repo, ctx, d) { return Servicio.editarCampanaDatos(repo, ctx, d.token, d.id, d); },
+  lanzarCampanaDatos: function (repo, ctx, d) { return Servicio.lanzarCampanaDatos(repo, ctx, d.token, d.id, d.hasta); },
+  eliminarCampanaDatos: function (repo, ctx, d) { return Servicio.eliminarCampanaDatos(repo, ctx, d.token, d.id); },
+  cargarPlanCampanas: function (repo, ctx, d) { return Servicio.cargarPlanCampanas(repo, ctx, d.token); },
   datosPersonal: function (repo, ctx, d) { return Servicio.datosPersonal(repo, ctx, d.token); },
   guardarAliasNombre: function (repo, ctx, d) { return Servicio.guardarAliasNombre(repo, ctx, d.token, d.nombre, d.clave); },
   guardarVerificacionNomina: function (repo, ctx, d) { return Servicio.guardarVerificacionNomina(repo, ctx, d.token, d.id, d.resumen); },
@@ -5148,7 +5241,7 @@ function crearRepo_() {
       asegurarHoja_('CAMPANAS_DATOS');
       var ya = leer_('CAMPANAS_DATOS').filter(function (x) { return texto_(x.id) === c.id; })[0];
       escribirFila_('CAMPANAS_DATOS', { _fila: ya ? ya._fila : undefined, id: c.id, titulo: c.titulo, estado: c.estado, creada: c.creada, por: c.por, cerrada: c.cerrada || '',
-        detalle: JSON.stringify({ mensaje: c.mensaje, secciones: c.secciones, alcance: c.alcance, hasta: c.hasta }) });
+        detalle: JSON.stringify({ mensaje: c.mensaje, secciones: c.secciones, alcance: c.alcance, hasta: c.hasta, orden: c.orden || 0, lanzada: c.lanzada || 0 }) });
     },
     nuevoIdCampana: function () { return 'CD-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     nuevoIdNominaEsp: function () { return 'NE-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
@@ -5235,7 +5328,7 @@ function perfil_(f) {
 function campana_(f) {
   var d = jsonSeguro_(f.detalle, {});
   return { id: texto_(f.id), titulo: texto_(f.titulo), estado: texto_(f.estado), creada: Number(f.creada) || 0, por: texto_(f.por), cerrada: Number(f.cerrada) || 0,
-    mensaje: d.mensaje || '', secciones: d.secciones || [], alcance: d.alcance || { tipo: 'todos' }, hasta: d.hasta || '' };
+    mensaje: d.mensaje || '', secciones: d.secciones || [], alcance: d.alcance || { tipo: 'todos' }, hasta: d.hasta || '', orden: Number(d.orden) || 0, lanzada: Number(d.lanzada) || 0 };
 }
 
 function nominaEsp_(f) {

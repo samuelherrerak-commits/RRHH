@@ -3014,6 +3014,7 @@ async function pasoComplementoQ(ctx) {
 /* ---------- Mi perfil (colaborador): resumen y actualización pregunta por pregunta ---------- */
 
 const PF = () => window.Perfil;
+const cuantasPreguntas = (n) => (n === 1 ? 'Es una pregunta corta' : `Son ${n} preguntas cortas`);
 const NOMBRE_SECCION = (id) => (PF().seccion(id) || {}).nombre || id;
 let asistente = null;   // actualización en curso: { d, secciones, campana, i, datos, familia, tieneFamilia }
 
@@ -3052,10 +3053,10 @@ function pintarPerfil(cont, d) {
     ${d.campanas.map((c, k) => `<section class="tarjeta aviso-campana">
       <h2>${esc(c.titulo)}</h2>${c.mensaje ? `<p>${esc(c.mensaje)}</p>` : ''}
       <p class="suave">Gestión Humana te pide revisar: <b>${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. Tienes hasta el <b>${esc(V().corta(c.hasta))}</b>.
-        Son ${preguntas(c.secciones)} preguntas cortas, una a la vez.</p>
+        ${cuantasPreguntas(preguntas(c.secciones))}, una a la vez.</p>
       <div><button class="btn" type="button" data-empezar="${k}">Empezar</button></div></section>`).join('')}
     ${!d.campanas.length && d.faltan.length ? `<section class="tarjeta aviso-campana"><h2>Completa tu perfil</h2>
-      <p class="suave">Te falta: <b>${d.faltan.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. Son ${preguntas(d.faltan)} preguntas cortas.</p>
+      <p class="suave">Te falta: <b>${d.faltan.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. ${cuantasPreguntas(preguntas(d.faltan))}.</p>
       <div><button class="btn" type="button" id="completar">Completar ahora</button></div></section>` : ''}
     <section class="tarjeta">
       <div><h2>Mi perfil</h2><p class="suave">Mantén al día tus datos: así Gestión Humana puede contactarte y tomarte en cuenta en beneficios y dotaciones.${d.actualizado ? ` Última actualización: ${fechaHoraMin(d.actualizado)}` : ''}</p></div>
@@ -3195,7 +3196,7 @@ let subDatos = 'campanas', campanaAbierta = '', buscaDatos = '';
 async function panelDatosPersonal(panel) {
   const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes']];
   panel.innerHTML = `<div class="submodulos" role="tablist">${SUB.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subDatos}">${t}</button>`).join('')}</div><div id="sub">${esqueleto(2)}</div>`;
-  panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subDatos = b.dataset.sub; campanaAbierta = ''; panelDatosPersonal(panel); }));
+  panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subDatos = b.dataset.sub; campanaAbierta = ''; editandoCamp = null; panelDatosPersonal(panel); }));
   const sub = panel.querySelector('#sub');
   if (subDatos === 'campanas') return campanaAbierta ? pintarCampana(panel, sub, campanaAbierta) : pintarCampanas(panel, sub);
   const r = await obtener('datosPersonal', {});
@@ -3206,36 +3207,99 @@ async function panelDatosPersonal(panel) {
 
 const alcanceTexto = (a) => (a.tipo === 'empresas' ? a.empresas.map((e) => (e === 'AIV' ? 'Austral' : 'Prosein')).join(' y ') : a.tipo === 'personas' ? `${a.claves.length} persona${a.claves.length === 1 ? '' : 's'}` : 'Todo el personal');
 
+let editandoCamp = null;   // campaña planificada que se está editando en el formulario
+
+const fechaIsoLocal = (dias = 0) => { const t = new Date(Date.now() + dias * 86400000); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
+
 async function pintarCampanas(panel, sub) {
   const r = await obtener('listarCampanasDatos', {});
   if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
-  const hoy = new Date().toISOString().slice(0, 10), en15 = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
-  sub.innerHTML = `<div class="dos-col"><div class="col"><section class="tarjeta">
-      <div><h2>Nueva campaña de actualización</h2><p class="suave">Cada colaborador recibe un aviso y ve en su inicio qué datos debe revisar. Lo que guardan queda registrado directo, y aquí ves quién completó.</p></div>
+  const plan = r.data.filter((c) => c.estado === 'PLANIFICADA'), otras = r.data.filter((c) => c.estado !== 'PLANIFICADA');
+  const e = editandoCamp, hoy = fechaIsoLocal(), al = !e ? 'todos' : e.alcance.tipo === 'empresas' ? e.alcance.empresas[0] : 'todos';
+  const pctCamp = (c) => (c.personas ? Math.round((c.completos / c.personas) * 100) : 0);
+  const preguntas = (c) => c.secciones.reduce((t, id) => t + (PF().seccion(id).lista ? 1 : PF().seccion(id).campos.length), 0);
+  sub.innerHTML = `
+    ${!r.data.length ? `<section class="tarjeta aviso-campana"><h2>Plan sugerido: el perfil en 4 campañas</h2>
+      <p class="suave">Una campaña por sección, para que cada una tome 2 o 3 minutos: <b>1</b> tu contacto · <b>2</b> contacto de emergencia · <b>3</b> carga familiar · <b>4</b> tallas y datos personales.
+        Quedan <b>planificadas</b> (nadie las ve todavía) y tú lanzas cada una cuando quieras, con su fecha límite.</p>
+      <div><button class="btn" id="cargar-plan">Cargar las 4 campañas</button></div></section>` : ''}
+    ${plan.length ? `<section class="tarjeta"><div><h2>Planificadas</h2><p class="suave">Todavía no las ven los colaboradores. Al lanzar una, les llega el aviso y la ven en su inicio.</p></div>
+      <div class="lista">${plan.map((c, k) => `<div class="item"><div class="item-cab"><div><b>${esc(c.titulo)}</b>
+          <p class="suave">${alcanceTexto(c.alcance)} · ${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')} · ${preguntas(c)} pregunta${preguntas(c) === 1 ? '' : 's'}</p>${c.mensaje ? `<p class="suave">«${esc(c.mensaje)}»</p>` : ''}</div>
+          <span class="chip chip-neutro">${k === 0 ? 'Siguiente' : 'Planificada'}</span></div>
+        <div class="fila"><button class="btn btn-chico" data-lanzar="${esc(c.id)}">Lanzar</button>
+          <button class="btn btn-sec btn-chico" data-editar-camp="${esc(c.id)}">Editar</button>
+          <button class="btn btn-sec btn-chico" data-eliminar-camp="${esc(c.id)}">Eliminar</button></div></div>`).join('')}</div></section>` : ''}
+    <div class="dos-col"><div class="col"><section class="tarjeta" id="caja-fcamp">
+      <div><h2>${e ? 'Editar campaña planificada' : 'Nueva campaña'}</h2><p class="suave">Cada colaborador recibe un aviso y responde una pregunta a la vez. Lo que guardan queda registrado directo, y aquí ves quién completó.</p></div>
       <form id="fcamp" class="form-vac" novalidate>
-        <label>Título <input name="titulo" maxlength="100" placeholder="Ej.: Actualización de datos diciembre 2026"></label>
-        <label>Mensaje para el colaborador (opcional) <textarea name="mensaje" maxlength="500" placeholder="Ej.: Necesitamos tus datos al día para la dotación de uniformes."></textarea></label>
-        <fieldset class="checks"><legend>¿Qué datos debe revisar?</legend>${PF().SECCIONES.map((s) => `<label class="check"><input type="checkbox" name="sec" value="${s.id}" checked> ${esc(s.nombre)}</label>`).join('')}</fieldset>
+        <label>Título <input name="titulo" maxlength="100" value="${esc(e ? e.titulo : '')}" placeholder="Ej.: Actualización de datos diciembre 2026"></label>
+        <label>Mensaje para el colaborador (opcional) <textarea name="mensaje" maxlength="500" placeholder="Ej.: Necesitamos tus datos al día para la dotación de uniformes.">${esc(e ? e.mensaje : '')}</textarea></label>
+        <fieldset class="checks"><legend>¿Qué datos debe revisar?</legend>${PF().SECCIONES.map((s) => `<label class="check"><input type="checkbox" name="sec" value="${s.id}"${!e || e.secciones.includes(s.id) ? ' checked' : ''}> ${esc(s.nombre)}</label>`).join('')}</fieldset>
         <div class="fila">
-          <label class="grow">¿A quién? <select name="alcance"><option value="todos">Todo el personal</option><option value="PCA">Solo Prosein</option><option value="AIV">Solo Austral</option></select></label>
-          <label class="grow">Fecha límite <input type="date" name="hasta" min="${hoy}" value="${en15}"></label>
+          <label class="grow">¿A quién? <select name="alcance">${[['todos', 'Todo el personal'], ['PCA', 'Solo Prosein'], ['AIV', 'Solo Austral']].map(([v, t]) => `<option value="${v}"${v === al ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+          ${e ? '' : `<label class="grow">Fecha límite <input type="date" name="hasta" min="${hoy}" value="${fechaIsoLocal(14)}"></label>`}
         </div>
         <div class="error-msg" id="err-camp" hidden></div>
-        <div class="fila"><button class="btn" type="submit">Abrir campaña y avisar</button></div>
+        <div class="fila">${e ? '<button class="btn" type="submit" data-modo="editar">Guardar cambios</button><button class="btn btn-sec" type="button" id="cancelar-edit">Cancelar</button>'
+          : '<button class="btn" type="submit" data-modo="abrir">Abrir ya y avisar</button><button class="btn btn-sec" type="submit" data-modo="planificar">Guardar para lanzar después</button>'}</div>
       </form></section></div>
-    <div class="col"><section class="tarjeta"><h2>Campañas</h2>${r.data.length ? `<div class="lista">${r.data.map((c) => `
+    <div class="col"><section class="tarjeta"><h2>En curso y anteriores</h2>${otras.length ? `<div class="lista">${otras.map((c) => `
       <div class="item"><div class="item-cab"><div><b>${esc(c.titulo)}</b><p class="suave">${alcanceTexto(c.alcance)} · hasta el ${esc(V().corta(c.hasta))} · ${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</p></div>
         ${c.estado === 'CERRADA' ? '<span class="chip chip-neutro">Cerrada</span>' : c.vencida ? '<span class="chip chip-error">Vencida</span>' : '<span class="chip chip-ok">Abierta</span>'}</div>
-        <div class="barra-avance" title="${c.completos} de ${c.personas}"><span style="width:${c.personas ? Math.round((c.completos / c.personas) * 100) : 0}%"></span></div>
-        <p class="suave"><b>${c.completos}</b> de ${c.personas} completaron (${c.personas ? Math.round((c.completos / c.personas) * 100) : 0} %)</p>
-        <div class="fila"><button class="btn btn-sec btn-chico" data-ver-camp="${esc(c.id)}">Ver detalle</button></div></div>`).join('')}</div>` : '<p class="vacio">Todavía no hay campañas.</p>'}</section></div></div>`;
+        <div class="barra-avance" title="${c.completos} de ${c.personas}"><span style="width:${pctCamp(c)}%"></span></div>
+        <p class="suave"><b>${c.completos}</b> de ${c.personas} completaron (${pctCamp(c)} %)</p>
+        <div class="fila"><button class="btn btn-sec btn-chico" data-ver-camp="${esc(c.id)}">Ver detalle</button></div></div>`).join('')}</div>` : '<p class="vacio">Todavía no has lanzado campañas.</p>'}</section></div></div>`;
+  const porId = (id) => r.data.find((c) => c.id === id);
   const f = sub.querySelector('#fcamp'), err = sub.querySelector('#err-camp');
   sub.querySelectorAll('[data-ver-camp]').forEach((b) => b.addEventListener('click', () => { campanaAbierta = b.dataset.verCamp; panelDatosPersonal(panel); }));
-  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(e.submitter || f.querySelector('button[type=submit]'), async () => {
+  sub.querySelector('#cargar-plan')?.addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
+    const x = await llamar('cargarPlanCampanas', {});
+    if (!x.ok) return toast(x.message);
+    toast(`${x.data.creadas} campañas planificadas.`); panelDatosPersonal(panel);
+  }));
+  sub.querySelectorAll('[data-editar-camp]').forEach((b) => b.addEventListener('click', () => { editandoCamp = porId(b.dataset.editarCamp); pintarCampanas(panel, sub).then(() => sub.querySelector('#caja-fcamp').scrollIntoView({ behavior: 'smooth' })); }));
+  sub.querySelector('#cancelar-edit')?.addEventListener('click', () => { editandoCamp = null; pintarCampanas(panel, sub); });
+  sub.querySelectorAll('[data-eliminar-camp]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm(`¿Eliminar la campaña planificada «${porId(b.dataset.eliminarCamp).titulo}»?`)) return;
+    const x = await llamar('eliminarCampanaDatos', { id: b.dataset.eliminarCamp });
+    if (!x.ok) return toast(x.message);
+    if (editandoCamp && editandoCamp.id === b.dataset.eliminarCamp) editandoCamp = null;
+    toast('Campaña eliminada.'); panelDatosPersonal(panel);
+  })));
+  sub.querySelectorAll('[data-lanzar]').forEach((b) => b.addEventListener('click', () => {
+    const c = porId(b.dataset.lanzar);
+    dlg.innerHTML = `<form id="flanzar" novalidate><h2>Lanzar campaña</h2><p><b>${esc(c.titulo)}</b></p>
+      <p class="suave">Se avisará a ${esc(alcanceTexto(c.alcance).toLowerCase())} y la verán en su inicio hasta que la completen.</p>
+      <label>Fecha límite <input type="date" name="hasta" min="${hoy}" value="${fechaIsoLocal(14)}"></label>
+      <div class="error-msg" id="err-l" hidden></div>
+      <div class="fila"><button class="btn" type="submit">Lanzar y avisar</button><button class="btn btn-sec" type="button" id="no">Cancelar</button></div></form>`;
+    dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+    const fl = dlg.querySelector('#flanzar');
+    fl.addEventListener('submit', (ev) => { ev.preventDefault(); conBoton(fl.querySelector('button[type=submit]'), async () => {
+      const x = await llamar('lanzarCampanaDatos', { id: c.id, hasta: fl.hasta.value });
+      if (!x.ok) return errorEn(dlg.querySelector('#err-l'), x.message);
+      dlg.close(); toast(`Campaña lanzada: se avisó a ${x.data.personas} persona${x.data.personas === 1 ? '' : 's'}.`);
+      campanaAbierta = c.id; panelDatosPersonal(panel);
+    }); });
+    dlg.showModal();
+  }));
+  f.addEventListener('submit', (ev) => { ev.preventDefault(); const modo = (ev.submitter || {}).dataset?.modo || 'abrir'; conBoton(ev.submitter || f.querySelector('button[type=submit]'), async () => {
     errorEn(err, '');
-    const al = f.alcance.value, secciones = [...f.querySelectorAll('[name=sec]:checked')].map((x) => x.value);
-    const datos = { titulo: f.titulo.value, mensaje: f.mensaje.value, secciones, hasta: f.hasta.value, alcance: al === 'todos' ? { tipo: 'todos' } : { tipo: 'empresas', empresas: [al] } };
-    if (!confirm(`¿Abrir la campaña «${datos.titulo}» y avisar a ${al === 'todos' ? 'todo el personal' : al === 'AIV' ? 'Austral' : 'Prosein'}?`)) return;
+    const a = f.alcance.value, secciones = [...f.querySelectorAll('[name=sec]:checked')].map((x) => x.value);
+    const datos = { titulo: f.titulo.value, mensaje: f.mensaje.value, secciones, alcance: a === 'todos' ? { tipo: 'todos' } : { tipo: 'empresas', empresas: [a] } };
+    if (modo === 'editar') {
+      const x = await llamar('editarCampanaDatos', { id: editandoCamp.id, ...datos });
+      if (!x.ok) return errorEn(err, x.message);
+      editandoCamp = null; toast('Campaña actualizada.'); return panelDatosPersonal(panel);
+    }
+    if (modo === 'planificar') {
+      const x = await llamar('crearCampanaDatos', { ...datos, planificada: true });
+      if (!x.ok) return errorEn(err, x.message);
+      toast('Campaña guardada en «Planificadas».'); return panelDatosPersonal(panel);
+    }
+    datos.hasta = f.hasta.value;
+    if (!confirm(`¿Abrir la campaña «${datos.titulo}» y avisar a ${a === 'todos' ? 'todo el personal' : a === 'AIV' ? 'Austral' : 'Prosein'}?`)) return;
     const x = await llamar('crearCampanaDatos', datos);
     if (!x.ok) return errorEn(err, x.message);
     toast(`Campaña abierta: se avisó a ${x.data.personas} persona${x.data.personas === 1 ? '' : 's'}.`);

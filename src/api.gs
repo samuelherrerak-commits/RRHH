@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-16.3';
+var VERSION = '2026-11-16.4';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -167,6 +167,10 @@ var RUTAS_RRHH = {
   panelCampanaDatos: function (repo, ctx, d) { return Servicio.panelCampanaDatos(repo, ctx, d.token, d.id); },
   recordarCampanaDatos: function (repo, ctx, d) { return Servicio.recordarCampanaDatos(repo, ctx, d.token, d.id); },
   cerrarCampanaDatos: function (repo, ctx, d) { return Servicio.cerrarCampanaDatos(repo, ctx, d.token, d.id); },
+  editarCampanaDatos: function (repo, ctx, d) { return Servicio.editarCampanaDatos(repo, ctx, d.token, d.id, d); },
+  lanzarCampanaDatos: function (repo, ctx, d) { return Servicio.lanzarCampanaDatos(repo, ctx, d.token, d.id, d.hasta); },
+  eliminarCampanaDatos: function (repo, ctx, d) { return Servicio.eliminarCampanaDatos(repo, ctx, d.token, d.id); },
+  cargarPlanCampanas: function (repo, ctx, d) { return Servicio.cargarPlanCampanas(repo, ctx, d.token); },
   datosPersonal: function (repo, ctx, d) { return Servicio.datosPersonal(repo, ctx, d.token); },
   guardarAliasNombre: function (repo, ctx, d) { return Servicio.guardarAliasNombre(repo, ctx, d.token, d.nombre, d.clave); },
   guardarVerificacionNomina: function (repo, ctx, d) { return Servicio.guardarVerificacionNomina(repo, ctx, d.token, d.id, d.resumen); },
@@ -789,7 +793,7 @@ function crearRepo_() {
       asegurarHoja_('CAMPANAS_DATOS');
       var ya = leer_('CAMPANAS_DATOS').filter(function (x) { return texto_(x.id) === c.id; })[0];
       escribirFila_('CAMPANAS_DATOS', { _fila: ya ? ya._fila : undefined, id: c.id, titulo: c.titulo, estado: c.estado, creada: c.creada, por: c.por, cerrada: c.cerrada || '',
-        detalle: JSON.stringify({ mensaje: c.mensaje, secciones: c.secciones, alcance: c.alcance, hasta: c.hasta }) });
+        detalle: JSON.stringify({ mensaje: c.mensaje, secciones: c.secciones, alcance: c.alcance, hasta: c.hasta, orden: c.orden || 0, lanzada: c.lanzada || 0 }) });
     },
     nuevoIdCampana: function () { return 'CD-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     nuevoIdNominaEsp: function () { return 'NE-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
@@ -876,7 +880,7 @@ function perfil_(f) {
 function campana_(f) {
   var d = jsonSeguro_(f.detalle, {});
   return { id: texto_(f.id), titulo: texto_(f.titulo), estado: texto_(f.estado), creada: Number(f.creada) || 0, por: texto_(f.por), cerrada: Number(f.cerrada) || 0,
-    mensaje: d.mensaje || '', secciones: d.secciones || [], alcance: d.alcance || { tipo: 'todos' }, hasta: d.hasta || '' };
+    mensaje: d.mensaje || '', secciones: d.secciones || [], alcance: d.alcance || { tipo: 'todos' }, hasta: d.hasta || '', orden: Number(d.orden) || 0, lanzada: Number(d.lanzada) || 0 };
 }
 
 function nominaEsp_(f) {

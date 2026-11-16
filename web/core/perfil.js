@@ -51,6 +51,18 @@
   ];
   var MAX_FAMILIA = 15;
 
+  /** Plan sugerido: el perfil en 4 campañas cortas (una sección cada una) que Gestión Humana lanza de una en una. */
+  var PLAN_CAMPANAS = [
+    { titulo: 'Actualización de datos (1 de 4): tu contacto', secciones: ['contacto'],
+      mensaje: 'Queremos tener al día tu teléfono, tu correo y tu dirección para poder comunicarnos contigo.' },
+    { titulo: 'Actualización de datos (2 de 4): contacto de emergencia', secciones: ['emergencia'],
+      mensaje: 'Si te pasa algo en el trabajo, ¿a quién llamamos?' },
+    { titulo: 'Actualización de datos (3 de 4): tu carga familiar', secciones: ['familia'],
+      mensaje: 'Cuéntanos quiénes dependen de ti para tomarlos en cuenta en los beneficios y actividades para tu familia.' },
+    { titulo: 'Actualización de datos (4 de 4): tallas y datos personales', secciones: ['personales'],
+      mensaje: 'Tus tallas para la dotación de uniformes, tu estado civil, tus estudios y tu cuenta nómina. Con esta terminas tu perfil.' },
+  ];
+
   function seccion(id) { return SECCIONES.filter(function (s) { return s.id === id; })[0]; }
   function texto(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
 
@@ -143,7 +155,7 @@
     return !!(perfil && perfil.confirmadas && perfil.confirmadas[campana.id]) && !faltantes(perfil.datos, campana.secciones).length;
   }
 
-  var api = { LISTAS: LISTAS, SECCIONES: SECCIONES, MAX_FAMILIA: MAX_FAMILIA, seccion: seccion, limpiarCampo: limpiarCampo, normalizar: normalizar,
+  var api = { LISTAS: LISTAS, SECCIONES: SECCIONES, PLAN_CAMPANAS: PLAN_CAMPANAS, MAX_FAMILIA: MAX_FAMILIA, seccion: seccion, limpiarCampo: limpiarCampo, normalizar: normalizar,
     seccionCompleta: seccionCompleta, faltantes: faltantes, diferencias: diferencias, enAlcance: enAlcance, completo: completo };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Perfil = api;

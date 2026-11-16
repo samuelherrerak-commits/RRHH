@@ -98,3 +98,25 @@ test('campaña de actualización: avisa a quienes les toca, se completa al guard
   assert.equal(S.cerrarCampanaDatos(repo, ctx, rrhh, c.data.id).data.estado, 'CERRADA');
   assert.match(S.recordarCampanaDatos(repo, ctx, rrhh, c.data.id).message, /cerrada/);
 });
+
+test('plan de 4 campañas: se cargan planificadas (sin aviso), se editan y se lanzan de una en una', () => {
+  const { repo, ctx, rrhh, entrar } = escenario();
+  assert.equal(S.cargarPlanCampanas(repo, ctx, rrhh).data.creadas, 4);
+  assert.equal(S.cargarPlanCampanas(repo, ctx, rrhh).data.creadas, 0);              // no se duplican
+  assert.equal(repo.st.notificaciones.length, 0);
+  const lista = S.listarCampanasDatos(repo, ctx, rrhh).data;
+  assert.deepEqual(lista.map((c) => [c.estado, c.secciones.join()]), [['PLANIFICADA', 'contacto'], ['PLANIFICADA', 'emergencia'], ['PLANIFICADA', 'familia'], ['PLANIFICADA', 'personales']]);
+  const ana = entrar('12345678');
+  assert.equal(S.miPerfil(repo, ctx, ana).data.campanas.length, 0);                // planificada: el colaborador no la ve
+  assert.equal(S.editarCampanaDatos(repo, ctx, rrhh, lista[0].id, { ...lista[0], titulo: 'Tu contacto' }).data.titulo, 'Tu contacto');
+  assert.match(S.lanzarCampanaDatos(repo, ctx, rrhh, lista[0].id, '').message, /fecha límite/);
+  const l = S.lanzarCampanaDatos(repo, ctx, rrhh, lista[0].id, '2026-12-10');
+  assert.equal(l.data.estado, 'ABIERTA'); assert.equal(l.data.personas, 2);
+  assert.equal(repo.st.notificaciones.filter((n) => n.tipo === 'PERFIL_CAMPANA').length, 1);
+  assert.deepEqual(S.miPerfil(repo, ctx, ana).data.campanas.map((c) => c.titulo), ['Tu contacto']);
+  assert.match(S.editarCampanaDatos(repo, ctx, rrhh, lista[0].id, lista[0]).message, /ya fue lanzada/);
+  assert.match(S.eliminarCampanaDatos(repo, ctx, rrhh, lista[0].id).message, /no se han lanzado/);
+  assert.equal(S.eliminarCampanaDatos(repo, ctx, rrhh, lista[3].id).ok, true);
+  assert.deepEqual(S.listarCampanasDatos(repo, ctx, rrhh).data.map((c) => c.estado), ['PLANIFICADA', 'PLANIFICADA', 'ABIERTA']);
+  assert.equal(S.crearCampanaDatos(repo, ctx, rrhh, { titulo: 'Para después', secciones: ['contacto'], planificada: true }).data.estado, 'PLANIFICADA');
+});
