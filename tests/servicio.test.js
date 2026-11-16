@@ -745,3 +745,19 @@ test('cancelaciones: retirados con aportes, registro, archivo y procesadas', () 
   assert.equal(S.archivoCancelaciones(repo, ctx, rrhh, 'PCA').code, 'VACIO');
   assert.equal(S.marcarCancelaciones(repo, ctx, rrhh, [c.id], 'PROCESADA').data.cambiados, 1);
 });
+
+test('el archivo de anticipos enviados al banco se puede descargar de nuevo sin cambiar su estado', () => {
+  const { repo, ctx } = escenario();
+  const t = entrar(repo, ctx), a = admin(repo, ctx);
+  const hoy = new Date(ctx.ahora() - 4 * 3600e3).toISOString().slice(0, 10), en = (n) => new Date(Date.parse(hoy) + n * 864e5).toISOString().slice(0, 10);
+  S.guardarApertura(repo, ctx, a, { clave: '2026-T4', inicio: en(-1), fin: en(5) });
+  const sol = S.solicitarAnticipo(repo, ctx, t, { monto: 1000, motivo: 'Salud', acepta: true });
+  assert.equal(sol.ok, true, JSON.stringify(sol));
+  assert.equal(S.generarArchivoAnticipos(repo, ctx, a, 'PCA', true).code, 'VACIO');
+  const r1 = S.generarArchivoAnticipos(repo, ctx, a, 'PCA');
+  assert.equal(r1.data.cantidad, 1);
+  assert.equal(S.generarArchivoAnticipos(repo, ctx, a, 'PCA').code, 'VACIO');
+  const r2 = S.generarArchivoAnticipos(repo, ctx, a, 'PCA', true);
+  assert.equal(r2.data.csv, r1.data.csv);
+  assert.equal(S.bandejaAnticipos(repo, ctx, a, 'EN_ARCHIVO').data.length, 1);
+});

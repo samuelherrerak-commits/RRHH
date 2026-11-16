@@ -822,7 +822,8 @@ async function panelAnticipos(panel) {
     </section>
     <section class="tarjeta"><h2>2 · Respuesta del banco (${enBanco.length})</h2>
       <p class="suave">Reporta las que el banco <b>rechazó</b> (por ejemplo, el monto superaba el disponible) y luego marca <b>las demás como pagadas</b>.</p>
-      ${enBanco.length ? `<div class="lista">${enBanco.map((a) => tarjetaAnticipo(a, `<div><button class="btn btn-sec btn-chico" data-rech-banco="${esc(a.id)}">Rechazada por el banco</button></div>`)).join('')}</div>
+      ${enBanco.length ? `<div class="fila">${['PCA', 'AIV'].filter((e) => enBanco.some((a) => a.empresa === e)).map((e) => `<button class="btn btn-sec btn-chico" data-gen-otra="${e}">Descargar de nuevo el archivo ${e} (${enBanco.filter((a) => a.empresa === e).length})</button>`).join('')}</div>
+      <div class="lista">${enBanco.map((a) => tarjetaAnticipo(a, `<div><button class="btn btn-sec btn-chico" data-rech-banco="${esc(a.id)}">Rechazada por el banco</button></div>`)).join('')}</div>
       <div><button class="btn" id="pagar">Marcar las ${enBanco.length} como pagadas</button></div>` : '<p class="vacio">No hay anticipos esperando respuesta del banco.</p>'}
     </section>
     </div><div class="col">
@@ -861,6 +862,12 @@ async function panelAnticipos(panel) {
     if (!r.ok) return toast(r.message);
     descargar(`ANTICIPOS_${b.dataset.gen}_${new Date().toISOString().slice(0, 10)}.csv`, r.data.csv);
     toast(`Archivo con ${r.data.cantidad} anticipos. Pasan a «Enviada al banco».`); panelAnticipos(panel);
+  })));
+  panel.querySelectorAll('[data-gen-otra]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const r = await llamar('archivoAnticipos', { empresa: b.dataset.genOtra, repetir: true });
+    if (!r.ok) return toast(r.message);
+    descargar(`ANTICIPOS_${b.dataset.genOtra}_${new Date().toISOString().slice(0, 10)}.csv`, r.data.csv);
+    toast(`Archivo descargado de nuevo: ${r.data.cantidad} anticipos (siguen en «Enviada al banco»).`);
   })));
   panel.querySelectorAll('[data-rech-banco]').forEach((b) => b.addEventListener('click', () => pedirMotivo('Rechazada por el banco', async (motivo) => {
     const r = await llamar('rechazarAnticipoBanco', { id: b.dataset.rechBanco, motivo });
