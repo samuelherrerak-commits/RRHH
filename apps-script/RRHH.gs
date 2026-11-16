@@ -2272,23 +2272,24 @@ var Servicio = (function () {
        * APROBADAS de antes) y las pasa a EN_ARCHIVO. RRHH no aprueba: el banco es quien acepta o rechaza.
        * Mismo diseño que NOMINA APORTES con TIPO T = 5.
        */
-      function generarArchivoAnticipos(repo, ctx, token, empresa) {
+      function generarArchivoAnticipos(repo, ctx, token, empresa, repetir) {
         var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
         if (!s) return err('SESION', 'No autorizado.');
         var cfg = repo.empresaConfig(empresa);
         if (!cfg) return err('VALIDACION', 'Empresa desconocida.');
-        var pendientes = repo.anticiposPorEstado('PENDIENTE').concat(repo.anticiposPorEstado('APROBADA')).filter(function (a) {
+        // repetir: vuelve a generar el archivo de las que ya están «Enviada al banco», sin cambiar nada
+        var pendientes = (repetir ? repo.anticiposPorEstado('EN_ARCHIVO') : repo.anticiposPorEstado('PENDIENTE').concat(repo.anticiposPorEstado('APROBADA'))).filter(function (a) {
           var e = repo.empleadoPorClave(a.clave);
           return e && Empleados.empresaFideicomiso(e) === empresa;
         });
-        if (!pendientes.length) return err('VACIO', 'No hay solicitudes de anticipo recibidas para ' + empresa + '.');
+        if (!pendientes.length) return err('VACIO', repetir ? 'No hay anticipos de ' + empresa + ' enviados al banco.' : 'No hay solicitudes de anticipo recibidas para ' + empresa + '.');
         var items = pendientes.map(function (a) {
           var e = repo.empleadoPorClave(a.clave);
           return { cedulaLetra: e.cedulaLetra, cedulaNumero: e.cedulaNumero, nombre: e.nombre, monto: a.monto };
         });
         var filas = Exportes.filasNomina(items, { fideicomiso: cfg.fideicomiso, tipoT: cfg.tipoTAnticipo, forma: cfg.forma });
-        pendientes.forEach(function (a) { cambiarEstado(repo, ctx, a, 'EN_ARCHIVO', s.clave, {}); });
-        repo.log('ARCHIVO_ANTICIPOS', s.clave, empresa + ' · ' + pendientes.length + ' anticipos');
+        if (!repetir) pendientes.forEach(function (a) { cambiarEstado(repo, ctx, a, 'EN_ARCHIVO', s.clave, {}); });
+        repo.log(repetir ? 'ARCHIVO_ANTICIPOS_COPIA' : 'ARCHIVO_ANTICIPOS', s.clave, empresa + ' · ' + pendientes.length + ' anticipos');
         return ok({ filas: filas, csv: Exportes.aCsv(filas, { decimales: { 5: 2 } }), cantidad: pendientes.length });
       }
     
@@ -4053,7 +4054,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-12.1';
+var VERSION = '2026-11-16.2';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -4233,7 +4234,7 @@ var RUTAS_RRHH = {
   loginAdmin: function (repo, ctx, d) { return Servicio.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave); },
   bandejaAnticipos: function (repo, ctx, d) { return Servicio.bandejaAnticipos(repo, ctx, d.token, d.estado); },
   decidirAnticipo: function (repo, ctx, d) { return Servicio.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo); },
-  archivoAnticipos: function (repo, ctx, d) { return Servicio.generarArchivoAnticipos(repo, ctx, d.token, d.empresa); },
+  archivoAnticipos: function (repo, ctx, d) { return Servicio.generarArchivoAnticipos(repo, ctx, d.token, d.empresa, !!d.repetir); },
   pagarAnticipos: function (repo, ctx, d) { return Servicio.marcarAnticiposPagados(repo, ctx, d.token, d.ids || []); },
   cargarEmpleados: function (repo, ctx, d) { return Servicio.cargarEmpleados(repo, ctx, d.token, d.filas); },
   listarEmpleados: function (repo, ctx, d) { return Servicio.listarEmpleados(repo, ctx, d.token, { buscar: d.buscar, departamento: d.departamento, sinJefe: !!d.sinJefe }); },
