@@ -3454,8 +3454,15 @@ async function pintarCelebraciones(sub) {
     ${d.filas.map((f, i) => `<tr${f.dia === hoyDia ? ' class="fila-hoy"' : ''}><td><b>${f.dia}</b>${f.dia === hoyDia ? ' <span class="chip chip-ok">Hoy</span>' : ''}</td>
       <td>${f.tipo === 'CUMPLEANOS' ? '🎂 Cumpleaños' : `🎉 Aniversario · ${f.anios} año${f.anios === 1 ? '' : 's'}`}</td>
       <td><b>${esc(f.nombre)}</b><br><span class="suave">${esc([f.cargo, f.empresa === 'AIV' ? 'Austral' : 'Prosein'].filter(Boolean).join(' · '))}</span></td><td>${esc(f.localidad)}</td>
-      <td><button class="btn btn-sec btn-chico" data-tarjeta="${i}">Descargar tarjeta</button></td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie celebra en este mes.</td></tr>'}
+      <td><div class="acciones-cel"><button class="btn btn-sec btn-chico" data-tarjeta="${i}">Descargar tarjeta</button>${f.dia === hoyDia ? `<button class="btn btn-sec btn-chico" data-reenviar="${i}" title="Volver a enviar el aviso a esta persona">Reenviar</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie celebra en este mes.</td></tr>'}
     </tbody></table></div></section>`;
   sub.querySelector('#mes-cel').addEventListener('change', (e) => { mesCelebraciones = e.target.value; pintarCelebraciones(sub); });
+  sub.querySelectorAll('[data-reenviar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const f = d.filas[Number(b.dataset.reenviar)], que = f.tipo === 'CUMPLEANOS' ? 'la felicitación de cumpleaños' : `la felicitación de aniversario (${f.anios} año${f.anios === 1 ? '' : 's'})`;
+    if (!confirm(`¿Enviar de nuevo ${que} a ${f.nombre}? Le llega solo a esa persona, a la campanita y al celular.`)) return;
+    const x = await llamar('reenviarCelebracion', { clave: f.clave, tipo: f.tipo });
+    if (!x.ok) return toast(x.message);
+    toast(x.data.push === 'ENVIADO' ? `Aviso enviado a ${x.data.nombre}.` : `Aviso enviado a la campanita de ${x.data.nombre}${x.data.push === 'SIN_DESTINATARIOS' ? ' (no tiene los avisos al celular activados)' : ''}.`);
+  })));
   sub.querySelectorAll('[data-tarjeta]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => { const f = d.filas[Number(b.dataset.tarjeta)]; return descargarTarjeta({ tipo: f.tipo, nombre: f.nombre, anios: f.anios }); })));
 }

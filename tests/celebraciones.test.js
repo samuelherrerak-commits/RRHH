@@ -53,3 +53,16 @@ test('29 de febrero se celebra el 28 en años no bisiestos; el colaborador ve su
     ['CUMPLEANOS', 'Beto Austral', 18, undefined], ['ANIVERSARIO', 'Beto Austral', 18, 1]]);
   assert.equal(S.celebracionesDelMes(repo, ctx, entrar('12345678'), '2026-11').ok, false);
 });
+
+test('RRHH reenvía la felicitación de hoy solo a la persona', () => {
+  const { repo, ctx, rrhh } = escenario(Date.UTC(2026, 10, 18, 15));
+  const antes = repo.st.notificaciones.length;
+  const r = S.reenviarCelebracion(repo, ctx, rrhh, 'V12345678', 'CUMPLEANOS');
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const n = repo.st.notificaciones.slice(antes);
+  assert.deepEqual(n.map((x) => [x.tipo, x.clave]), [['CUMPLEANOS', 'V12345678']]);          // no repite el aviso a todos
+  assert.equal(S.reenviarCelebracion(repo, ctx, rrhh, 'V23456789', 'ANIVERSARIO').ok, true);
+  assert.match(S.reenviarCelebracion(repo, ctx, rrhh, 'V34567890', 'ANIVERSARIO').message, /no es el aniversario/);   // entró hoy
+  assert.match(S.reenviarCelebracion(repo, ctx, rrhh, 'V34567890', 'CUMPLEANOS').message, /no es el cumpleaños/);
+  assert.equal(S.reenviarCelebracion(repo, ctx, S.iniciarSesion(repo, ctx, '12345678').data.token, 'V12345678', 'CUMPLEANOS').ok, false);
+});

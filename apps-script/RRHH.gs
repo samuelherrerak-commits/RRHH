@@ -4449,10 +4449,7 @@ var Servicio = (function () {
           if (n.creada >= inicioDia && /^(CUMPLEANOS|ANIVERSARIO)/.test(n.tipo)) ya[n.tipo + ':' + n.clave] = true;
         });
         var cumple = c.cumpleanos.filter(function (e) { return !ya['CUMPLEANOS:' + Empleados.claveCedula(e)]; });
-        cumple.forEach(function (e) {
-          notificar(repo, ctx, [Empleados.claveCedula(e)], { tipo: 'CUMPLEANOS', ruta: 'celebracion',
-            titulo: '🎂 ¡Feliz cumpleaños, ' + primerNombreDe(e.nombre) + '!', texto: 'Hoy todo el Grupo Prosein celebra contigo. ¡Que tengas un gran día!' });
-        });
+        cumple.forEach(function (e) { notificar(repo, ctx, [Empleados.claveCedula(e)], avisoCumple(e)); });
         if (cumple.length && !ya['CUMPLEANOS_TODOS:*']) {
           var nombres = cumple.map(function (e) { return nombreCorto(e.nombre); });
           var lista = nombres.length === 1 ? nombres[0] : nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1];
@@ -4460,13 +4457,38 @@ var Servicio = (function () {
             texto: '¡Acompáñanos a felicitar' + (nombres.length === 1 ? 'le' : 'los') + ' en su día!' });
         }
         var aniv = c.aniversarios.filter(function (a) { return !ya['ANIVERSARIO:' + Empleados.claveCedula(a.emp)]; });
-        aniv.forEach(function (a) {
-          notificar(repo, ctx, [Empleados.claveCedula(a.emp)], { tipo: 'ANIVERSARIO', ruta: 'celebracion',
-            titulo: '🎉 ¡Feliz aniversario, ' + primerNombreDe(a.emp.nombre) + '!',
-            texto: 'Hoy cumples ' + (a.anios === 1 ? 'tu primer año' : a.anios + ' años') + ' en el Grupo Prosein. ¡Gracias por tu compromiso!' });
-        });
+        aniv.forEach(function (a) { notificar(repo, ctx, [Empleados.claveCedula(a.emp)], avisoAniversario(a.emp, a.anios)); });
         if (cumple.length || aniv.length) repo.log('CELEBRACIONES', 'SISTEMA', hoy + ' · ' + cumple.length + ' cumpleaños · ' + aniv.length + ' aniversarios');
         return { cumpleanos: cumple.length, aniversarios: aniv.length };
+      }
+    
+      function avisoCumple(e) {
+        return { tipo: 'CUMPLEANOS', ruta: 'celebracion', titulo: '🎂 ¡Feliz cumpleaños, ' + primerNombreDe(e.nombre) + '!', texto: 'Hoy todo el Grupo Prosein celebra contigo. ¡Que tengas un gran día!' };
+      }
+      function avisoAniversario(e, anios) {
+        return { tipo: 'ANIVERSARIO', ruta: 'celebracion', titulo: '🎉 ¡Feliz aniversario, ' + primerNombreDe(e.nombre) + '!',
+          texto: 'Hoy cumples ' + (anios === 1 ? 'tu primer año' : anios + ' años') + ' en el Grupo Prosein. ¡Gracias por tu compromiso!' };
+      }
+    
+      /**
+       * RRHH vuelve a enviar la felicitación de hoy a una persona (campanita y celular). Solo a esa persona:
+       * el aviso de cumpleaños «a todos» no se repite.
+       */
+      function reenviarCelebracion(repo, ctx, token, clave, tipo) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var e = repo.empleadoPorClave(clave), hoy = hoyCaracas(ctx);
+        if (!e || e.estado === 'Inactivo') return err('NO_ENCONTRADO', 'No encontramos a esa persona activa.');
+        var k = Empleados.claveCedula(e), anios = e.fechaIngreso ? Number(hoy.slice(0, 4)) - e.fechaIngreso.y : 0, r;
+        if (tipo === 'CUMPLEANOS') {
+          if (!caeHoy(e.fechaNacimiento, hoy)) return err('VALIDACION', 'Hoy no es el cumpleaños de ' + nombreBonito(e.nombre) + '.');
+          r = notificar(repo, ctx, [k], avisoCumple(e));
+        } else if (tipo === 'ANIVERSARIO') {
+          if (!e.fechaIngreso || !caeHoy(e.fechaIngreso, hoy) || anios < 1) return err('VALIDACION', 'Hoy no es el aniversario de ' + nombreBonito(e.nombre) + '.');
+          r = notificar(repo, ctx, [k], avisoAniversario(e, anios));
+        } else return err('VALIDACION', 'Tipo de celebración no válido.');
+        repo.log('CELEBRACION_REENVIADA', s.clave, tipo + ' · ' + k);
+        return ok({ nombre: nombreBonito(e.nombre), push: (r && r.estado) || 'SIN_CONFIGURAR' });
       }
     
       /** El colaborador: ¿celebra algo hoy? Para mostrarle su tarjeta en el CAC. */
@@ -4497,7 +4519,7 @@ var Servicio = (function () {
       }
     
       var api = {
-        avisosCelebraciones: function (repo, ctx) { return ok(avisosCelebraciones(repo, ctx)); }, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes,
+        avisosCelebraciones: function (repo, ctx) { return ok(avisosCelebraciones(repo, ctx)); }, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes, reenviarCelebracion: reenviarCelebracion,
         miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
         panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
         solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
@@ -4549,7 +4571,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-18.3';
+var VERSION = '2026-11-18.4';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -4704,6 +4726,7 @@ var RUTAS_RRHH = {
   cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
   datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
   miCelebracion: function (repo, ctx, d) { return Servicio.miCelebracion(repo, ctx, d.token); },
+  reenviarCelebracion: function (repo, ctx, d) { return Servicio.reenviarCelebracion(repo, ctx, d.token, d.clave, d.tipo); },
   celebracionesDelMes: function (repo, ctx, d) { return Servicio.celebracionesDelMes(repo, ctx, d.token, d.mes); },
   miPerfil: function (repo, ctx, d) { return Servicio.miPerfil(repo, ctx, d.token); },
   guardarMiPerfil: function (repo, ctx, d) { return Servicio.guardarMiPerfil(repo, ctx, d.token, d.datos); },

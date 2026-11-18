@@ -426,3 +426,5 @@ details.item[open] { gap: var(--s3); }
 .nota-cel { background: var(--espera-velo); color: var(--espera); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); font-size: 14px; }
 .tabla-omega td .btn { white-space: nowrap; }
 .tabla-cel { min-width: 0; width: 100%; } .tabla-cel th:first-child, .tabla-cel td:first-child { width: 90px; min-width: 0; white-space: nowrap; } .tabla-cel td:last-child { text-align: right; padding-right: 16px; }
+.acciones-cel { display: flex; gap: var(--s2); justify-content: flex-end; flex-wrap: nowrap; }
+.tabla-cel td:nth-child(4) { white-space: normal; min-width: 120px; }

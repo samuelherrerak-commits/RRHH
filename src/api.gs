@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-18.3';
+var VERSION = '2026-11-18.4';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -161,6 +161,7 @@ var RUTAS_RRHH = {
   cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
   datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
   miCelebracion: function (repo, ctx, d) { return Servicio.miCelebracion(repo, ctx, d.token); },
+  reenviarCelebracion: function (repo, ctx, d) { return Servicio.reenviarCelebracion(repo, ctx, d.token, d.clave, d.tipo); },
   celebracionesDelMes: function (repo, ctx, d) { return Servicio.celebracionesDelMes(repo, ctx, d.token, d.mes); },
   miPerfil: function (repo, ctx, d) { return Servicio.miPerfil(repo, ctx, d.token); },
   guardarMiPerfil: function (repo, ctx, d) { return Servicio.guardarMiPerfil(repo, ctx, d.token, d.datos); },
