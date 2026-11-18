@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-18.2';
+var VERSION = '2026-11-18.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -375,7 +375,8 @@ function refrescarDatos() {
 
 function leer_(nombre) {
   var vals = valores_(nombre);
-  var cab = vals[0], filas = [];
+  // encabezado vacío (columna nueva en una hoja ya creada): se toma el nombre que le toca por posición
+  var cab = (vals[0] || []).map(function (h, j) { return String(h || '').trim() || (HOJAS[nombre] && HOJAS[nombre][j]) || ''; }), filas = [];
   for (var i = 1; i < vals.length; i++) {
     var o = { _fila: i + 1 };
     for (var j = 0; j < cab.length; j++) o[cab[j]] = vals[i][j];

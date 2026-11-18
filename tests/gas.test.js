@@ -596,3 +596,17 @@ test('cumpleaños y aniversarios sobre las hojas: la fecha de nacimiento se guar
   assert.deepEqual(e.llamar({ action: 'miCelebracion', token: ana }).data, { nombre: 'Ana Prosein', cumpleanos: true, aniversario: 3 });
   assert.equal(e.llamar({ action: 'celebracionesDelMes', token: admin }).data.filas.length, 2);
 });
+
+test('columna nueva con el encabezado vacío en la hoja: se lee igual por su posición', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [{ cedula: 'V123456789', nombre: 'ANA PROSEIN', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2020', fechaNacimiento: '04/02/1995' }] });
+  const cab = e.hojas.EMPLEADOS.filas[0];
+  cab[cab.indexOf('fechaNacimiento')] = '';                      // como quedó en la hoja real
+  e.ejecutar('refrescarDatos');
+  const ana = entrarTrabajador(e, '12345678').token;
+  assert.ok(ana);
+  const r = e.llamar({ action: 'celebracionesDelMes', token: admin, mes: '2026-02' }).data;
+  assert.equal(r.filas.filter((f) => f.tipo === 'CUMPLEANOS').length, 1);
+});
