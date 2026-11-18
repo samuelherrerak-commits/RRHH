@@ -3020,8 +3020,10 @@ var Servicio = (function () {
         var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
           .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
         var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
+        var activos = r.empleados.filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina; });
+        var conNacimiento = activos.filter(function (e) { return e.fechaNacimiento; }).length;
         repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
-        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula });
+        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula, conNacimiento: conNacimiento, activos: activos.length });
       }
     
       /** opciones: { buscar, departamento, sinJefe } */
@@ -4495,7 +4497,7 @@ var Servicio = (function () {
       }
     
       var api = {
-        avisosCelebraciones: avisosCelebraciones, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes,
+        avisosCelebraciones: function (repo, ctx) { return ok(avisosCelebraciones(repo, ctx)); }, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes,
         miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
         panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
         solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
@@ -4547,7 +4549,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-18.1';
+var VERSION = '2026-11-18.2';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -5627,6 +5629,13 @@ function avisosDiarios() {
   props.setProperty('AVISOS_DESDE', String(ahora));
 }
 
+/** Menú → envía ya los avisos de cumpleaños y aniversarios de hoy (los que no se hayan enviado). */
+function enviarAvisosDeHoy() {
+  memo_ = {};
+  var r = Servicio.avisosCelebraciones(crearRepo_(), crearCtx_()).data;
+  SpreadsheetApp.getUi().alert('Avisos de hoy', r.cumpleanos + ' cumpleaños y ' + r.aniversarios + ' aniversarios avisados ahora.\n(Los que ya se habían enviado hoy no se repiten.)', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
 function instalarTareaDiaria_() {
   try {
     var ya = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'avisosDiarios'; });
@@ -5731,6 +5740,7 @@ function onOpen() {
     .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
     .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
     .addItem('3 · Notificaciones al celular (OneSignal)', 'configurarNotificaciones')
+    .addItem('Enviar avisos de hoy (cumpleaños y aniversarios)', 'enviarAvisosDeHoy')
     .addItem('Refrescar datos', 'refrescarDatos')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
@@ -5806,6 +5816,11 @@ function diagnostico() {
   var cargados = modulosCargados_();
   MODULOS.forEach(function (m) { l.push((cargados[m] ? '✔ ' : '✘ FALTA ') + 'módulo ' + m); });
   l.push('Versión del código: ' + VERSION);
+  try {
+    var act = leer_('EMPLEADOS').filter(function (f) { return texto_(f.estado) !== 'Inactivo' && texto_(f.cedulaNumero); });
+    var conNac = act.filter(function (f) { return texto_(f.fechaNacimiento); }).length;
+    l.push((conNac ? '✔ ' : '· ') + 'fecha de nacimiento (cumpleaños): ' + conNac + ' de ' + act.length + ' empleados activos' + (conNac ? '' : ' — vuelve a cargar el Detalle de empleado en el CAC'));
+  } catch (e) { /* sin EMPLEADOS */ }
   try {
     var errores = leer_('LOG').filter(function (f) { return f.accion === 'ERROR'; }).slice(-3).map(function (f) { return '· ' + texto_(f.detalle).split('\n')[0]; });
     if (errores.length) l.push('Últimos errores:\n' + errores.join('\n'));

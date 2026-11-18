@@ -866,8 +866,10 @@
     var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
       .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
     var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
+    var activos = r.empleados.filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina; });
+    var conNacimiento = activos.filter(function (e) { return e.fechaNacimiento; }).length;
     repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
-    return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula });
+    return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula, conNacimiento: conNacimiento, activos: activos.length });
   }
 
   /** opciones: { buscar, departamento, sinJefe } */
@@ -2341,7 +2343,7 @@
   }
 
   var api = {
-    avisosCelebraciones: avisosCelebraciones, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes,
+    avisosCelebraciones: function (repo, ctx) { return ok(avisosCelebraciones(repo, ctx)); }, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes,
     miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
     panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
     solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,

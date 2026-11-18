@@ -262,8 +262,8 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 .avisos-cab { display: flex; justify-content: space-between; align-items: center; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--linea-suave); color: var(--carbon); }
 .avisos-x { border: 0; background: none; font-size: 24px; line-height: 1; cursor: pointer; color: var(--tinta-2); width: 36px; height: 36px; border-radius: 999px; }
 .avisos-lista { overflow-y: auto; }
-.aviso { width: 100%; display: grid; grid-template-columns: 36px 1fr; gap: var(--s3); text-align: left; padding: var(--s3) var(--s4); border: 0; border-bottom: 1px solid var(--linea-suave); background: #fff; cursor: pointer; font: inherit; color: var(--tinta); }
-.aviso:hover { background: var(--fondo); }
+.avisos-lista .aviso { width: 100%; display: grid; grid-template-columns: 36px 1fr; gap: var(--s3); text-align: left; padding: var(--s3) var(--s4); border: 0; border-bottom: 1px solid var(--linea-suave); background: #fff; cursor: pointer; font: inherit; color: var(--tinta); }
+.avisos-lista .aviso:hover { background: var(--fondo); }
 .aviso-nuevo { background: var(--austral-velo); }
 .aviso-icono { width: 36px; height: 36px; border-radius: 10px; background: var(--marca-velo); color: var(--marca); display: grid; place-items: center; }
 .aviso-icono .icono { width: 19px; height: 19px; }
