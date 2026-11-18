@@ -572,3 +572,27 @@ test('perfil del trabajador y campaña de actualización sobre las hojas', () =>
   assert.equal(p.cambios.length, 8);
   assert.equal(p.filas.find((f) => f.clave === 'V12345678').datos.emergencia.nombre, 'Pedro');
 });
+
+test('cumpleaños y aniversarios sobre las hojas: la fecha de nacimiento se guarda y la tarea diaria avisa', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  const hoy = new Date(Date.now() - 4 * 3600000);   // Caracas
+  const dd = String(hoy.getUTCDate()).padStart(2, '0'), mm = String(hoy.getUTCMonth() + 1).padStart(2, '0'), yy = hoy.getUTCFullYear();
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '10/03/2022', fechaNacimiento: '01/01/1990' },
+    { cedula: 'V123456789', nombre: 'ANA PROSEIN', organizacion: 'PROSEIN CENTRAL', fechaInicio: `${dd}/${mm}/${yy - 3}`, fechaNacimiento: `${dd}/${mm}/1995` },
+  ] });
+  const cab = e.hojas.EMPLEADOS.filas[0];
+  assert.ok(cab.includes('fechaNacimiento'));
+  assert.equal(e.hojas.EMPLEADOS.filas.find((f) => f[cab.indexOf('nombre')] === 'ANA PROSEIN')[cab.indexOf('fechaNacimiento')], `${dd}/${mm}/1995`);
+  e.ejecutar('avisosDiarios');
+  const n = e.hojas.NOTIFICACIONES.filas.slice(1), H = e.hojas.NOTIFICACIONES.filas[0];
+  const tipos = n.map((f) => [f[H.indexOf('tipo')], f[H.indexOf('clave')]]);
+  assert.deepEqual(tipos, [['CUMPLEANOS', 'V12345678'], ['CUMPLEANOS_TODOS', '*'], ['ANIVERSARIO', 'V12345678']]);
+  e.ejecutar('avisosDiarios');                                     // si corre otra vez el mismo día, no repite
+  assert.equal(e.hojas.NOTIFICACIONES.filas.length, n.length + 1);
+  const ana = entrarTrabajador(e, '12345678').token;
+  assert.deepEqual(e.llamar({ action: 'miCelebracion', token: ana }).data, { nombre: 'Ana Prosein', cumpleanos: true, aniversario: 3 });
+  assert.equal(e.llamar({ action: 'celebracionesDelMes', token: admin }).data.filas.length, 2);
+});

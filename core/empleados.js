@@ -179,6 +179,7 @@
       puesto: espacios(fila.puesto),
       estado: estadoEnEspanol(fila.estado),
       fechaIngreso: f,
+      fechaNacimiento: fila.fechaNacimiento ? Calculo.aFecha(fila.fechaNacimiento) : null,
       empresaDetalle: empresaDesdeDetalle(fila.organizacion),
       salarioMensual: numeroDeMonto(fila.salarioMensual),
       genero: espacios(fila.genero),                        // 'Femenino' / 'Masculino' (para el saludo)   // Salario M. del detalle; lo usa la constancia de trabajo
@@ -188,7 +189,7 @@
     };
   }
 
-  var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
+  var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'fechaNacimiento', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
 
   /**
    * Recarga del detalle: actualiza los existentes, agrega los nuevos y
@@ -213,6 +214,7 @@
           if (actual.editados && actual.editados.indexOf(c) !== -1) return;
           if (c === 'salarioMensual' && nuevo.salarioMensual == null) return;   // el archivo no trae sueldo: se conserva el anterior
           if (c === 'genero' && !nuevo.genero) return;
+          if (c === 'fechaNacimiento' && !nuevo.fechaNacimiento) return;   // archivo sin la columna «Cumpleaños»: se conserva
           actual[c] = nuevo[c];
         });
         if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
@@ -341,6 +343,7 @@
     genero: ['GENERO', 'SEXO'],
     salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
     fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
+    fechaNacimiento: ['CUMPLEANOS', 'FECHA NACIMIENTO', 'FECHA DE NACIMIENTO', 'NACIMIENTO', 'FECHA NAC'],
   };
 
   /** Convierte un serial de Excel (p. ej. 45356) o texto en "dd/mm/aaaa". */
@@ -386,6 +389,7 @@
       o.genero = col.genero ? f[col.genero] : '';
       o.jefeNombre = col.jefeNombre ? espacios(f[col.jefeNombre]) : '';
       o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
+      o.fechaNacimiento = col.fechaNacimiento ? fechaDeExcel(f[col.fechaNacimiento]) : '';
       filas.push(o);
     });
     return { filas: filas, faltantes: faltantes, omitidas: omitidas };

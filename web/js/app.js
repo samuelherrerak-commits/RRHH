@@ -3,6 +3,7 @@ import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
+import { dibujarTarjeta, descargarTarjeta } from './tarjeta.js';
 import { vincular, desvincular, estadoPush, activarPush, esIphone, registrarServiceWorker, suscritoEnOneSignal } from './push.js';
 
 const URL_BASE = location.origin + location.pathname;
@@ -141,7 +142,7 @@ function vistaLogin() {
 // así funcionan los botones Atrás/Adelante del navegador y del celular.
 let cuenta = { cont: app, token: '', seccion: 'inicio' };
 const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
-const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'perfil', 'equipo'];
+const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'perfil', 'celebracion', 'equipo'];
 // Fideicomiso queda en «Próximamente» para los trabajadores hasta que esté la pantalla de aportes (cambiar a true para abrirlo).
 const FIDEICOMISO_ACTIVO = true;
 const seccionDesdeHash = () => { const m = /^#\/(\w+)$/.exec(location.hash); return m && SECCIONES.includes(m[1]) ? m[1] : 'inicio'; };
@@ -215,6 +216,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   else if (seccion === 'equipo') await seccionEquipo(destino);
   else if (seccion === 'recibos') await seccionRecibos(destino);
   else if (seccion === 'perfil') await seccionPerfil(destino);
+  else if (seccion === 'celebracion') await seccionCelebracion(destino);
   else if (seccion === 'fideicomiso') await seccionFideicomiso(destino);
   else seccionInicio(destino);
   if (cont !== app && !token) destino.querySelectorAll('.volver').forEach((b) => b.remove());   // «Mi equipo» del panel de RRHH
@@ -224,7 +226,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
 /** Mientras la persona ve su inicio, se piden en segundo plano los datos de cada tarjeta. */
 async function precargarTrabajador(tk = {}) {
   // De una en una: así cada persona ocupa un solo cupo de Google a la vez (el límite es 30 simultáneas).
-  for (const accion of ['equipoVacaciones', 'misRecibos', 'miPerfil', 'datosVacaciones', 'misConstancias', 'datosAnticipo']) {
+  for (const accion of ['miCelebracion', 'equipoVacaciones', 'misRecibos', 'miPerfil', 'datosVacaciones', 'misConstancias', 'datosAnticipo']) {
     await obtener(accion, tk).catch(() => {});
   }
 }
@@ -271,6 +273,16 @@ function seccionInicio(cont) {
         <span><b>${esc(c.titulo)}</b><span>Gestión Humana te pide actualizar tus datos antes del ${esc(V().corta(c.hasta))}.</span></span>${icono('ir')}</button>`);
       cont.querySelector('.aviso-inicio').addEventListener('click', () => navegar('perfil'));
     } else if (!r.data.actualizado) t.insertAdjacentHTML('beforeend', '<span class="chip chip-neutro">Sin completar</span>');
+  }).catch(() => {});
+  // ¿Celebra algo hoy? Su tarjeta, arriba de todo
+  obtener('miCelebracion', conToken()).then((r) => {
+    const b = cont.querySelector('.bienvenida');
+    if (!r.ok || !b || (!r.data.cumpleanos && !r.data.aniversario) || cont.querySelector('.aviso-celebracion')) return;
+    const a = r.data.aniversario, txt = r.data.cumpleanos && a ? `¡Feliz cumpleaños y feliz aniversario! Hoy cumples ${a === 1 ? 'tu primer año' : a + ' años'} con nosotros.`
+      : r.data.cumpleanos ? '¡Feliz cumpleaños! Todo el Grupo Prosein celebra contigo.' : `¡Feliz aniversario! Hoy cumples ${a === 1 ? 'tu primer año' : a + ' años'} con nosotros.`;
+    b.insertAdjacentHTML('afterend', `<button type="button" class="aviso-celebracion" data-ir="celebracion"><span class="emoji" aria-hidden="true">${r.data.cumpleanos ? '🎂' : '🎉'}</span>
+      <span><b>${esc(txt)}</b><span>Mira tu tarjeta de felicitación</span></span>${icono('ir')}</button>`);
+    cont.querySelector('.aviso-celebracion').addEventListener('click', () => navegar('celebracion'));
   }).catch(() => {});
   if (!cuenta.token) pintarAvisoPush(cont.querySelector('#aviso-push'));
   // Si es jefe de alguien, aparece «Mi equipo» con las solicitudes por aprobar
@@ -1340,7 +1352,7 @@ async function leerArchivoExcel(archivo) {
   return XLSX.utils.sheet_to_json(hoja, { defval: '', raw: true });
 }
 
-const COL_NOMBRES = { cedula: 'Cédula', nombre: 'Nombre', organizacion: 'Organización', departamento: 'Departamento', puesto: 'Puesto', estado: 'Estado', fechaInicio: 'Fecha Inicio', jefeNombre: 'Jefe directo', genero: 'Género', salarioMensual: 'Salario M.' };
+const COL_NOMBRES = { cedula: 'Cédula', nombre: 'Nombre', organizacion: 'Organización', departamento: 'Departamento', puesto: 'Puesto', estado: 'Estado', fechaInicio: 'Fecha Inicio', jefeNombre: 'Jefe directo', genero: 'Género', salarioMensual: 'Salario M.', fechaNacimiento: 'Cumpleaños' };
 
 async function panelEmpleados(panel) {
   panel.innerHTML = `<div class="dos-col izq-angosta"><div class="col">
@@ -3194,11 +3206,12 @@ function pintarAsistente(cont) {
 let subDatos = 'campanas', campanaAbierta = '', buscaDatos = '';
 
 async function panelDatosPersonal(panel) {
-  const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes']];
+  const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes'], ['celebraciones', 'Cumpleaños y aniversarios']];
   panel.innerHTML = `<div class="submodulos" role="tablist">${SUB.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subDatos}">${t}</button>`).join('')}</div><div id="sub">${esqueleto(2)}</div>`;
   panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subDatos = b.dataset.sub; campanaAbierta = ''; editandoCamp = null; panelDatosPersonal(panel); }));
   const sub = panel.querySelector('#sub');
   if (subDatos === 'campanas') return campanaAbierta ? pintarCampana(panel, sub, campanaAbierta) : pintarCampanas(panel, sub);
+  if (subDatos === 'celebraciones') return pintarCelebraciones(sub);
   const r = await obtener('datosPersonal', {});
   if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
   if (subDatos === 'cambios') return pintarCambiosPerfil(sub, r.data.cambios);
@@ -3401,4 +3414,45 @@ function pintarCambiosPerfil(sub, cambios) {
     ${cambios.map((c) => `<tr><td>${fechaHoraMin(c.cuando)}</td><td><b>${esc(c.nombre)}</b><br><span class="suave">${esc(c.clave.slice(1))}</span></td><td>${esc(c.campo)}</td>
       <td class="suave">${esc(c.antes || '—')}</td><td>${esc(c.despues || '—')}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Todavía no hay cambios.</td></tr>'}
     </tbody></table></div></section>`;
+}
+
+/* ---------- Cumpleaños y aniversarios ---------- */
+
+async function seccionCelebracion(cont) {
+  cont.innerHTML = `${volver()}${esqueleto(1)}`;
+  const r = await obtener('miCelebracion', conToken());
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } cont.innerHTML = `${volver()}<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const d = r.data, tarjetas = [...(d.cumpleanos ? [{ tipo: 'CUMPLEANOS', nombre: d.nombre }] : []), ...(d.aniversario ? [{ tipo: 'ANIVERSARIO', nombre: d.nombre, anios: d.aniversario }] : [])];
+  if (!tarjetas.length) { cont.innerHTML = `${volver()}<section class="tarjeta"><h2>Celebraciones</h2><p class="vacio">Hoy no tienes celebraciones. ¡Te esperamos en tu día!</p></section>`; cont.querySelector('[data-ir]').addEventListener('click', () => navegar('inicio')); return; }
+  cont.innerHTML = `${volver()}${tarjetas.map((t, i) => `<section class="tarjeta tarjeta-celebracion"><div class="lienzo" data-t="${i}" aria-label="Tarjeta de ${t.tipo === 'CUMPLEANOS' ? 'cumpleaños' : 'aniversario'}">${esqueleto(1)}</div>
+    <div class="fila"><button class="btn" type="button" data-bajar="${i}">Descargar imagen</button></div></section>`).join('')}`;
+  cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+  for (const [i, t] of tarjetas.entries()) {
+    const cv = await dibujarTarjeta(t), img = new Image();
+    img.src = cv.toDataURL('image/png'); img.alt = t.tipo === 'CUMPLEANOS' ? `¡Feliz cumpleaños, ${t.nombre}!` : `¡Feliz aniversario, ${t.nombre}! ${t.anios} años`;
+    const caja = cont.querySelector(`[data-t="${i}"]`); caja.innerHTML = ''; caja.appendChild(img);
+  }
+  cont.querySelectorAll('[data-bajar]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => descargarTarjeta(tarjetas[Number(b.dataset.bajar)]))));
+}
+
+let mesCelebraciones = '';
+async function pintarCelebraciones(sub) {
+  const r = await obtener('celebracionesDelMes', { mes: mesCelebraciones });
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const d = r.data, hoyDia = d.hoy.slice(0, 7) === d.mes ? Number(d.hoy.slice(8, 10)) : 0;
+  const nombreMes = new Date(d.mes + '-15T12:00:00Z').toLocaleDateString('es-VE', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const cumple = d.filas.filter((f) => f.tipo === 'CUMPLEANOS').length, aniv = d.filas.length - cumple;
+  sub.innerHTML = `<section class="tarjeta"><div class="item-cab"><div><h2>Cumpleaños y aniversarios</h2>
+      <p class="suave">Cada mañana, a las 7, el CAC envía los avisos del día. <b>Cumpleaños:</b> a la persona, su felicitación, y a todos, quién cumple. <b>Aniversario:</b> solo a la persona.</p></div>
+      <label>Mes <input type="month" id="mes-cel" value="${esc(d.mes)}"></label></div>
+    <p><b>${cumple}</b> cumpleaños y <b>${aniv}</b> aniversarios en ${esc(nombreMes)}.</p>
+    ${d.sinNacimiento ? `<p class="nota-cel">${d.sinNacimiento} colaborador${d.sinNacimiento === 1 ? '' : 'es'} activo${d.sinNacimiento === 1 ? '' : 's'} sin fecha de nacimiento. Se toma de la columna <b>«Cumpleaños»</b> del Detalle de empleado: vuelve a cargarlo en Empleados.</p>` : ''}
+    <div class="tabla-caja"><table class="tabla-omega tabla-cel"><thead><tr><th>Día</th><th>Celebración</th><th>Colaborador</th><th>Localidad</th><th></th></tr></thead><tbody>
+    ${d.filas.map((f, i) => `<tr${f.dia === hoyDia ? ' class="fila-hoy"' : ''}><td><b>${f.dia}</b>${f.dia === hoyDia ? ' <span class="chip chip-ok">Hoy</span>' : ''}</td>
+      <td>${f.tipo === 'CUMPLEANOS' ? '🎂 Cumpleaños' : `🎉 Aniversario · ${f.anios} año${f.anios === 1 ? '' : 's'}`}</td>
+      <td><b>${esc(f.nombre)}</b><br><span class="suave">${esc([f.cargo, f.empresa === 'AIV' ? 'Austral' : 'Prosein'].filter(Boolean).join(' · '))}</span></td><td>${esc(f.localidad)}</td>
+      <td><button class="btn btn-sec btn-chico" data-tarjeta="${i}">Descargar tarjeta</button></td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie celebra en este mes.</td></tr>'}
+    </tbody></table></div></section>`;
+  sub.querySelector('#mes-cel').addEventListener('change', (e) => { mesCelebraciones = e.target.value; pintarCelebraciones(sub); });
+  sub.querySelectorAll('[data-tarjeta]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => { const f = d.filas[Number(b.dataset.tarjeta)]; return descargarTarjeta({ tipo: f.tipo, nombre: f.nombre, anios: f.anios }); })));
 }

@@ -415,3 +415,14 @@ details.item[open] { gap: var(--s3); }
 .revisa-fila .suave { font-size: 12px; }
 .enlace { background: none; border: 0; padding: var(--s1); color: var(--austral); font: inherit; font-weight: 600; cursor: pointer; flex: none; }
 .lista-simple { margin: 0; padding-left: var(--s5); display: grid; gap: var(--s1); }
+/* Cumpleaños y aniversarios */
+.aviso-celebracion { display: grid; grid-template-columns: 36px 1fr 20px; align-items: center; gap: var(--s3); width: 100%; text-align: left; font: inherit; color: var(--tinta);
+  border: 0; border-radius: var(--radio-sm); padding: var(--s3) var(--s4); cursor: pointer; background: linear-gradient(90deg, var(--rojo-velo), #fff); border-left: 4px solid var(--rojo); }
+.aviso-celebracion .emoji { font-size: 30px; line-height: 1; }
+.aviso-celebracion span { display: grid; } .aviso-celebracion b { color: var(--carbon); }
+.aviso-celebracion .icono { color: var(--rojo); }
+.tarjeta-celebracion .lienzo img { display: block; width: 100%; max-width: 540px; margin: 0 auto; border-radius: var(--radio-sm); box-shadow: var(--sombra); }
+.fila-hoy td { background: var(--ok-velo); }
+.nota-cel { background: var(--espera-velo); color: var(--espera); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); font-size: 14px; }
+.tabla-omega td .btn { white-space: nowrap; }
+.tabla-cel { min-width: 0; width: 100%; } .tabla-cel th:first-child, .tabla-cel td:first-child { width: 90px; min-width: 0; white-space: nowrap; } .tabla-cel td:last-child { text-align: right; padding-right: 16px; }

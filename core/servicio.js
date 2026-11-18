@@ -1134,7 +1134,8 @@
     var claves = Object.keys(avisadas);
     try { if (claves.length && repo.enviarPush) repo.enviarPush(claves.map(function (c) { return idPush(ctx, c); }), 'Tu constancia de trabajo venció', 'Ya puedes generar una nueva en el CAC.', 'constancia'); }
     catch (e) { /* sin celular */ }
-    return ok({ avisadas: claves.length });
+    var cel = avisosCelebraciones(repo, ctx);
+    return ok({ avisadas: claves.length, cumpleanos: cel.cumpleanos, aniversarios: cel.aniversarios });
   }
 
   /* ---------- Vacaciones: panel de días pendientes (RRHH) ---------- */
@@ -2252,7 +2253,95 @@
     return ok({ filas: filas, cambios: cambios });
   }
 
+  /* ---------- Cumpleaños y aniversarios ---------- */
+
+  function esBisiesto(y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; }
+  /** ¿La fecha f ({y,m,d}) «cae» hoy (texto aaaa-mm-dd)? El 29 de febrero se celebra el 28 en años no bisiestos. */
+  function caeHoy(f, hoy) {
+    if (!f) return false;
+    var y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7)), d = Number(hoy.slice(8, 10));
+    var fd = f.m === 2 && f.d === 29 && !esBisiesto(y) ? 28 : f.d;
+    return f.m === m && fd === d;
+  }
+  function primerNombreDe(nombre) { var p = String(nombre || '').trim().split(/\s+/)[0] || ''; return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(); }
+  function nombreCorto(nombre) {
+    var p = String(nombre || '').trim().split(/\s+/), cap = function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); };
+    // «NOMBRE1 NOMBRE2 APELLIDO1 APELLIDO2» → «Nombre1 Apellido1»
+    return (p.length >= 4 ? [p[0], p[2]] : p.length === 3 ? [p[0], p[1]] : p).map(cap).join(' ');
+  }
+  function nombreBonito(nombre) { return String(nombre || '').trim().split(/\s+/).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join(' '); }
+
+  /** Quiénes celebran hoy: { cumpleanos: [emp], aniversarios: [{ emp, anios }] }. Solo activos. */
+  function celebracionesDelDia(repo, hoy) {
+    var y = Number(hoy.slice(0, 4)), out = { cumpleanos: [], aniversarios: [] };
+    activosConCedula(repo).forEach(function (e) {
+      if (caeHoy(e.fechaNacimiento, hoy)) out.cumpleanos.push(e);
+      if (e.fechaIngreso && caeHoy(e.fechaIngreso, hoy) && y - e.fechaIngreso.y >= 1) out.aniversarios.push({ emp: e, anios: y - e.fechaIngreso.y });
+    });
+    return out;
+  }
+
+  /**
+   * Avisos de cumpleaños y aniversarios del día (los envía la tarea diaria de la mañana; no se repiten si corre dos veces).
+   * Cumpleaños: a la persona, su felicitación; y a todos, quién cumple hoy. Aniversario: solo a la persona.
+   */
+  function avisosCelebraciones(repo, ctx) {
+    if (!repo.agregarNotificaciones) return { cumpleanos: 0, aniversarios: 0 };
+    var hoy = hoyCaracas(ctx), c = celebracionesDelDia(repo, hoy), ya = {};
+    var inicioDia = ctx.ahora() - 20 * 3600 * 1000;
+    (repo.notificacionesRecientes ? repo.notificacionesRecientes() : []).forEach(function (n) {
+      if (n.creada >= inicioDia && /^(CUMPLEANOS|ANIVERSARIO)/.test(n.tipo)) ya[n.tipo + ':' + n.clave] = true;
+    });
+    var cumple = c.cumpleanos.filter(function (e) { return !ya['CUMPLEANOS:' + Empleados.claveCedula(e)]; });
+    cumple.forEach(function (e) {
+      notificar(repo, ctx, [Empleados.claveCedula(e)], { tipo: 'CUMPLEANOS', ruta: 'celebracion',
+        titulo: '🎂 ¡Feliz cumpleaños, ' + primerNombreDe(e.nombre) + '!', texto: 'Hoy todo el Grupo Prosein celebra contigo. ¡Que tengas un gran día!' });
+    });
+    if (cumple.length && !ya['CUMPLEANOS_TODOS:*']) {
+      var nombres = cumple.map(function (e) { return nombreCorto(e.nombre); });
+      var lista = nombres.length === 1 ? nombres[0] : nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1];
+      notificar(repo, ctx, '*', { tipo: 'CUMPLEANOS_TODOS', ruta: '', titulo: nombres.length === 1 ? '🎉 Hoy está de cumpleaños ' + lista : '🎉 Hoy están de cumpleaños ' + lista,
+        texto: '¡Acompáñanos a felicitar' + (nombres.length === 1 ? 'le' : 'los') + ' en su día!' });
+    }
+    var aniv = c.aniversarios.filter(function (a) { return !ya['ANIVERSARIO:' + Empleados.claveCedula(a.emp)]; });
+    aniv.forEach(function (a) {
+      notificar(repo, ctx, [Empleados.claveCedula(a.emp)], { tipo: 'ANIVERSARIO', ruta: 'celebracion',
+        titulo: '🎉 ¡Feliz aniversario, ' + primerNombreDe(a.emp.nombre) + '!',
+        texto: 'Hoy cumples ' + (a.anios === 1 ? 'tu primer año' : a.anios + ' años') + ' en el Grupo Prosein. ¡Gracias por tu compromiso!' });
+    });
+    if (cumple.length || aniv.length) repo.log('CELEBRACIONES', 'SISTEMA', hoy + ' · ' + cumple.length + ' cumpleaños · ' + aniv.length + ' aniversarios');
+    return { cumpleanos: cumple.length, aniversarios: aniv.length };
+  }
+
+  /** El colaborador: ¿celebra algo hoy? Para mostrarle su tarjeta en el CAC. */
+  function miCelebracion(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var e = repo.empleadoPorClave(s.clave), hoy = hoyCaracas(ctx);
+    if (!e || e.estado === 'Inactivo') return ok({ cumpleanos: false, aniversario: 0 });
+    var y = Number(hoy.slice(0, 4)), anios = e.fechaIngreso && caeHoy(e.fechaIngreso, hoy) ? y - e.fechaIngreso.y : 0;
+    return ok({ nombre: nombreBonito(e.nombre), cumpleanos: caeHoy(e.fechaNacimiento, hoy), aniversario: anios >= 1 ? anios : 0 });
+  }
+
+  /** RRHH: cumpleaños y aniversarios de un mes (aaaa-mm), para ver quién celebra y descargar las tarjetas. */
+  function celebracionesDelMes(repo, ctx, token, mes) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var hoy = hoyCaracas(ctx);
+    mes = /^\d{4}-\d{2}$/.test(String(mes || '')) ? mes : hoy.slice(0, 7);
+    var y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7)), filas = [], sinNacimiento = 0;
+    var diaDe = function (f) { return f.m === 2 && f.d === 29 && !esBisiesto(y) ? 28 : f.d; };
+    activosConCedula(repo).forEach(function (e) {
+      var base = Object.assign({ clave: Empleados.claveCedula(e), nombre: nombreBonito(e.nombre), cargo: e.puesto || '' }, ubicacion(e));
+      if (!e.fechaNacimiento) sinNacimiento++;
+      else if (e.fechaNacimiento.m === m) filas.push(Object.assign({ tipo: 'CUMPLEANOS', dia: diaDe(e.fechaNacimiento) }, base));
+      if (e.fechaIngreso && e.fechaIngreso.m === m && y - e.fechaIngreso.y >= 1) filas.push(Object.assign({ tipo: 'ANIVERSARIO', dia: diaDe(e.fechaIngreso), anios: y - e.fechaIngreso.y }, base));
+    });
+    filas.sort(function (a, b) { return a.dia - b.dia || (a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : a.tipo < b.tipo ? 1 : -1); });
+    return ok({ mes: mes, hoy: hoy, filas: filas, sinNacimiento: sinNacimiento });
+  }
+
   var api = {
+    avisosCelebraciones: avisosCelebraciones, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes,
     miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
     panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
     solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,

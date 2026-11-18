@@ -347,6 +347,7 @@ var Empleados = (function () {
           puesto: espacios(fila.puesto),
           estado: estadoEnEspanol(fila.estado),
           fechaIngreso: f,
+          fechaNacimiento: fila.fechaNacimiento ? Calculo.aFecha(fila.fechaNacimiento) : null,
           empresaDetalle: empresaDesdeDetalle(fila.organizacion),
           salarioMensual: numeroDeMonto(fila.salarioMensual),
           genero: espacios(fila.genero),                        // 'Femenino' / 'Masculino' (para el saludo)   // Salario M. del detalle; lo usa la constancia de trabajo
@@ -356,7 +357,7 @@ var Empleados = (function () {
         };
       }
     
-      var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
+      var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'fechaNacimiento', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
     
       /**
        * Recarga del detalle: actualiza los existentes, agrega los nuevos y
@@ -381,6 +382,7 @@ var Empleados = (function () {
               if (actual.editados && actual.editados.indexOf(c) !== -1) return;
               if (c === 'salarioMensual' && nuevo.salarioMensual == null) return;   // el archivo no trae sueldo: se conserva el anterior
               if (c === 'genero' && !nuevo.genero) return;
+              if (c === 'fechaNacimiento' && !nuevo.fechaNacimiento) return;   // archivo sin la columna «Cumpleaños»: se conserva
               actual[c] = nuevo[c];
             });
             if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
@@ -509,6 +511,7 @@ var Empleados = (function () {
         genero: ['GENERO', 'SEXO'],
         salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
         fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
+        fechaNacimiento: ['CUMPLEANOS', 'FECHA NACIMIENTO', 'FECHA DE NACIMIENTO', 'NACIMIENTO', 'FECHA NAC'],
       };
     
       /** Convierte un serial de Excel (p. ej. 45356) o texto en "dd/mm/aaaa". */
@@ -554,6 +557,7 @@ var Empleados = (function () {
           o.genero = col.genero ? f[col.genero] : '';
           o.jefeNombre = col.jefeNombre ? espacios(f[col.jefeNombre]) : '';
           o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
+          o.fechaNacimiento = col.fechaNacimiento ? fechaDeExcel(f[col.fechaNacimiento]) : '';
           filas.push(o);
         });
         return { filas: filas, faltantes: faltantes, omitidas: omitidas };
@@ -3284,7 +3288,8 @@ var Servicio = (function () {
         var claves = Object.keys(avisadas);
         try { if (claves.length && repo.enviarPush) repo.enviarPush(claves.map(function (c) { return idPush(ctx, c); }), 'Tu constancia de trabajo venció', 'Ya puedes generar una nueva en el CAC.', 'constancia'); }
         catch (e) { /* sin celular */ }
-        return ok({ avisadas: claves.length });
+        var cel = avisosCelebraciones(repo, ctx);
+        return ok({ avisadas: claves.length, cumpleanos: cel.cumpleanos, aniversarios: cel.aniversarios });
       }
     
       /* ---------- Vacaciones: panel de días pendientes (RRHH) ---------- */
@@ -4402,7 +4407,95 @@ var Servicio = (function () {
         return ok({ filas: filas, cambios: cambios });
       }
     
+      /* ---------- Cumpleaños y aniversarios ---------- */
+    
+      function esBisiesto(y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; }
+      /** ¿La fecha f ({y,m,d}) «cae» hoy (texto aaaa-mm-dd)? El 29 de febrero se celebra el 28 en años no bisiestos. */
+      function caeHoy(f, hoy) {
+        if (!f) return false;
+        var y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7)), d = Number(hoy.slice(8, 10));
+        var fd = f.m === 2 && f.d === 29 && !esBisiesto(y) ? 28 : f.d;
+        return f.m === m && fd === d;
+      }
+      function primerNombreDe(nombre) { var p = String(nombre || '').trim().split(/\s+/)[0] || ''; return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(); }
+      function nombreCorto(nombre) {
+        var p = String(nombre || '').trim().split(/\s+/), cap = function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); };
+        // «NOMBRE1 NOMBRE2 APELLIDO1 APELLIDO2» → «Nombre1 Apellido1»
+        return (p.length >= 4 ? [p[0], p[2]] : p.length === 3 ? [p[0], p[1]] : p).map(cap).join(' ');
+      }
+      function nombreBonito(nombre) { return String(nombre || '').trim().split(/\s+/).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join(' '); }
+    
+      /** Quiénes celebran hoy: { cumpleanos: [emp], aniversarios: [{ emp, anios }] }. Solo activos. */
+      function celebracionesDelDia(repo, hoy) {
+        var y = Number(hoy.slice(0, 4)), out = { cumpleanos: [], aniversarios: [] };
+        activosConCedula(repo).forEach(function (e) {
+          if (caeHoy(e.fechaNacimiento, hoy)) out.cumpleanos.push(e);
+          if (e.fechaIngreso && caeHoy(e.fechaIngreso, hoy) && y - e.fechaIngreso.y >= 1) out.aniversarios.push({ emp: e, anios: y - e.fechaIngreso.y });
+        });
+        return out;
+      }
+    
+      /**
+       * Avisos de cumpleaños y aniversarios del día (los envía la tarea diaria de la mañana; no se repiten si corre dos veces).
+       * Cumpleaños: a la persona, su felicitación; y a todos, quién cumple hoy. Aniversario: solo a la persona.
+       */
+      function avisosCelebraciones(repo, ctx) {
+        if (!repo.agregarNotificaciones) return { cumpleanos: 0, aniversarios: 0 };
+        var hoy = hoyCaracas(ctx), c = celebracionesDelDia(repo, hoy), ya = {};
+        var inicioDia = ctx.ahora() - 20 * 3600 * 1000;
+        (repo.notificacionesRecientes ? repo.notificacionesRecientes() : []).forEach(function (n) {
+          if (n.creada >= inicioDia && /^(CUMPLEANOS|ANIVERSARIO)/.test(n.tipo)) ya[n.tipo + ':' + n.clave] = true;
+        });
+        var cumple = c.cumpleanos.filter(function (e) { return !ya['CUMPLEANOS:' + Empleados.claveCedula(e)]; });
+        cumple.forEach(function (e) {
+          notificar(repo, ctx, [Empleados.claveCedula(e)], { tipo: 'CUMPLEANOS', ruta: 'celebracion',
+            titulo: '🎂 ¡Feliz cumpleaños, ' + primerNombreDe(e.nombre) + '!', texto: 'Hoy todo el Grupo Prosein celebra contigo. ¡Que tengas un gran día!' });
+        });
+        if (cumple.length && !ya['CUMPLEANOS_TODOS:*']) {
+          var nombres = cumple.map(function (e) { return nombreCorto(e.nombre); });
+          var lista = nombres.length === 1 ? nombres[0] : nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1];
+          notificar(repo, ctx, '*', { tipo: 'CUMPLEANOS_TODOS', ruta: '', titulo: nombres.length === 1 ? '🎉 Hoy está de cumpleaños ' + lista : '🎉 Hoy están de cumpleaños ' + lista,
+            texto: '¡Acompáñanos a felicitar' + (nombres.length === 1 ? 'le' : 'los') + ' en su día!' });
+        }
+        var aniv = c.aniversarios.filter(function (a) { return !ya['ANIVERSARIO:' + Empleados.claveCedula(a.emp)]; });
+        aniv.forEach(function (a) {
+          notificar(repo, ctx, [Empleados.claveCedula(a.emp)], { tipo: 'ANIVERSARIO', ruta: 'celebracion',
+            titulo: '🎉 ¡Feliz aniversario, ' + primerNombreDe(a.emp.nombre) + '!',
+            texto: 'Hoy cumples ' + (a.anios === 1 ? 'tu primer año' : a.anios + ' años') + ' en el Grupo Prosein. ¡Gracias por tu compromiso!' });
+        });
+        if (cumple.length || aniv.length) repo.log('CELEBRACIONES', 'SISTEMA', hoy + ' · ' + cumple.length + ' cumpleaños · ' + aniv.length + ' aniversarios');
+        return { cumpleanos: cumple.length, aniversarios: aniv.length };
+      }
+    
+      /** El colaborador: ¿celebra algo hoy? Para mostrarle su tarjeta en el CAC. */
+      function miCelebracion(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var e = repo.empleadoPorClave(s.clave), hoy = hoyCaracas(ctx);
+        if (!e || e.estado === 'Inactivo') return ok({ cumpleanos: false, aniversario: 0 });
+        var y = Number(hoy.slice(0, 4)), anios = e.fechaIngreso && caeHoy(e.fechaIngreso, hoy) ? y - e.fechaIngreso.y : 0;
+        return ok({ nombre: nombreBonito(e.nombre), cumpleanos: caeHoy(e.fechaNacimiento, hoy), aniversario: anios >= 1 ? anios : 0 });
+      }
+    
+      /** RRHH: cumpleaños y aniversarios de un mes (aaaa-mm), para ver quién celebra y descargar las tarjetas. */
+      function celebracionesDelMes(repo, ctx, token, mes) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var hoy = hoyCaracas(ctx);
+        mes = /^\d{4}-\d{2}$/.test(String(mes || '')) ? mes : hoy.slice(0, 7);
+        var y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7)), filas = [], sinNacimiento = 0;
+        var diaDe = function (f) { return f.m === 2 && f.d === 29 && !esBisiesto(y) ? 28 : f.d; };
+        activosConCedula(repo).forEach(function (e) {
+          var base = Object.assign({ clave: Empleados.claveCedula(e), nombre: nombreBonito(e.nombre), cargo: e.puesto || '' }, ubicacion(e));
+          if (!e.fechaNacimiento) sinNacimiento++;
+          else if (e.fechaNacimiento.m === m) filas.push(Object.assign({ tipo: 'CUMPLEANOS', dia: diaDe(e.fechaNacimiento) }, base));
+          if (e.fechaIngreso && e.fechaIngreso.m === m && y - e.fechaIngreso.y >= 1) filas.push(Object.assign({ tipo: 'ANIVERSARIO', dia: diaDe(e.fechaIngreso), anios: y - e.fechaIngreso.y }, base));
+        });
+        filas.sort(function (a, b) { return a.dia - b.dia || (a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : a.tipo < b.tipo ? 1 : -1); });
+        return ok({ mes: mes, hoy: hoy, filas: filas, sinNacimiento: sinNacimiento });
+      }
+    
       var api = {
+        avisosCelebraciones: avisosCelebraciones, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes,
         miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
         panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
         solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
@@ -4454,7 +4547,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-16.4';
+var VERSION = '2026-11-18.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -4475,7 +4568,7 @@ function modulosCargados_() {
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
-  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina'],
+  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina', 'fechaNacimiento'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo',
     'nombre', 'salarioDiario', 'alicUtilidades', 'alicVacaciones', 'diasVacaciones', 'diasAntiguedad'],
   CANCELACIONES: ['id', 'clave', 'nombre', 'empresa', 'fechaIngreso', 'fechaEgreso', 'monto', 'estado', 'creada', 'por', 'actualizada'],
@@ -4608,6 +4701,8 @@ var RUTAS_RRHH = {
   rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
   cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
   datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
+  miCelebracion: function (repo, ctx, d) { return Servicio.miCelebracion(repo, ctx, d.token); },
+  celebracionesDelMes: function (repo, ctx, d) { return Servicio.celebracionesDelMes(repo, ctx, d.token, d.mes); },
   miPerfil: function (repo, ctx, d) { return Servicio.miPerfil(repo, ctx, d.token); },
   guardarMiPerfil: function (repo, ctx, d) { return Servicio.guardarMiPerfil(repo, ctx, d.token, d.datos); },
   crearCampanaDatos: function (repo, ctx, d) { return Servicio.crearCampanaDatos(repo, ctx, d.token, d); },
@@ -4669,7 +4764,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -4846,7 +4941,7 @@ function empleado_(f) {
   return {
     cedulaLetra: texto_(f.cedulaLetra), cedulaNumero: texto_(f.cedulaNumero), nombre: texto_(f.nombre),
     organizacion: texto_(f.organizacion), departamento: texto_(f.departamento), puesto: texto_(f.puesto),
-    estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso),
+    estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso), fechaNacimiento: f.fechaNacimiento ? Calculo.aFecha(f.fechaNacimiento) : null,
     empresaDetalle: texto_(f.empresaDetalle) || 'PCA', empresaFideicomiso: texto_(f.empresaFideicomiso),
     revisarCedula: f.revisarCedula === true || f.revisarCedula === 'TRUE', motivoRevision: texto_(f.motivoRevision),
     salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), genero: texto_(f.genero),
@@ -4948,6 +5043,7 @@ function crearRepo_() {
     /** Reemplaza toda la hoja VAC_PERIODOS de una vez (importación del cierre). */
     guardarVacPeriodos: function (filas) {
       var h = hoja_('VAC_PERIODOS'), cab = HOJAS.VAC_PERIODOS, ultima = h.getLastRow();
+      h.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold');   // columnas nuevas (p. ej. fechaNacimiento) en hojas ya creadas
       if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
       invalidar_('VAC_PERIODOS');
       if (!filas.length) return;
@@ -4992,7 +5088,7 @@ function crearRepo_() {
       if (!lista.length) return;
       var filas = lista.map(function (e) {
         return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
-          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || '', !!e.fueraNomina];
+          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || '', !!e.fueraNomina, fechaTexto_(e.fechaNacimiento)];
       });
       var rango = h.getRange(2, 1, filas.length, cab.length);
       rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte
@@ -5522,7 +5618,7 @@ function enviarPush_(destinos, titulo, texto, ruta) {
   } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
 }
 
-/** Tarea diaria (la instala «Configurar hojas»): avisa al celular las constancias que vencieron desde la última vez. */
+/** Tarea diaria de las 7 a. m. (la instala «Configurar hojas»): constancias vencidas, cumpleaños y aniversarios del día. */
 function avisosDiarios() {
   var props = PropertiesService.getScriptProperties(), ahora = Date.now();
   var desde = Number(props.getProperty('AVISOS_DESDE')) || ahora - 86400000;
