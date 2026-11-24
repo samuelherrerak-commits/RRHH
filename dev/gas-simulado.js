@@ -62,6 +62,9 @@ function crearEntorno({ respuestasUi = [], codigo = fs.readFileSync(ARCHIVO, 'ut
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
       getUuid: () => crypto.randomUUID(),
+      // Caracas es UTC−4 todo el año; solo los patrones que usa el código
+      formatDate: (d, tz, patron) => { const c = new Date(d.getTime() - 4 * 3600e3), z = (n) => String(n).padStart(2, '0');
+        return patron.replace('yyyy', c.getUTCFullYear()).replace('MM', z(c.getUTCMonth() + 1)).replace('dd', z(c.getUTCDate())).replace("'T'", 'T').replace('HH', z(c.getUTCHours())).replace('mm', z(c.getUTCMinutes())).replace('ss', z(c.getUTCSeconds())); },
       computeDigest: (alg, txt) => bytes(crypto.createHash('sha256').update(txt, 'utf8').digest()),
       computeHmacSha256Signature: (txt, clave) => bytes(crypto.createHmac('sha256', clave).update(txt, 'utf8').digest()),
       base64EncodeWebSafe: (s) => Buffer.from(s, 'utf8').toString('base64url'),

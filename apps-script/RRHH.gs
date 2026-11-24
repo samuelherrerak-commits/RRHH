@@ -13,7 +13,7 @@ var ERRORES_CARGA = [];
 var Calculo = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Cálculo del aporte trimestral al fideicomiso.
        Funciones puras: sin hojas, sin DOM, sin fecha del sistema.
@@ -165,7 +165,7 @@ var Calculo = (function () {
 var Empleados = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Base de empleados y cruce del aporte. Funciones puras.
        ========================================================== */
@@ -347,6 +347,7 @@ var Empleados = (function () {
           puesto: espacios(fila.puesto),
           estado: estadoEnEspanol(fila.estado),
           fechaIngreso: f,
+          fechaNacimiento: fila.fechaNacimiento ? Calculo.aFecha(fila.fechaNacimiento) : null,
           empresaDetalle: empresaDesdeDetalle(fila.organizacion),
           salarioMensual: numeroDeMonto(fila.salarioMensual),
           genero: espacios(fila.genero),                        // 'Femenino' / 'Masculino' (para el saludo)   // Salario M. del detalle; lo usa la constancia de trabajo
@@ -356,7 +357,7 @@ var Empleados = (function () {
         };
       }
     
-      var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
+      var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'fechaNacimiento', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
     
       /**
        * Recarga del detalle: actualiza los existentes, agrega los nuevos y
@@ -381,6 +382,7 @@ var Empleados = (function () {
               if (actual.editados && actual.editados.indexOf(c) !== -1) return;
               if (c === 'salarioMensual' && nuevo.salarioMensual == null) return;   // el archivo no trae sueldo: se conserva el anterior
               if (c === 'genero' && !nuevo.genero) return;
+              if (c === 'fechaNacimiento' && !nuevo.fechaNacimiento) return;   // archivo sin la columna «Cumpleaños»: se conserva
               actual[c] = nuevo[c];
             });
             if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
@@ -509,6 +511,7 @@ var Empleados = (function () {
         genero: ['GENERO', 'SEXO'],
         salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
         fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
+        fechaNacimiento: ['CUMPLEANOS', 'FECHA NACIMIENTO', 'FECHA DE NACIMIENTO', 'NACIMIENTO', 'FECHA NAC'],
       };
     
       /** Convierte un serial de Excel (p. ej. 45356) o texto en "dd/mm/aaaa". */
@@ -536,17 +539,25 @@ var Empleados = (function () {
           var hit = COLUMNAS_DETALLE[campo].filter(function (n) { return indice[n]; })[0];
           if (hit) col[campo] = indice[hit]; else faltantes.push(campo);
         });
-        var omitidas = 0, filas = [];
+        var omitidas = 0, filas = [], arrastre = {};
         filasCrudas.forEach(function (f) {
           var cedula = col.cedula ? String(f[col.cedula] == null ? '' : f[col.cedula]).trim() : '';
           var nombre = col.nombre ? String(f[col.nombre] == null ? '' : f[col.nombre]).trim() : '';
           if (!cedula && !nombre) { omitidas++; return; }
+          // Reportes agrupados: filas de conteo («Asesor Comercial №», «Conteo», números sueltos) sin cédula → se ignoran
+          if (!cedula && (/^[\d.,\s]*$/.test(nombre) || /№|^conteo$/i.test(nombre))) { omitidas++; return; }
           var o = { cedula: cedula, nombre: nombre };
-          ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) { o[k] = col[k] ? f[col[k]] : ''; });
+          ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) {
+            var v = col[k] ? f[col[k]] : '';
+            if ((k === 'organizacion' || k === 'departamento') && (v == null || String(v).trim() === '') && arrastre[k]) v = arrastre[k];   // celda combinada: hereda la de arriba
+            if (k === 'organizacion' || k === 'departamento') { if (v && !/№/.test(String(v))) arrastre[k] = v; }
+            o[k] = v;
+          });
           o.salarioMensual = col.salarioMensual ? f[col.salarioMensual] : '';
           o.genero = col.genero ? f[col.genero] : '';
           o.jefeNombre = col.jefeNombre ? espacios(f[col.jefeNombre]) : '';
           o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
+          o.fechaNacimiento = col.fechaNacimiento ? fechaDeExcel(f[col.fechaNacimiento]) : '';
           filas.push(o);
         });
         return { filas: filas, faltantes: faltantes, omitidas: omitidas };
@@ -572,7 +583,7 @@ var Empleados = (function () {
 var Prestaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Módulo 1 · Prestaciones sociales: lo que ve el trabajador y
        las reglas del anticipo. Funciones puras.
@@ -725,7 +736,7 @@ var Prestaciones = (function () {
 var Exportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Archivos para el banco. Funciones puras.
        Diseño NOMINA APORTES: FIDEICOMISO | Cedula (letra) | (número)
@@ -772,7 +783,7 @@ var Exportes = (function () {
 var Constancia = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Constancia de trabajo: textos, monto en letras y vigencia (30 días).
        Funciones puras; las usan el servidor, el navegador (PDF) y las pruebas.
@@ -900,7 +911,7 @@ var Constancia = (function () {
 var Vacaciones = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Vacaciones: días hábiles, períodos, saldo y reglas de la solicitud.
        Funciones puras. Fechas como texto 'AAAA-MM-DD' (sin horas ni zonas).
@@ -1185,7 +1196,7 @@ var Vacaciones = (function () {
 var Aportes = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Aporte trimestral al fideicomiso: arma la vista previa a partir del Excel (nombre + monto).
        Función pura: recibe empleados, filas, días adicionales forzados y el aporte anterior.
@@ -1293,7 +1304,7 @@ var Aportes = (function () {
 var Recibos = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Recibos de pago: leer cada hoja del PDF de nómina (texto ya extraído),
        proponer el concepto y asignar cada hoja a su colaborador.
@@ -1387,7 +1398,7 @@ var Recibos = (function () {
 var Planificacion = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Planificación anual de vacaciones y su cumplimiento.
        Funciones puras. Fechas como texto 'AAAA-MM-DD'.
@@ -1535,7 +1546,7 @@ var Planificacion = (function () {
 var Omega = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Omega Capital: cestaticket y Omega Transferencia (complemento de alimentación
        y otros beneficios en $), por quincena y en 4 lotes:
@@ -1713,10 +1724,22 @@ var Omega = (function () {
         return { filas: [], faltan: ['cedula', 'complemento'], error: 'No encontré las columnas «Cédula» y «Monto de complemento de alimentación aprobado».' };
       }
     
+    
+      /**
+       * Quincena en la que se paga una vacación con pago: la última quincena pagada antes de salir (o el mismo día).
+       * Sale del 16 al 31 → 1.ª quincena de ese mes (se paga el 15); sale del 1 al 15 → 2.ª quincena del mes anterior.
+       */
+      function quincenaDePagoVacaciones(inicio) {
+        var y = Number(inicio.slice(0, 4)), m = Number(inicio.slice(5, 7)), d = Number(inicio.slice(8, 10));
+        if (d >= 15) return idQuincena(y + '-' + ('0' + m).slice(-2), 1);
+        if (m === 1) { y--; m = 12; } else m--;
+        return idQuincena(y + '-' + ('0' + m).slice(-2), 2);
+      }
+    
       var api = { PARAMETROS: PARAMETROS, EMPRESAS: EMPRESAS, LOTES: LOTES, ADICIONALES: ADICIONALES, r2: r2, esMes: esMes, idQuincena: idQuincena, lote: lote,
         diasCestaticket: diasCestaticket, ingresoEnElMes: ingresoEnElMes, ingresoTrasPrimeraQuincena: ingresoTrasPrimeraQuincena, montosDelMes: montosDelMes,
         montoQuincena: montoQuincena, lineasQuincena: lineasQuincena, totalesOmega: totalesOmega, revisarLinea: revisarLinea, archivoDeposito: archivoDeposito,
-        leerExcelBeneficios: leerExcelBeneficios, soloAlfanumerico: soloAlfanumerico };
+        leerExcelBeneficios: leerExcelBeneficios, soloAlfanumerico: soloAlfanumerico, quincenaDePagoVacaciones: quincenaDePagoVacaciones };
       if (typeof module !== 'undefined' && module.exports) module.exports = api;
       else raiz.Omega = api;
     })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -1724,11 +1747,411 @@ var Omega = (function () {
   } catch (e) { ERRORES_CARGA.push('Omega: ' + (e && e.message)); return undefined; }
 })();
 
+// ===== core/comisiones.js =====
+var Comisiones = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Comisiones: leer el Excel de comisiones que envía la gerencia (nombres escritos a mano, sin cédula),
+       cruzar cada nombre con los empleados del CAC, y verificar contra el «Resumen de Pago» de la nómina
+       que las comisiones quedaron registradas en «Otras Asignaciones».
+       Funciones puras: las usan el navegador, Apps Script y las pruebas.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      var VACIAS = { DE: 1, DEL: 1, LA: 1, LAS: 1, LOS: 1, Y: 1, POS: 1, VENTAS: 1, PROPIAS: 1 };
+    
+      function sinTildes(s) { return String(s == null ? '' : s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+      /** Palabras significativas de un nombre: sin tildes, sin lo que va entre paréntesis ni sufijos como «-POS». */
+      function palabras(nombre) {
+        return sinTildes(nombre).replace(/\([^)]*\)/g, ' ').replace(/-\s*POS\b/g, ' ').replace(/[^A-ZÑ ]/g, ' ').split(/\s+/).filter(function (p) { return p && !VACIAS[p]; });
+      }
+      function clave(nombre) { return palabras(nombre).join(' '); }
+    
+      /** Distancia de edición con trasposición (Varela/Valera = 1). */
+      function distancia(a, b) {
+        var m = a.length, n = b.length, d = [];
+        for (var i = 0; i <= m; i++) { d[i] = [i]; }
+        for (var j = 0; j <= n; j++) d[0][j] = j;
+        for (i = 1; i <= m; i++) for (j = 1; j <= n; j++) {
+          var c = a[i - 1] === b[j - 1] ? 0 : 1;
+          d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+          if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+        }
+        return d[m][n];
+      }
+      /** ¿La palabra del reporte coincide con la del empleado? igual, abreviada (≥4 letras) o con un error de tipeo (≥5 letras). */
+      function parecida(p, q) {
+        if (p === q) return 2;
+        if (p.length >= 4 && q.indexOf(p) === 0) return 1.5;
+        if (p.length >= 5 && q.length >= 5 && distancia(p, q) <= 1) return 1;
+        if (p.length >= 6 && q.length >= 6 && distancia(p, q) <= 2) return 0.5;
+        return 0;
+      }
+      /** Puntaje de un nombre del reporte contra un empleado: todas sus palabras deben aparecer (en cualquier orden). */
+      function puntaje(rep, emp) {
+        if (!rep.length) return 0;
+        var usadas = {}, total = 0;
+        for (var i = 0; i < rep.length; i++) {
+          var mejor = 0, cual = -1;
+          for (var j = 0; j < emp.length; j++) { if (usadas[j]) continue; var s = parecida(rep[i], emp[j]); if (s > mejor) { mejor = s; cual = j; } }
+          if (!mejor) return 0;
+          usadas[cual] = true; total += mejor;
+        }
+        return total + (rep.length >= 2 ? 1 : 0);
+      }
+      function mismaSucursal(sucursal, emp) {
+        var s = palabras(String(sucursal || '').replace(/sucursal/i, '')), o = palabras(emp.organizacion);
+        return s.length > 0 && s.every(function (p) { return o.some(function (q) { return parecida(p, q) >= 1; }); });
+      }
+    
+      /**
+       * Cruza un nombre del reporte con los empleados. empleados: [{ clave, nombre, organizacion, estado }]; alias: { 'CLAVE DEL NOMBRE': claveEmpleado }.
+       * Devuelve { clave, estado: 'alias'|'exacto'|'sugerido'|'ambiguo'|'sin', candidatos: [{ clave, nombre, organizacion }] }.
+       */
+      function cruzarNombre(nombre, sucursal, empleados, alias) {
+        var k = clave(nombre), rep = palabras(nombre);
+        var activos = empleados.filter(function (e) { return e.estado !== 'Inactivo'; });
+        if (alias && alias[k] && empleados.some(function (e) { return e.clave === alias[k]; })) return { clave: alias[k], estado: 'alias', candidatos: [] };
+        var exactos = activos.filter(function (e) { return clave(e.nombre) === k; });
+        if (exactos.length === 1) return { clave: exactos[0].clave, estado: 'exacto', candidatos: [] };
+        var c = activos.map(function (e) { return { e: e, s: puntaje(rep, palabras(e.nombre)) + (mismaSucursal(sucursal, e) ? 0.5 : 0) }; })
+          .filter(function (x) { return x.s >= 2; }).sort(function (a, b) { return b.s - a.s; });
+        var cand = c.slice(0, 5).map(function (x) { return { clave: x.e.clave, nombre: x.e.nombre, organizacion: x.e.organizacion || '' }; });
+        if (!c.length) return { clave: '', estado: 'sin', candidatos: [] };
+        if (c.length === 1 || c[0].s > c[1].s) return { clave: c[0].e.clave, estado: 'sugerido', candidatos: cand };
+        return { clave: '', estado: 'ambiguo', candidatos: cand };
+      }
+    
+      function r2(x) { return Math.round((Number(x) || 0) * 100) / 100; }
+      function texto(v) { return v == null ? '' : String(v).trim(); }
+    
+      /**
+       * Lee las hojas del Excel de comisiones. hojas: [{ nombre, matriz }] (matriz = filas de celdas).
+       * En cada hoja busca la fila de encabezados con una columna «Total/Monto a pagar…»; la columna de nombres es la de «Sucursal».
+       * Las filas «SUCURSAL …» marcan la sucursal; las de «TOTAL» se ignoran. Un texto a la derecha del nombre es una nota
+       * (p. ej. «Pagar por Pago Especial»). Devuelve [{ hoja, fila, sucursal, nombre, monto, nota }].
+       */
+      function leerExcelComisiones(hojas) {
+        var out = [];
+        (hojas || []).forEach(function (h) {
+          var m = h.matriz || [], cab = -1, colNom = -1, colMonto = -1;
+          for (var f = 0; f < Math.min(15, m.length) && cab < 0; f++) {
+            var fila = (m[f] || []).map(function (v) { return sinTildes(v).trim(); });
+            var mon = -1, nom = -1;
+            fila.forEach(function (v, j) {
+              if (/PAGAR/.test(v) && /^(TOTAL|MONTO)/.test(v)) mon = j;
+              if (nom < 0 && /^SUCURSAL$|^NOMBRE|^COLABORADOR|^TRABAJADOR/.test(v)) nom = j;
+            });
+            if (mon >= 0 && nom >= 0) { cab = f; colMonto = mon; colNom = nom; }
+          }
+          if (cab < 0) return;
+          var sucursal = '';
+          for (var i = cab + 1; i < m.length; i++) {
+            var row = m[i] || [], nombre = texto(row[colNom]);
+            if (!nombre) continue;
+            var N = sinTildes(nombre);
+            if (/^SUCURSAL\b/.test(N)) { sucursal = nombre; continue; }
+            if (/^TOTAL\b/.test(N)) continue;
+            if (!palabras(nombre).length) continue;
+            var v = row[colMonto], monto = typeof v === 'number' ? r2(v) : (isFinite(Number(texto(v).replace(',', '.'))) && texto(v) ? r2(Number(texto(v).replace(',', '.'))) : 0);
+            var notas = [];
+            if (typeof v === 'string' && texto(v) && !isFinite(Number(texto(v).replace(',', '.')))) notas.push(texto(v));
+            for (var j = colMonto + 1; j < row.length; j++) if (typeof row[j] === 'string' && texto(row[j])) notas.push(texto(row[j]));
+            out.push({ hoja: h.nombre, fila: i + 1, sucursal: sucursal, nombre: nombre, monto: monto, nota: notas.join(' · ') });
+          }
+        });
+        return out;
+      }
+    
+      /** Suma por persona las filas cruzadas e incluidas. filas: [{ clave, monto, incluir }] → [{ clave, monto, filas }]. */
+      function consolidar(filas) {
+        var por = {}, orden = [];
+        filas.forEach(function (f) {
+          if (!f.incluir || !f.clave) return;
+          if (!por[f.clave]) { por[f.clave] = { clave: f.clave, monto: 0, filas: 0 }; orden.push(f.clave); }
+          por[f.clave].monto = r2(por[f.clave].monto + f.monto); por[f.clave].filas++;
+        });
+        return orden.map(function (k) { return por[k]; });
+      }
+    
+      /**
+       * Lee el «Resumen de Pago» (Detalle de Nómina) a partir de sus líneas de texto, en orden.
+       * Cada persona termina en «Total NOMBRE asignaciones deducciones total»; antes vienen sus conceptos.
+       * Devuelve [{ nombre, otrasAsignaciones, asignaciones }].
+       */
+      function leerResumenPago(lineas) {
+        var montoRe = /(-?\d{1,3}(?:\.\d{3})*,\d{2})/g, num = function (s) { return Number(s.replace(/\./g, '').replace(',', '.')); };
+        var out = [], otras = 0;
+        (lineas || []).forEach(function (l) {
+          var t = String(l).replace(/\s+/g, ' ').trim(), montos = t.match(montoRe) || [];
+          var tot = /\bTotal (.+?) -?\d{1,3}(?:\.\d{3})*,\d{2}/.exec(t);
+          if (tot && !/^(Total )?(N[oó]mina|Contrato|General)\b/i.test(tot[1]) && !/Total General/i.test(t)) {
+            out.push({ nombre: tot[1].trim(), otrasAsignaciones: r2(otras), asignaciones: montos.length ? r2(num(montos[0])) : 0 });
+            otras = 0; return;
+          }
+          if (/Otras Asignaciones/i.test(t) && montos.length) otras += num(montos[0]);
+        });
+        return out;
+      }
+    
+      /**
+       * Compara lo solicitado con el reporte. items: [{ clave, nombre, monto }]; personas: leerResumenPago(...).
+       * Estado: 'ok' (otras asignaciones = monto), 'mayor' (otras asignaciones > monto: puede incluir otros pagos),
+       * 'menor' (falta), 'no' (no aparece o sin otras asignaciones).
+       */
+      function verificar(items, personas) {
+        var usados = {};
+        return items.map(function (it) {
+          var rep = palabras(it.nombre), mejor = null, ms = 0;
+          personas.forEach(function (p, i) {
+            if (usados[i]) return;
+            var k1 = clave(p.nombre) === clave(it.nombre) ? 100 : 0;
+            var s = k1 || Math.max(puntaje(palabras(p.nombre), rep), puntaje(rep, palabras(p.nombre)));
+            if (s > ms) { ms = s; mejor = i; }
+          });
+          if (mejor == null || ms < 3) return { clave: it.clave, nombre: it.nombre, monto: it.monto, enReporte: '', otras: 0, estado: 'no', diferencia: -it.monto };
+          usados[mejor] = true;
+          var p = personas[mejor], dif = r2(p.otrasAsignaciones - it.monto);
+          var estado = !(p.otrasAsignaciones > 0) ? 'no' : Math.abs(dif) < 0.01 ? 'ok' : dif > 0 ? 'mayor' : 'menor';
+          return { clave: it.clave, nombre: it.nombre, monto: it.monto, enReporte: p.nombre, otras: p.otrasAsignaciones, estado: estado, diferencia: dif };
+        });
+      }
+    
+    
+      /** Empleado de un nombre del reporte de nómina (nombres completos o abreviados). Devuelve el empleado o null. */
+      function empleadoDeNombre(nombre, empleados, usados, alias) {
+        var k = clave(nombre), rep = palabras(nombre), mejor = null, ms = 0, empate = false;
+        if (alias && alias[k]) { var a = empleados.filter(function (e) { return e.clave === alias[k] && !(usados && usados[e.clave]); })[0]; if (a) return a; }
+        empleados.forEach(function (e) {
+          if (usados && usados[e.clave]) return;
+          var pe = palabras(e.nombre), s = clave(e.nombre) === k ? 100 : Math.max(puntaje(rep, pe), puntaje(pe, rep));
+          if (s > ms) { ms = s; mejor = e; empate = false; } else if (s === ms && s > 0) empate = true;
+        });
+        return ms >= 3 && (!empate || ms === 100) ? mejor : null;
+      }
+    
+      /**
+       * Revisa un reporte de nómina (personas: [{ nombre, asignaciones, otrasAsignaciones }]) contra los empleados del CAC.
+       * empleados: [{ clave, nombre, estado, empresa, fueraNomina, sinTarjeta, ingresoMes }].
+       * opciones: { empresas: ['PCA'] (si no, las del reporte), excluirFaltantes: fn(e) → motivo para no exigirlo (p. ej. sin tarjeta) }.
+       * Devuelve { empresas, ok: [...], egresados: [...], noEnCac: [...], faltan: [...], esperados: [...] }.
+       */
+      function revisarReporte(personas, empleados, opciones) {
+        opciones = opciones || {};
+        var usados = {}, ok = [], egresados = [], noEnCac = [], cuenta = {};
+        personas.forEach(function (p) {
+          var e = empleadoDeNombre(p.nombre, empleados, usados, opciones.alias);
+          if (!e) { noEnCac.push({ nombre: p.nombre, monto: p.asignaciones }); return; }
+          usados[e.clave] = true;
+          var x = { clave: e.clave, nombre: e.nombre, enReporte: p.nombre, empresa: e.empresa, monto: p.asignaciones, otras: p.otrasAsignaciones };
+          if (e.estado === 'Inactivo') egresados.push(x); else { ok.push(x); cuenta[e.empresa] = (cuenta[e.empresa] || 0) + 1; }
+        });
+        var empresas = opciones.empresas || Object.keys(cuenta).filter(function (k) { return cuenta[k] >= Math.max(3, ok.length * 0.1); });
+        var faltan = [], esperados = [];
+        empleados.forEach(function (e) {
+          if (e.estado === 'Inactivo' || e.fueraNomina || usados[e.clave] || empresas.indexOf(e.empresa) === -1) return;
+          var motivo = opciones.excluirFaltantes ? opciones.excluirFaltantes(e) : '';
+          (motivo ? esperados : faltan).push({ clave: e.clave, nombre: e.nombre, empresa: e.empresa, motivo: motivo || '' });
+        });
+        // nombres del reporte que no se encontraron: ¿será alguno de los que faltan? (2 palabras iguales o más)
+        noEnCac.forEach(function (n) {
+          var rp = palabras(n.nombre), mejor = null, ms = 1;
+          faltan.concat(esperados).forEach(function (f) { var c = palabras(f.nombre).filter(function (w) { return rp.indexOf(w) !== -1; }).length; if (c > ms) { ms = c; mejor = f; } });
+          if (mejor) n.posible = { clave: mejor.clave, nombre: mejor.nombre };
+        });
+        var otraEmpresa = ok.filter(function (x) { return empresas.indexOf(x.empresa) === -1; });
+        return { empresas: empresas, ok: ok, egresados: egresados, noEnCac: noEnCac, faltan: faltan, esperados: esperados, otraEmpresa: otraEmpresa };
+      }
+    
+      var api = { palabras: palabras, clave: clave, distancia: distancia, cruzarNombre: cruzarNombre, leerExcelComisiones: leerExcelComisiones,
+        notaExcluye: function (n) { return /pago especial|liquidaci|no pagar|no se paga/i.test(String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '')); },
+        consolidar: consolidar, empleadoDeNombre: empleadoDeNombre, revisarReporte: revisarReporte, leerResumenPago: leerResumenPago, verificar: verificar, r2: r2 };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Comisiones = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Comisiones: ' + (e && e.message)); return undefined; }
+})();
+
+// ===== core/perfil.js =====
+var Perfil = (function () {
+  try {
+    var module = { exports: {} }, exports = module.exports;
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
+    /* ==========================================================
+       Perfil del trabajador: datos que el propio colaborador mantiene al día
+       (contacto, contacto de emergencia, carga familiar, datos personales y otros)
+       y las campañas de actualización de datos que abre Gestión Humana.
+       Funciones puras: las usan el navegador, Apps Script y las pruebas.
+       ========================================================== */
+    (function (raiz) {
+      'use strict';
+    
+      var LISTAS = {
+        estadoCivil: ['Soltero(a)', 'Casado(a)', 'Concubino(a)', 'Divorciado(a)', 'Viudo(a)'],
+        estudios: ['Primaria', 'Bachiller', 'Técnico Medio', 'TSU', 'Universitario', 'Postgrado'],
+        tallaCamisa: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'],
+        parentesco: ['Hijo(a)', 'Cónyuge', 'Concubino(a)', 'Padre', 'Madre', 'Hermano(a)', 'Otro'],
+        parentescoEmergencia: ['Cónyuge', 'Padre', 'Madre', 'Hijo(a)', 'Hermano(a)', 'Otro familiar', 'Amigo(a)'],
+        estados: ['Amazonas', 'Anzoátegui', 'Apure', 'Aragua', 'Barinas', 'Bolívar', 'Carabobo', 'Cojedes', 'Delta Amacuro', 'Distrito Capital', 'Falcón', 'Guárico',
+          'La Guaira', 'Lara', 'Mérida', 'Miranda', 'Monagas', 'Nueva Esparta', 'Portuguesa', 'Sucre', 'Táchira', 'Trujillo', 'Yaracuy', 'Zulia'],
+      };
+    
+      /** Secciones y campos. tipo: texto | telefono | correo | lista | numero | cuenta | fecha. req: obligatorio para dar la sección por completa. */
+      var SECCIONES = [
+        { id: 'contacto', nombre: 'Contacto', campos: [
+          { id: 'telefono', nombre: 'Teléfono celular', tipo: 'telefono', req: true, pregunta: '¿Cuál es tu número de celular?', ayuda: 'El número donde te podemos ubicar.' },
+          { id: 'telefono2', nombre: 'Otro teléfono', tipo: 'telefono', pregunta: '¿Tienes otro número de teléfono?', ayuda: 'De tu casa o un segundo celular.' },
+          { id: 'correo', nombre: 'Correo personal', tipo: 'correo', req: true, pregunta: '¿Cuál es tu correo personal?' },
+          { id: 'estado', nombre: 'Estado', tipo: 'lista', lista: 'estados', req: true, pregunta: '¿En qué estado vives?' },
+          { id: 'ciudad', nombre: 'Ciudad o municipio', tipo: 'texto', req: true, pregunta: '¿En qué ciudad o municipio?' },
+          { id: 'direccion', nombre: 'Dirección de habitación', tipo: 'texto', largo: 250, req: true, pregunta: '¿Cuál es tu dirección de habitación?', ayuda: 'Urbanización o sector, calle y número de casa o apartamento.' },
+        ] },
+        { id: 'emergencia', nombre: 'Contacto de emergencia', campos: [
+          { id: 'nombre', nombre: 'Nombre y apellido', tipo: 'texto', req: true, pregunta: 'En caso de emergencia, ¿a quién llamamos?', ayuda: 'Nombre y apellido de esa persona.' },
+          { id: 'parentesco', nombre: 'Parentesco', tipo: 'lista', lista: 'parentescoEmergencia', req: true, pregunta: '¿Qué es esa persona para ti?' },
+          { id: 'telefono', nombre: 'Teléfono', tipo: 'telefono', req: true, pregunta: '¿A qué número la llamamos?' },
+        ] },
+        { id: 'familia', nombre: 'Carga familiar', lista: true, campos: [
+          { id: 'nombre', nombre: 'Nombre y apellido', tipo: 'texto', req: true },
+          { id: 'parentesco', nombre: 'Parentesco', tipo: 'lista', lista: 'parentesco', req: true },
+          { id: 'fechaNacimiento', nombre: 'Fecha de nacimiento', tipo: 'fecha', req: true },
+          { id: 'cedula', nombre: 'Cédula (si tiene)', tipo: 'numero' },
+        ] },
+        { id: 'personales', nombre: 'Datos personales y otros', campos: [
+          { id: 'estadoCivil', nombre: 'Estado civil', tipo: 'lista', lista: 'estadoCivil', req: true, pregunta: '¿Cuál es tu estado civil?' },
+          { id: 'estudios', nombre: 'Nivel de estudios', tipo: 'lista', lista: 'estudios', req: true, pregunta: '¿Cuál es tu nivel de estudios?', ayuda: 'El más alto que hayas terminado.' },
+          { id: 'profesion', nombre: 'Profesión u oficio', tipo: 'texto', pregunta: '¿Cuál es tu profesión u oficio?' },
+          { id: 'camisa', nombre: 'Talla de camisa', tipo: 'lista', lista: 'tallaCamisa', req: true, pregunta: '¿Qué talla de camisa usas?', ayuda: 'Para la dotación de uniformes.' },
+          { id: 'pantalon', nombre: 'Talla de pantalón', tipo: 'numero', req: true, pregunta: '¿Qué talla de pantalón usas?', ayuda: 'Por ejemplo: 30, 32, 34.' },
+          { id: 'zapatos', nombre: 'Talla de zapatos', tipo: 'numero', req: true, pregunta: '¿Qué talla de zapatos usas?', ayuda: 'Por ejemplo: 38, 40, 42.' },
+          { id: 'banco', nombre: 'Banco de su cuenta nómina', tipo: 'texto', pregunta: '¿En qué banco cobras tu nómina?' },
+          { id: 'cuenta', nombre: 'Número de cuenta (20 dígitos)', tipo: 'cuenta', pregunta: '¿Cuál es el número de esa cuenta?', ayuda: 'Los 20 dígitos, sin guiones.' },
+        ] },
+      ];
+      var MAX_FAMILIA = 15;
+    
+      /** Plan sugerido: el perfil en 4 campañas cortas (una sección cada una) que Gestión Humana lanza de una en una. */
+      var PLAN_CAMPANAS = [
+        { titulo: 'Actualización de datos (1 de 4): tu contacto', secciones: ['contacto'],
+          mensaje: 'Queremos tener al día tu teléfono, tu correo y tu dirección para poder comunicarnos contigo.' },
+        { titulo: 'Actualización de datos (2 de 4): contacto de emergencia', secciones: ['emergencia'],
+          mensaje: 'Si te pasa algo en el trabajo, ¿a quién llamamos?' },
+        { titulo: 'Actualización de datos (3 de 4): tu carga familiar', secciones: ['familia'],
+          mensaje: 'Cuéntanos quiénes dependen de ti para tomarlos en cuenta en los beneficios y actividades para tu familia.' },
+        { titulo: 'Actualización de datos (4 de 4): tallas y datos personales', secciones: ['personales'],
+          mensaje: 'Tus tallas para la dotación de uniformes, tu estado civil, tus estudios y tu cuenta nómina. Con esta terminas tu perfil.' },
+      ];
+    
+      function seccion(id) { return SECCIONES.filter(function (s) { return s.id === id; })[0]; }
+      function texto(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+    
+      /** Limpia y valida un valor. Devuelve { valor, error }. */
+      function limpiarCampo(c, v) {
+        var t = texto(v);
+        if (!t) return { valor: '' };
+        if (c.tipo === 'telefono') {
+          var d = t.replace(/\D/g, '');
+          if (d.length === 12 && d.indexOf('58') === 0) d = '0' + d.slice(2);
+          if (d.length === 10 && d[0] !== '0') d = '0' + d;
+          if (d.length !== 11) return { valor: t, error: c.nombre + ': escribe 11 dígitos, por ejemplo 04141234567.' };
+          return { valor: d.slice(0, 4) + '-' + d.slice(4) };
+        }
+        if (c.tipo === 'correo') {
+          t = t.toLowerCase().replace(/\s/g, '');
+          return /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(t) ? { valor: t } : { valor: t, error: c.nombre + ': no parece un correo válido.' };
+        }
+        if (c.tipo === 'lista') return LISTAS[c.lista].indexOf(t) !== -1 ? { valor: t } : { valor: '', error: c.nombre + ': elige una opción de la lista.' };
+        if (c.tipo === 'numero') return /^[\d.,\s-]{1,15}$/.test(t) ? { valor: t.replace(/[\s.]/g, '') } : { valor: t, error: c.nombre + ': escribe solo números.' };
+        if (c.tipo === 'cuenta') { var n = t.replace(/\D/g, ''); return n.length === 20 ? { valor: n } : { valor: t, error: c.nombre + ': debe tener 20 dígitos.' }; }
+        if (c.tipo === 'fecha') return /^\d{4}-\d{2}-\d{2}$/.test(t) ? { valor: t } : { valor: t, error: c.nombre + ': fecha no válida.' };
+        return { valor: t.slice(0, c.largo || 120) };
+      }
+    
+      /** Limpia los datos que envía el trabajador. Devuelve { datos, errores }. Solo se toman las secciones enviadas. */
+      function normalizar(entrada) {
+        var datos = {}, errores = [];
+        SECCIONES.forEach(function (s) {
+          if (!entrada || entrada[s.id] === undefined) return;
+          if (s.lista) {
+            var filas = Array.isArray(entrada[s.id]) ? entrada[s.id] : [];
+            if (filas.length > MAX_FAMILIA) errores.push('Puedes registrar hasta ' + MAX_FAMILIA + ' familiares.');
+            datos[s.id] = filas.slice(0, MAX_FAMILIA).map(function (f, i) {
+              var o = {};
+              s.campos.forEach(function (c) { var r = limpiarCampo(c, f && f[c.id]); o[c.id] = r.valor; if (r.error) errores.push('Familiar ' + (i + 1) + ' · ' + r.error); });
+              return o;
+            }).filter(function (o) { return s.campos.some(function (c) { return o[c.id]; }); });
+            datos[s.id].forEach(function (o, i) { s.campos.forEach(function (c) { if (c.req && !o[c.id]) errores.push('Familiar ' + (i + 1) + ': falta ' + c.nombre.toLowerCase() + '.'); }); });
+            return;
+          }
+          var o = {};
+          s.campos.forEach(function (c) { var r = limpiarCampo(c, entrada[s.id] && entrada[s.id][c.id]); o[c.id] = r.valor; if (r.error) errores.push(r.error); });
+          datos[s.id] = o;
+        });
+        if (entrada && entrada.sinFamilia !== undefined) datos.sinFamilia = !!entrada.sinFamilia;
+        return { datos: datos, errores: errores };
+      }
+    
+      /** ¿La sección está completa? (la carga familiar cuenta si hay familiares o si marcó «no tengo carga familiar»). */
+      function seccionCompleta(datos, id) {
+        var s = seccion(id), d = datos && datos[id];
+        if (!s) return true;
+        if (s.lista) return !!(datos && (datos.sinFamilia || (d && d.length)));
+        return !!d && s.campos.every(function (c) { return !c.req || d[c.id]; });
+      }
+      function faltantes(datos, secciones) { return (secciones || SECCIONES.map(function (s) { return s.id; })).filter(function (id) { return !seccionCompleta(datos, id); }); }
+    
+      function aTexto(s, v) {
+        if (s.lista) return (v || []).map(function (f) { return [f.nombre, f.parentesco, f.fechaNacimiento].filter(Boolean).join(' · '); }).join(' | ');
+        return v || '';
+      }
+      /** Cambios entre el perfil anterior y el nuevo: [{ seccion, campo, nombre, antes, despues }]. */
+      function diferencias(antes, despues) {
+        var out = [];
+        SECCIONES.forEach(function (s) {
+          if (!despues || despues[s.id] === undefined) return;
+          if (s.lista) {
+            var a = aTexto(s, antes && antes[s.id]), b = aTexto(s, despues[s.id]);
+            if (a !== b) out.push({ seccion: s.id, campo: s.id, nombre: s.nombre, antes: a, despues: b });
+            return;
+          }
+          s.campos.forEach(function (c) {
+            var a = (antes && antes[s.id] && antes[s.id][c.id]) || '', b = despues[s.id][c.id] || '';
+            if (a !== b) out.push({ seccion: s.id, campo: c.id, nombre: s.nombre + ' · ' + c.nombre, antes: a, despues: b });
+          });
+        });
+        return out;
+      }
+    
+      /** ¿Esta campaña le toca a esta persona? alcance: { tipo: 'todos'|'empresas'|'personas', empresas: [], claves: [] } */
+      function enAlcance(campana, persona) {
+        var a = campana.alcance || { tipo: 'todos' };
+        if (a.tipo === 'empresas') return (a.empresas || []).indexOf(persona.empresa) !== -1;
+        if (a.tipo === 'personas') return (a.claves || []).indexOf(persona.clave) !== -1;
+        return true;
+      }
+      /** Una persona completó la campaña si la confirmó y las secciones pedidas están completas. */
+      function completo(campana, perfil) {
+        return !!(perfil && perfil.confirmadas && perfil.confirmadas[campana.id]) && !faltantes(perfil.datos, campana.secciones).length;
+      }
+    
+      var api = { LISTAS: LISTAS, SECCIONES: SECCIONES, PLAN_CAMPANAS: PLAN_CAMPANAS, MAX_FAMILIA: MAX_FAMILIA, seccion: seccion, limpiarCampo: limpiarCampo, normalizar: normalizar,
+        seccionCompleta: seccionCompleta, faltantes: faltantes, diferencias: diferencias, enAlcance: enAlcance, completo: completo };
+      if (typeof module !== 'undefined' && module.exports) module.exports = api;
+      else raiz.Perfil = api;
+    })(typeof globalThis !== 'undefined' ? globalThis : this);
+    return module.exports;
+  } catch (e) { ERRORES_CARGA.push('Perfil: ' + (e && e.message)); return undefined; }
+})();
+
 // ===== core/servicio.js =====
 var Servicio = (function () {
   try {
     var module = { exports: {} }, exports = module.exports;
-    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './servicio.js': Servicio })[ruta]; };
+    var require = function (ruta) { return ({ './calculo.js': Calculo, './empleados.js': Empleados, './prestaciones.js': Prestaciones, './exportes.js': Exportes, './constancia.js': Constancia, './vacaciones.js': Vacaciones, './aportes.js': Aportes, './recibos.js': Recibos, './planificacion.js': Planificacion, './omega.js': Omega, './comisiones.js': Comisiones, './perfil.js': Perfil, './servicio.js': Servicio })[ruta]; };
     /* ==========================================================
        Casos de uso del módulo de prestaciones. No sabe de Sheets:
        recibe un `repo` (hojas en producción, memoria en pruebas) y
@@ -1752,6 +2175,8 @@ var Servicio = (function () {
       var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
       var Planificacion = isNode ? require('./planificacion.js') : dependencia(raiz, 'Planificacion');
       var Omega = isNode ? require('./omega.js') : dependencia(raiz, 'Omega');
+      var Comisiones = isNode ? require('./comisiones.js') : dependencia(raiz, 'Comisiones');
+      var Perfil = isNode ? require('./perfil.js') : dependencia(raiz, 'Perfil');
     
       var HORAS_SESION = 8;
       var MAX_FALLOS_CEDULA = 5;
@@ -2023,23 +2448,24 @@ var Servicio = (function () {
        * APROBADAS de antes) y las pasa a EN_ARCHIVO. RRHH no aprueba: el banco es quien acepta o rechaza.
        * Mismo diseño que NOMINA APORTES con TIPO T = 5.
        */
-      function generarArchivoAnticipos(repo, ctx, token, empresa) {
+      function generarArchivoAnticipos(repo, ctx, token, empresa, repetir) {
         var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
         if (!s) return err('SESION', 'No autorizado.');
         var cfg = repo.empresaConfig(empresa);
         if (!cfg) return err('VALIDACION', 'Empresa desconocida.');
-        var pendientes = repo.anticiposPorEstado('PENDIENTE').concat(repo.anticiposPorEstado('APROBADA')).filter(function (a) {
+        // repetir: vuelve a generar el archivo de las que ya están «Enviada al banco», sin cambiar nada
+        var pendientes = (repetir ? repo.anticiposPorEstado('EN_ARCHIVO') : repo.anticiposPorEstado('PENDIENTE').concat(repo.anticiposPorEstado('APROBADA'))).filter(function (a) {
           var e = repo.empleadoPorClave(a.clave);
           return e && Empleados.empresaFideicomiso(e) === empresa;
         });
-        if (!pendientes.length) return err('VACIO', 'No hay solicitudes de anticipo recibidas para ' + empresa + '.');
+        if (!pendientes.length) return err('VACIO', repetir ? 'No hay anticipos de ' + empresa + ' enviados al banco.' : 'No hay solicitudes de anticipo recibidas para ' + empresa + '.');
         var items = pendientes.map(function (a) {
           var e = repo.empleadoPorClave(a.clave);
           return { cedulaLetra: e.cedulaLetra, cedulaNumero: e.cedulaNumero, nombre: e.nombre, monto: a.monto };
         });
         var filas = Exportes.filasNomina(items, { fideicomiso: cfg.fideicomiso, tipoT: cfg.tipoTAnticipo, forma: cfg.forma });
-        pendientes.forEach(function (a) { cambiarEstado(repo, ctx, a, 'EN_ARCHIVO', s.clave, {}); });
-        repo.log('ARCHIVO_ANTICIPOS', s.clave, empresa + ' · ' + pendientes.length + ' anticipos');
+        if (!repetir) pendientes.forEach(function (a) { cambiarEstado(repo, ctx, a, 'EN_ARCHIVO', s.clave, {}); });
+        repo.log(repetir ? 'ARCHIVO_ANTICIPOS_COPIA' : 'ARCHIVO_ANTICIPOS', s.clave, empresa + ' · ' + pendientes.length + ' anticipos');
         return ok({ filas: filas, csv: Exportes.aCsv(filas, { decimales: { 5: 2 } }), cantidad: pendientes.length });
       }
     
@@ -2254,7 +2680,7 @@ var Servicio = (function () {
         return {
           id: c.id, nombre: c.nombre, cedula: c.cedula, empresa: c.empresa, empresaNombre: Constancia.NOMBRES_EMPRESA[c.empresa] || c.empresa,
           cargo: c.cargo, organizacion: c.organizacion, fechaIngreso: c.fechaIngreso, salario: c.salario,
-          emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora),
+          emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora), destinatario: c.destinatario || '',
           firmante: p ? firmante(p) : undefined,
         };
       }
@@ -2265,7 +2691,11 @@ var Servicio = (function () {
        * Solo una a la vez: mientras tenga una VIGENTE no se genera otra (se vuelve a descargar la misma).
        * Cuando vence, o si RRHH la anula, puede generar una nueva.
        */
-      function emitirConstancia(repo, ctx, token) {
+      /** Destinatario de la constancia: '' = «A quien pueda interesar»; si no, la institución (texto limpio, hasta 120). */
+      function limpiarDestinatario(t) { return String(t == null ? '' : t).replace(/[<>{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+      function mismoDestinatario(a, b) { var n = function (x) { return Empleados.normalizarNombre(limpiarDestinatario(x)); }; return n(a) === n(b); }
+    
+      function emitirConstancia(repo, ctx, token, destinatario) {
         var s = leerToken(ctx, token, ['TRABAJADOR']);
         if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
         var emp = repo.empleadoPorClave(s.clave);
@@ -2275,10 +2705,13 @@ var Servicio = (function () {
         var p = repo.parametros(), ahora = ctx.ahora();
         var max = Number(p.constanciasMaxPorMes) > 0 ? Number(p.constanciasMaxPorMes) : MAX_CONSTANCIAS_MES;
         var propias = repo.constanciasDe(s.clave);
-        var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE'; })[0];
+        var dest = limpiarDestinatario(destinatario);
+        if (destinatario != null && String(destinatario).trim() && dest.length < 3) return err('VALIDACION', 'Escribe el nombre de la institución a la que va dirigida.');
+        // Una vigente por destinatario: con el mismo destinatario se vuelve a descargar la que ya tiene.
+        var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE' && mismoDestinatario(c.destinatario, dest); })[0];
         if (vigente) {
           var hasta = Constancia.fechaCaracas(vigente.vence);
-          return err('YA_VIGENTE', 'Ya tienes una constancia vigente hasta el ' + Constancia.fechaCorta(hasta) +
+          return err('YA_VIGENTE', 'Ya tienes una constancia vigente ' + (dest ? 'dirigida a ' + vigente.destinatario : '«A quien pueda interesar»') + ' hasta el ' + Constancia.fechaCorta(hasta) +
             '. Puedes descargarla de nuevo; podrás generar una nueva a partir del ' + Constancia.fechaCorta(Constancia.sumarDias(hasta, 1)) + '.');
         }
         var recientes = propias.filter(function (c) { return c.emision > ahora - 30 * 86400000; });
@@ -2287,7 +2720,7 @@ var Servicio = (function () {
           id: repo.nuevoIdConstancia(), clave: s.clave, nombre: emp.nombre, cedula: emp.cedulaLetra + '-' + emp.cedulaNumero,
           empresa: Empleados.empresaFideicomiso(emp), cargo: emp.puesto, organizacion: emp.organizacion,
           fechaIngreso: Constancia.fechaCorta(emp.fechaIngreso), salario: Calculo.redondear2(emp.salarioMensual),
-          emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave,
+          emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave, destinatario: dest,
         };
         repo.guardarConstancia(c);
         repo.log('CONSTANCIA_EMITIDA', s.clave, c.id);
@@ -2594,8 +3027,10 @@ var Servicio = (function () {
         var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
           .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
         var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
+        var activos = r.empleados.filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina; });
+        var conNacimiento = activos.filter(function (e) { return e.fechaNacimiento; }).length;
         repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
-        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula });
+        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula, conNacimiento: conNacimiento, activos: activos.length });
       }
     
       /** opciones: { buscar, departamento, sinJefe } */
@@ -2862,7 +3297,8 @@ var Servicio = (function () {
         var claves = Object.keys(avisadas);
         try { if (claves.length && repo.enviarPush) repo.enviarPush(claves.map(function (c) { return idPush(ctx, c); }), 'Tu constancia de trabajo venció', 'Ya puedes generar una nueva en el CAC.', 'constancia'); }
         catch (e) { /* sin celular */ }
-        return ok({ avisadas: claves.length });
+        var cel = avisosCelebraciones(repo, ctx);
+        return ok({ avisadas: claves.length, cumpleanos: cel.cumpleanos, aniversarios: cel.aniversarios });
       }
     
       /* ---------- Vacaciones: panel de días pendientes (RRHH) ---------- */
@@ -3208,6 +3644,86 @@ var Servicio = (function () {
         return ok({ id: x.r.id, visto: x.r.visto, conforme: x.r.conforme });
       }
     
+      /* ---------- Quincena: proceso completo de nómina (detalle, vacaciones, comisiones, cestaticket, complemento) ---------- */
+    
+      var PASOS_QUINCENA = ['detalle', 'vacaciones', 'comisiones', 'cestaticket', 'complemento'];
+    
+      function quincenaListar(repo, ctx, token) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        return ok(repo.omegaQuincenas().map(function (q) {
+          var pasos = q.pasos || {};
+          return { id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, creada: q.creada, hechos: PASOS_QUINCENA.filter(function (p) { return pasos[p] && pasos[p].hecho; }).length };
+        }).sort(function (a, b) { return a.id < b.id ? 1 : -1; }));
+      }
+    
+      function quincenaVer(repo, ctx, token, id) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id);
+        if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+        var v = vistaQuincena(repo, q, configOmega(repo)), pasos = q.pasos || {};
+        var com = pasos.comisiones && pasos.comisiones.nomina ? repo.nominaEspecialPorId(pasos.comisiones.nomina) : null;
+        return ok({ id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, pasos: pasos, orden: PASOS_QUINCENA, lotes: v.lotes, sin1Q: v.sin1Q,
+          comisiones: com ? vistaNominaEsp(com) : null });
+      }
+    
+      function quincenaAbrir(repo, ctx, token, mes, quincena, tasa) {
+        var r = omegaAbrirQuincena(repo, ctx, token, mes, quincena, tasa);
+        if (!r.ok) return r;
+        return quincenaVer(repo, ctx, token, r.data.id);
+      }
+    
+      /** Guarda el estado de un paso (hecho y un resumen corto que se muestra al volver). */
+      function quincenaPaso(repo, ctx, token, id, paso, datos) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        if (PASOS_QUINCENA.indexOf(paso) === -1) return err('VALIDACION', 'Paso desconocido.');
+        var q = quincenaOmega(repo, id);
+        if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+        q.pasos = q.pasos || {};
+        var previo = q.pasos[paso] || {}, d = datos || {};
+        var limpio = JSON.parse(JSON.stringify(d.resumen || {}));
+        if (JSON.stringify(limpio).length > 20000) return err('VALIDACION', 'El resumen es demasiado grande.');
+        q.pasos[paso] = Object.assign({}, previo, limpio, { hecho: d.hecho != null ? !!d.hecho : !!previo.hecho, cuando: ctx.ahora(), por: s.clave });
+        q.actualizada = ctx.ahora();
+        repo.guardarOmegaQuincena(q);
+        return quincenaVer(repo, ctx, token, id);
+      }
+    
+      /** Lo que cambiaría al cargar el detalle: ingresos, egresos y actualizados (sin guardar nada). */
+      function previaDetalle(repo, ctx, token, filas) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        if (!Array.isArray(filas) || !filas.length) return err('VALIDACION', 'El archivo no trae empleados.');
+        var validas = filas.filter(function (f) { var c = Empleados.parsearCedula(f.cedula); return c.numero && c.numero.length >= 5; });
+        var antes = {}; repo.todosEmpleados().forEach(function (e) { antes[Empleados.claveCedula(e)] = e; });
+        var r = Empleados.fusionarDetalle(repo.todosEmpleados(), validas), fecha = function (f) { return f ? ('0' + f.d).slice(-2) + '/' + ('0' + f.m).slice(-2) + '/' + f.y : ''; };
+        var ingresos = [], reingresos = [], egresos = [];
+        r.empleados.forEach(function (e) {
+          var k = Empleados.claveCedula(e), a = antes[k], x = { clave: k, nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', empresa: Empleados.empresaFideicomiso(e), ingreso: fecha(e.fechaIngreso) };
+          if (!a) ingresos.push(x);
+          else if (a.estado === 'Inactivo' && e.estado !== 'Inactivo') reingresos.push(x);
+          else if (a.estado !== 'Inactivo' && e.estado === 'Inactivo') egresos.push(x);
+        });
+        return ok({ filas: validas.length, sinCedula: filas.length - validas.length, ingresos: ingresos, reingresos: reingresos, egresos: egresos, actualizados: r.resumen.actualizados });
+      }
+    
+      /** Vacaciones con pago (aprobadas por el jefe o registradas) que se pagan en esta quincena. */
+      function vacacionesQuincena(repo, ctx, token, id) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        var lista = [];
+        ['APROBADA_JEFE', 'REGISTRADA'].forEach(function (est) {
+          repo.vacSolicitudesPorEstado(est).forEach(function (x) {
+            var pagos = (x.imputacion || []).filter(function (i) { return i.pagaPeriodo; });
+            if (!pagos.length || Omega.quincenaDePagoVacaciones(x.inicio) !== id) return;
+            var e = repo.empleadoPorClave(x.clave) || {};
+            lista.push({ id: x.id, clave: x.clave, cedula: e.cedulaNumero || x.clave.slice(1), nombre: e.nombre || x.clave, empresa: e.nombre ? Empleados.empresaFideicomiso(e) : '',
+              inicio: x.inicio, culminacion: x.culminacion, reintegro: x.reintegro, dias: x.dias, estado: x.estado, nomina: x.nomina || '',
+              periodos: pagos.map(function (i) { return { periodo: i.periodo, dias: i.diasDelPeriodo }; }) });
+          });
+        });
+        lista.sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; });
+        return ok(lista);
+      }
+    
       /* ---------- Omega Capital: cestaticket y Omega Transferencia por quincena, en 4 lotes ---------- */
     
       function configOmega(repo) {
@@ -3242,7 +3758,7 @@ var Servicio = (function () {
         if (!q1) return { existe: false, pagado: r, validados: {} };
         Omega.LOTES.forEach(function (l) {
           if (!q1.lotes[l.id] || q1.lotes[l.id].estado !== 'VALIDADO') return;
-          r[l.id] = {}; repo.omegaPagos(q1.id, l.id).forEach(function (x) { r[l.id][x.clave] = x.montoBs; });
+          r[l.id] = {}; repo.omegaPagos(q1.id, l.id).forEach(function (x) { r[l.id][x.clave] = Omega.r2(x.montoBs - ((x.detalle && x.detalle.adicionalBs) || 0)); });   // lo adicional de la 1Q no se descuenta
         });
         var val = {}; Omega.LOTES.forEach(function (l) { val[l.id] = !!(q1.lotes[l.id] && q1.lotes[l.id].estado === 'VALIDADO'); });
         return { existe: true, pagado: r, validados: val };
@@ -3259,11 +3775,21 @@ var Servicio = (function () {
           cache.calc = Omega.lineasQuincena(personasOmega(repo), benef, q.mes, q.quincena, q.tasa, p1.pagado, cfg.parametros);
         }
         var aj = q.ajustes[loteId] || {};
-        return (cache.calc[loteId] || []).map(function (l) {
-          var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs });
+        var vistos = {};
+        var lineas = (cache.calc[loteId] || []).map(function (l) {
+          vistos[l.clave] = true;
+          var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs, adicional: Number(a.adicional) || 0, notaAdicional: a.nota || '' });
           if (a.monto != null && a.monto !== '') { x.montoBs = Omega.r2(a.monto); x.ajustado = true; }
+          if (x.adicional) x.montoBs = Omega.r2(x.montoBs + x.adicional);
           return x;
         });
+        // personas agregadas a mano en este lote (solo un monto adicional de esta quincena)
+        Object.keys(aj).forEach(function (k) {
+          var a = aj[k]; if (vistos[k] || !a.agregada) return;
+          lineas.push({ clave: k, cedula: a.cedula || k.slice(1), nombre: a.nombre || k, usd: 0, montoBs: Omega.r2(a.adicional), calculado: 0, adicional: Number(a.adicional) || 0,
+            notaAdicional: a.nota || '', agregada: true, excluida: !!a.excluir, anticipoBs: 0, dias: 0, detalle: {} });
+        });
+        return lineas;
       }
     
       function resumenLote(lineas, cfg) {
@@ -3417,6 +3943,17 @@ var Servicio = (function () {
         if (q.lotes[loteId] && q.lotes[loteId].estado === 'VALIDADO') return err('VALIDADO', 'El lote ya está validado: reábrelo para cambiarlo.');
         var aj = q.ajustes[loteId] = q.ajustes[loteId] || {}, a = aj[clave] = aj[clave] || {};
         if (cambio && cambio.excluir != null) { if (cambio.excluir) a.excluir = true; else delete a.excluir; }
+        if (cambio && 'adicional' in cambio) {
+          var ad = cambio.adicional == null || cambio.adicional === '' ? 0 : Number(String(cambio.adicional).replace(/\./g, '').replace(',', '.'));
+          if (!isFinite(ad)) return err('VALIDACION', 'Monto adicional no válido.');
+          if (ad) { a.adicional = Omega.r2(ad); a.nota = String(cambio.nota || a.nota || '').slice(0, 120); } else { delete a.adicional; delete a.nota; }
+          if (cambio.agregar) {
+            var e = repo.empleadoPorClave(clave);
+            if (!e) return err('NO_ENCONTRADO', 'No encontramos a esa persona.');
+            a.agregada = true; a.nombre = e.nombre; a.cedula = e.cedulaNumero;
+          }
+          if (a.agregada && !a.adicional) delete aj[clave];
+        }
         if (cambio && 'monto' in cambio) {
           var m = cambio.monto == null || cambio.monto === '' ? null : Number(String(cambio.monto).replace(/\./g, '').replace(',', '.'));
           if (m == null) delete a.monto; else if (isFinite(m) && m >= 0) a.monto = Omega.r2(m); else return err('VALIDACION', 'Monto no válido.');
@@ -3446,7 +3983,7 @@ var Servicio = (function () {
         repo.quitarOmegaPagos(id, loteId);
         repo.agregarOmegaPagos(lineas.map(function (x) {
           return { quincena: id, lote: loteId, clave: x.clave, cedula: x.cedula, nombre: x.nombre, usd: x.usd, montoBs: x.montoBs, anticipoBs: x.anticipoBs || 0,
-            dias: x.dias, detalle: x.detalle, validado: ahora };
+            dias: x.dias, detalle: Object.assign({}, x.detalle, x.adicional ? { adicionalBs: x.adicional, notaAdicional: x.notaAdicional } : {}), validado: ahora };
         }));
         var total = Omega.r2(lineas.reduce(function (t, x) { return t + x.montoBs; }, 0));
         q.lotes[loteId] = { estado: 'VALIDADO', cuando: ahora, por: s.clave, personas: lineas.length, total: total };
@@ -3521,7 +4058,493 @@ var Servicio = (function () {
         return ok(b);
       }
     
+      /* ---------- Nóminas especiales: el jefe solicita un pago especial y Gestión Humana lo registra en la nómina ---------- */
+    
+      var MONEDAS_NOMINA = ['Bs.', '$'];
+      function vistaNominaEsp(n) {
+        return { id: n.id, concepto: n.concepto, moneda: n.moneda, fechaPago: n.fechaPago, observacion: n.observacion, items: n.items, total: n.total, personas: n.personas,
+          verificacion: n.verificacion || null, estado: n.estado, solicitadaPor: n.solicitadaPor, solicitadaPorNombre: n.solicitadaPorNombre, solicitada: n.solicitada,
+          atendidaPor: n.atendidaPor, atendidaPorNombre: n.atendidaPorNombre, atendida: n.atendida, referencia: n.referencia, motivo: n.motivo };
+      }
+      function nombreUsuario(repo, clave) {
+        var d = digitos(clave), e = repo.empleadoPorClave('V' + d) || repo.empleadoPorClave('E' + d);
+        if (e) return e.nombre;
+        var u = repo.todosUsuarios().filter(function (x) { return digitos(x.cedula) === d; })[0];
+        return u ? u.nombre : d;
+      }
+    
+      /** Solicitud de una nómina de pago especial. datos: { concepto, moneda, fechaPago, observacion, items: [{ clave, monto }] } */
+      function solicitarNominaEspecial(repo, ctx, token, datos) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        datos = datos || {};
+        var concepto = String(datos.concepto || '').trim().slice(0, 120);
+        if (!concepto) return err('VALIDACION', 'Escribe el concepto del pago (por ejemplo, «Bono por cierre de inventario»).');
+        var moneda = MONEDAS_NOMINA.indexOf(datos.moneda) !== -1 ? datos.moneda : 'Bs.';
+        var fechaPago = /^\d{4}-\d{2}-\d{2}$/.test(String(datos.fechaPago || '')) ? datos.fechaPago : '';
+        var vistos = {}, items = [], errores = [];
+        var alias = {};
+        (datos.items || []).forEach(function (it) {
+          var e = it.clave ? repo.empleadoPorClave(it.clave) : null, monto = Math.round((Number(it.monto) || 0) * 100) / 100;
+          if (!e && !it.clave && it.cedula) {   // persona que no está en el CAC (la escribe Gestión Humana)
+            var ced = Empleados.numeroDeCedulaTexto(it.cedula), nom = String(it.nombre || '').trim().toUpperCase();
+            if (!ced || !nom) { errores.push('Falta la cédula o el nombre de una persona escrita a mano.'); return; }
+            if (vistos['V' + ced]) { errores.push(nom + ' está repetido.'); return; }
+            vistos['V' + ced] = true;
+            if (!(monto > 0)) { errores.push('Falta el monto de ' + nom + '.'); return; }
+            items.push({ clave: 'V' + ced, cedula: ced, cedulaLetra: 'V', nombre: nom, empresa: '', organizacion: '', monto: monto, manual: true });
+            return;
+          }
+          if (!e) { errores.push('No encontramos a ' + (it.clave || 'una persona') + '.'); return; }
+          (it.nombresReporte || []).forEach(function (n) { var k = Comisiones.clave(n); if (k && k !== Comisiones.clave(e.nombre)) alias[k] = Empleados.claveCedula(e); });
+          var clave = Empleados.claveCedula(e);
+          if (vistos[clave]) { errores.push(e.nombre + ' está repetido.'); return; }
+          vistos[clave] = true;
+          if (!(monto > 0)) { errores.push('Falta el monto de ' + e.nombre + '.'); return; }
+          if (e.estado === 'Inactivo') { errores.push(e.nombre + ' ya no está activo.'); return; }
+          items.push({ clave: clave, cedula: e.cedulaNumero, cedulaLetra: e.cedulaLetra, nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e), organizacion: e.organizacion || '', monto: monto });
+        });
+        if (errores.length) return err('VALIDACION', errores[0]);
+        if (!items.length) return err('VALIDACION', 'Agrega al menos una persona con su monto.');
+        var n = { id: repo.nuevoIdNominaEsp(), concepto: concepto, moneda: moneda, fechaPago: fechaPago, observacion: String(datos.observacion || '').trim().slice(0, 500),
+          items: items, personas: items.length, total: Math.round(items.reduce(function (t, x) { return t + x.monto; }, 0) * 100) / 100,
+          estado: 'SOLICITADA', solicitadaPor: s.clave, solicitadaPorNombre: nombreUsuario(repo, s.clave), solicitada: ctx.ahora() };
+        repo.guardarNominaEspecial(n);
+        if (Object.keys(alias).length && repo.guardarAliasComisiones) repo.guardarAliasComisiones(alias);
+        repo.log('NOMINA_ESP_SOLICITUD', s.clave, n.id + ' · ' + n.personas + ' · ' + n.total);
+        var destinos = repo.todosUsuarios().map(function (u) { return digitos(u.cedula); }).filter(function (d) { return d && d !== digitos(s.clave); }).map(function (d) { return 'V' + d; });
+        notificar(repo, ctx, destinos, { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial por registrar', texto: n.solicitadaPorNombre + ' solicitó «' + concepto + '» para ' + n.personas + ' persona' + (n.personas === 1 ? '' : 's') + '.', ruta: 'nominas' });
+        return ok(vistaNominaEsp(n));
+      }
+    
+      function listarNominasEspeciales(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var lista = repo.nominasEspeciales().sort(function (a, b) { return b.solicitada - a.solicitada; }).map(vistaNominaEsp);
+        return ok({ yo: digitos(s.clave), solicitudes: lista });
+      }
+    
+      function atenderNominaEspecial(repo, ctx, token, id, estado, extra) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var n = repo.nominaEspecialPorId(id);
+        if (!n) return err('NO_ENCONTRADO', 'No existe esa solicitud.');
+        if (n.estado !== 'SOLICITADA') return err('TRANSICION', 'Esa solicitud ya fue atendida.');
+        if (estado === 'CANCELADA' && digitos(n.solicitadaPor) !== digitos(s.clave)) return err('PERMISO', 'Solo quien la solicitó puede cancelarla.');
+        n.estado = estado; n.atendidaPor = s.clave; n.atendidaPorNombre = nombreUsuario(repo, s.clave); n.atendida = ctx.ahora();
+        Object.assign(n, extra || {});
+        repo.guardarNominaEspecial(n);
+        repo.log('NOMINA_ESP_' + estado, s.clave, n.id);
+        if (estado !== 'CANCELADA' && digitos(n.solicitadaPor) !== digitos(s.clave)) {
+          notificar(repo, ctx, ['V' + digitos(n.solicitadaPor)], estado === 'REGISTRADA'
+            ? { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial registrada', texto: '«' + n.concepto + '» quedó registrada en la nómina' + (n.referencia ? ' (' + n.referencia + ')' : '') + '.', ruta: 'nominas' }
+            : { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial rechazada', texto: '«' + n.concepto + '»: ' + n.motivo, ruta: 'nominas' });
+        }
+        return ok(vistaNominaEsp(n));
+      }
+      /** Empleados (activos e inactivos) y los nombres ya aprendidos, para cruzar el Excel de comisiones en el navegador. */
+      function datosCruceNomina(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        return ok({
+          empleados: (function () {
+            var sin = repo.omegaSinTarjeta ? repo.omegaSinTarjeta() : {};
+            return repo.todosEmpleados().map(function (e) {
+              var k = Empleados.claveCedula(e), f = e.fechaIngreso;
+              return { clave: k, nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', estado: e.estado, empresa: Empleados.empresaFideicomiso(e),
+                fueraNomina: !!e.fueraNomina, sinTarjeta: !!sin[k], jefe: e.jefe || '', fechaIngreso: f ? f.y + '-' + ('0' + f.m).slice(-2) + '-' + ('0' + f.d).slice(-2) : '' };
+            });
+          })(),
+          alias: repo.aliasComisiones ? repo.aliasComisiones() : {},
+        });
+      }
+    
+      /** Recuerda que un nombre (como viene en un reporte o Excel) es esta persona. */
+      function guardarAliasNombre(repo, ctx, token, nombre, claveEmp) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var e = repo.empleadoPorClave(claveEmp), k = Comisiones.clave(nombre);
+        if (!e || !k) return err('VALIDACION', 'Datos incompletos.');
+        var m = {}; m[k] = Empleados.claveCedula(e);
+        repo.guardarAliasComisiones(m);
+        return ok({ alias: k, clave: m[k] });
+      }
+    
+      /** Guarda el resultado de comparar la solicitud con el Resumen de Pago (resumen: { ok, mayor, menor, no, archivo, detalle }). */
+      function guardarVerificacionNomina(repo, ctx, token, id, resumen) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var n = repo.nominaEspecialPorId(id);
+        if (!n) return err('NO_ENCONTRADO', 'No existe esa solicitud.');
+        var r = resumen || {}, cuenta = function (k) { return Math.max(0, Math.round(Number(r[k]) || 0)); };
+        n.verificacion = { cuando: ctx.ahora(), por: s.clave, archivo: String(r.archivo || '').slice(0, 120), ok: cuenta('ok'), mayor: cuenta('mayor'), menor: cuenta('menor'), no: cuenta('no'),
+          detalle: (r.detalle || []).slice(0, 300).map(function (d) { return { clave: String(d.clave || ''), estado: String(d.estado || ''), otras: Math.round((Number(d.otras) || 0) * 100) / 100 }; }) };
+        repo.guardarNominaEspecial(n);
+        return ok(vistaNominaEsp(n));
+      }
+    
+      function registrarNominaEspecial(repo, ctx, token, id, referencia) {
+        return atenderNominaEspecial(repo, ctx, token, id, 'REGISTRADA', { referencia: String(referencia || '').trim().slice(0, 80) });
+      }
+      function rechazarNominaEspecial(repo, ctx, token, id, motivo) {
+        if (!String(motivo || '').trim()) return err('VALIDACION', 'Escribe el motivo.');
+        return atenderNominaEspecial(repo, ctx, token, id, 'RECHAZADA', { motivo: String(motivo).trim().slice(0, 300) });
+      }
+      function cancelarNominaEspecial(repo, ctx, token, id) { return atenderNominaEspecial(repo, ctx, token, id, 'CANCELADA', {}); }
+    
+      /* ---------- Perfil del trabajador y campañas de actualización de datos ---------- */
+    
+      function fechaIso(f) { return f ? f.y + '-' + ('0' + f.m).slice(-2) + '-' + ('0' + f.d).slice(-2) : ''; }
+      function perfilVacio(clave) { return { clave: clave, datos: {}, confirmadas: {}, actualizado: 0, por: '' }; }
+      function activosConCedula(repo) { return repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }); }
+      function personaCampana(e) { return { clave: Empleados.claveCedula(e), empresa: Empleados.empresaFideicomiso(e) }; }
+    
+      function vistaCampana(c, hoy) {
+        return { id: c.id, titulo: c.titulo, mensaje: c.mensaje || '', secciones: c.secciones || [], alcance: c.alcance || { tipo: 'todos' }, hasta: c.hasta,
+          estado: c.estado, creada: c.creada, por: c.por || '', orden: c.orden || 0, lanzada: c.lanzada || 0, vigente: c.estado === 'ABIERTA' && hoy <= c.hasta, vencida: c.estado === 'ABIERTA' && hoy > c.hasta };
+      }
+      /** Secciones que esta persona puede actualizar ahora: las de las campañas abiertas que le tocan. */
+      function seccionesAbiertas(repo, emp) {
+        var p = personaCampana(emp), m = {};
+        repo.campanasDatos().forEach(function (c) { if (c.estado === 'ABIERTA' && Perfil.enAlcance(c, p)) (c.secciones || []).forEach(function (x) { m[x] = true; }); });
+        return Object.keys(m);
+      }
+    
+      /** Campañas abiertas que le tocan a esta persona y aún no completa. */
+      function pendientesDe(repo, emp, perfil, hoy) {
+        var p = personaCampana(emp);
+        return repo.campanasDatos().filter(function (c) { return c.estado === 'ABIERTA' && Perfil.enAlcance(c, p) && !Perfil.completo(c, perfil); })
+          .sort(function (a, b) { return a.hasta < b.hasta ? -1 : 1; }).map(function (c) { return Object.assign(vistaCampana(c, hoy), { faltan: Perfil.faltantes(perfil.datos, c.secciones) }); });
+      }
+    
+      /** Lo que ve el colaborador en «Mi perfil»: sus datos de nómina (solo lectura), lo que él mantiene y las campañas pendientes. */
+      function miPerfil(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var emp = repo.empleadoPorClave(s.clave);
+        if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+        var perfil = repo.perfil(s.clave) || perfilVacio(s.clave), hoy = hoyCaracas(ctx);
+        return ok({
+          nomina: { nombre: emp.nombre, cedula: s.clave, cargo: emp.puesto || '', departamento: emp.departamento || '', localidad: emp.organizacion || '',
+            empresa: Empleados.empresaFideicomiso(emp), fechaIngreso: fechaIso(emp.fechaIngreso) },
+          datos: perfil.datos, actualizado: perfil.actualizado || 0, faltan: Perfil.faltantes(perfil.datos), campanas: pendientesDe(repo, emp, perfil, hoy),
+        });
+      }
+    
+      /**
+       * El colaborador guarda sus datos (se guardan directo, sin aprobación). Solo cambian las secciones enviadas.
+       * Queda el registro de qué cambió, y cada campaña abierta que le toca queda confirmada si sus secciones están completas.
+       */
+      function guardarMiPerfil(repo, ctx, token, entrada) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var emp = repo.empleadoPorClave(s.clave);
+        if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+        // Solo se actualiza lo que pide una campaña abierta: fuera de campaña el perfil no se edita.
+        var abiertas = seccionesAbiertas(repo, emp);
+        var pedidas = Perfil.SECCIONES.map(function (x) { return x.id; }).filter(function (id) { return entrada && (entrada[id] !== undefined || (id === 'familia' && entrada.sinFamilia !== undefined)); });
+        var cerradas = pedidas.filter(function (id) { return abiertas.indexOf(id) === -1; });
+        if (!pedidas.length) return err('VALIDACION', 'No hay datos para guardar.');
+        if (cerradas.length) return err('CERRADA', 'La actualización de «' + cerradas.map(function (id) { return Perfil.seccion(id).nombre; }).join('», «') + '» no está abierta. Gestión Humana te avisará cuando abra.');
+        var n = Perfil.normalizar(entrada || {});
+        if (n.errores.length) return err('VALIDACION', n.errores.slice(0, 6).join(' '));
+        var perfil = repo.perfil(s.clave) || perfilVacio(s.clave), ahora = ctx.ahora(), hoy = hoyCaracas(ctx);
+        var cambios = Perfil.diferencias(perfil.datos, n.datos);
+        var datos = Object.assign({}, perfil.datos, n.datos);
+        if (n.datos.familia && n.datos.familia.length) datos.sinFamilia = false;
+        var confirmadas = Object.assign({}, perfil.confirmadas), nuevas = [], p = personaCampana(emp);
+        repo.campanasDatos().forEach(function (c) {
+          if (c.estado !== 'ABIERTA' || confirmadas[c.id] || !Perfil.enAlcance(c, p)) return;
+          if (!Perfil.faltantes(datos, c.secciones).length) { confirmadas[c.id] = ahora; nuevas.push(c.id); }
+        });
+        perfil = { clave: s.clave, datos: datos, confirmadas: confirmadas, actualizado: ahora, por: s.clave };
+        repo.guardarPerfil(perfil);
+        if (cambios.length) repo.agregarCambiosPerfil(cambios.map(function (c) {
+          return { cuando: ahora, clave: s.clave, nombre: emp.nombre, seccion: c.seccion, campo: c.nombre, antes: String(c.antes).slice(0, 500), despues: String(c.despues).slice(0, 500) };
+        }));
+        repo.log('PERFIL_ACTUALIZADO', s.clave, cambios.length + ' cambios' + (nuevas.length ? ' · confirma ' + nuevas.join(',') : ''));
+        return ok({ datos: datos, actualizado: ahora, cambios: cambios.length, confirmadas: nuevas, faltan: Perfil.faltantes(datos), campanas: pendientesDe(repo, emp, perfil, hoy) });
+      }
+    
+      /** Valida título, secciones, alcance y fecha límite de una campaña. Devuelve { error } o { c }. hasta es obligatoria si se abre ya. */
+      function datosCampana(repo, d, hoy, conFecha) {
+        d = d || {};
+        var titulo = String(d.titulo || '').trim().slice(0, 100);
+        var secciones = (d.secciones || []).filter(function (x) { return Perfil.seccion(x); });
+        var a = d.alcance || { tipo: 'todos' }, alcance = { tipo: ['todos', 'empresas', 'personas'].indexOf(a.tipo) !== -1 ? a.tipo : 'todos' };
+        if (alcance.tipo === 'empresas') alcance.empresas = (a.empresas || []).filter(function (x) { return x === 'PCA' || x === 'AIV'; });
+        if (alcance.tipo === 'personas') alcance.claves = (a.claves || []).filter(function (k) { return repo.empleadoPorClave(k); });
+        var hasta = String(d.hasta || '');
+        if (!titulo) return { error: 'Escribe un título para la campaña.' };
+        if (!secciones.length) return { error: 'Elige al menos una sección para actualizar.' };
+        if ((conFecha || hasta) && (!/^\d{4}-\d{2}-\d{2}$/.test(hasta) || hasta < hoy)) return { error: 'La fecha límite debe ser hoy o una fecha futura.' };
+        if ((alcance.tipo === 'empresas' && !alcance.empresas.length) || (alcance.tipo === 'personas' && !alcance.claves.length)) return { error: 'Elige a quién va dirigida.' };
+        return { c: { titulo: titulo, mensaje: String(d.mensaje || '').trim().slice(0, 500), secciones: secciones, alcance: alcance, hasta: hasta } };
+      }
+    
+      /** Abre la campaña: avisa a cada persona a la que le toca. */
+      function lanzar(repo, ctx, s, c) {
+        c.estado = 'ABIERTA'; c.lanzada = ctx.ahora();
+        repo.guardarCampanaDatos(c);
+        var destinos = activosConCedula(repo).filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); }).map(function (e) { return Empleados.claveCedula(e); });
+        notificar(repo, ctx, c.alcance.tipo === 'todos' ? '*' : destinos, { tipo: 'PERFIL_CAMPANA', ruta: 'perfil', titulo: 'Actualiza tus datos: ' + c.titulo,
+          texto: (c.mensaje ? c.mensaje + ' ' : '') + 'Tienes hasta el ' + fechaCorta(c.hasta) + '.' });
+        repo.log('PERFIL_CAMPANA', s.clave, c.id + ' · ' + c.titulo + ' · ' + destinos.length);
+        return ok(Object.assign(vistaCampana(c, hoyCaracas(ctx)), { personas: destinos.length }));
+      }
+      function campanaPorId(repo, id) { return repo.campanasDatos().filter(function (x) { return x.id === id && x.estado !== 'ELIMINADA'; })[0]; }
+      function siguienteOrden(repo) { return repo.campanasDatos().reduce(function (m, c) { return Math.max(m, c.orden || 0); }, 0) + 1; }
+    
+      /**
+       * RRHH crea una campaña: qué secciones, a quién, hasta cuándo y el mensaje.
+       * Con d.planificada queda guardada sin avisar (se lanza después); si no, se abre y avisa a cada persona.
+       */
+      function crearCampanaDatos(repo, ctx, token, d) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var planificada = !!(d && d.planificada), v = datosCampana(repo, d, hoyCaracas(ctx), !planificada);
+        if (v.error) return err('VALIDACION', v.error);
+        var c = Object.assign(v.c, { id: repo.nuevoIdCampana(), estado: 'PLANIFICADA', creada: ctx.ahora(), por: s.clave, orden: siguienteOrden(repo) });
+        if (!planificada) return lanzar(repo, ctx, s, c);
+        repo.guardarCampanaDatos(c);
+        repo.log('PERFIL_CAMPANA_PLANIFICADA', s.clave, c.id + ' · ' + c.titulo);
+        return ok(vistaCampana(c, hoyCaracas(ctx)));
+      }
+    
+      /** Cambia una campaña planificada (todavía no lanzada). */
+      function editarCampanaDatos(repo, ctx, token, id, d) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = campanaPorId(repo, id);
+        if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+        if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Esa campaña ya fue lanzada: no se puede cambiar.');
+        var v = datosCampana(repo, d, hoyCaracas(ctx), false);
+        if (v.error) return err('VALIDACION', v.error);
+        Object.assign(c, v.c);
+        repo.guardarCampanaDatos(c);
+        return ok(vistaCampana(c, hoyCaracas(ctx)));
+      }
+    
+      /** Lanza una campaña planificada con su fecha límite: desde ese momento la ven los colaboradores y les llega el aviso. */
+      function lanzarCampanaDatos(repo, ctx, token, id, hasta) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = campanaPorId(repo, id);
+        if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+        if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Esa campaña ya fue lanzada.');
+        var v = datosCampana(repo, Object.assign({}, c, { hasta: hasta }), hoyCaracas(ctx), true);
+        if (v.error) return err('VALIDACION', v.error);
+        c.hasta = v.c.hasta;
+        return lanzar(repo, ctx, s, c);
+      }
+    
+      function eliminarCampanaDatos(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = campanaPorId(repo, id);
+        if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+        if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Solo se pueden eliminar campañas que no se han lanzado.');
+        c.estado = 'ELIMINADA'; repo.guardarCampanaDatos(c);
+        repo.log('PERFIL_CAMPANA_ELIMINADA', s.clave, c.id);
+        return ok({ id: id });
+      }
+    
+      /** Carga el plan sugerido (4 campañas, una por sección) como campañas planificadas, para todo el personal. */
+      function cargarPlanCampanas(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var ya = {}; repo.campanasDatos().forEach(function (c) { if (c.estado !== 'ELIMINADA') ya[c.titulo] = true; });
+        var creadas = Perfil.PLAN_CAMPANAS.filter(function (p) { return !ya[p.titulo]; }).map(function (p) {
+          var c = { id: repo.nuevoIdCampana(), titulo: p.titulo, mensaje: p.mensaje, secciones: p.secciones.slice(), alcance: { tipo: 'todos' }, hasta: '',
+            estado: 'PLANIFICADA', creada: ctx.ahora(), por: s.clave, orden: siguienteOrden(repo) };
+          repo.guardarCampanaDatos(c);
+          return c.id;
+        });
+        repo.log('PERFIL_PLAN_CAMPANAS', s.clave, creadas.join(','));
+        return ok({ creadas: creadas.length });
+      }
+    
+      /** Avance de cada campaña: cuántas personas le tocan y cuántas la completaron. */
+      function listarCampanasDatos(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var hoy = hoyCaracas(ctx), perfiles = {}, gente = activosConCedula(repo);
+        repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+        return ok(repo.campanasDatos().filter(function (c) { return c.estado !== 'ELIMINADA'; }).sort(function (a, b) {
+          var pa = a.estado === 'PLANIFICADA', pb = b.estado === 'PLANIFICADA';
+          return pa !== pb ? (pa ? -1 : 1) : pa ? (a.orden || 0) - (b.orden || 0) : (b.lanzada || b.creada) - (a.lanzada || a.creada);
+        }).map(function (c) {
+          var en = gente.filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); });
+          var listos = en.filter(function (e) { return Perfil.completo(c, perfiles[Empleados.claveCedula(e)]); }).length;
+          return Object.assign(vistaCampana(c, hoy), { personas: en.length, completos: listos });
+        }));
+      }
+    
+      /** Detalle de una campaña: cada persona, si la completó y qué le falta. */
+      function panelCampanaDatos(repo, ctx, token, id) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var c = campanaPorId(repo, id);
+        if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+        var perfiles = {}; repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+        var filas = activosConCedula(repo).filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); }).map(function (e) {
+          var k = Empleados.claveCedula(e), p = perfiles[k];
+          return Object.assign({ clave: k, nombre: e.nombre, completo: Perfil.completo(c, p), confirmada: p && p.confirmadas && p.confirmadas[c.id] || 0,
+            faltan: Perfil.faltantes(p && p.datos, c.secciones), actualizado: p ? p.actualizado : 0 }, ubicacion(e));
+        }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+        return ok({ campana: vistaCampana(c, hoyCaracas(ctx)), filas: filas });
+      }
+    
+      function recordarCampanaDatos(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var r = panelCampanaDatos(repo, ctx, token, id);
+        if (!r.ok) return r;
+        if (r.data.campana.estado !== 'ABIERTA') return err('TRANSICION', 'La campaña está cerrada.');
+        var faltan = r.data.filas.filter(function (f) { return !f.completo; }).map(function (f) { return f.clave; });
+        if (faltan.length) notificar(repo, ctx, faltan, { tipo: 'PERFIL_RECORDATORIO', ruta: 'perfil', titulo: 'Falta que actualices tus datos',
+          texto: r.data.campana.titulo + ': tienes hasta el ' + fechaCorta(r.data.campana.hasta) + '.' });
+        repo.log('PERFIL_RECORDATORIO', s.clave, id + ' · ' + faltan.length);
+        return ok({ avisados: faltan.length });
+      }
+    
+      function cerrarCampanaDatos(repo, ctx, token, id) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var c = repo.campanasDatos().filter(function (x) { return x.id === id; })[0];
+        if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+        if (c.estado !== 'ABIERTA') return err('TRANSICION', 'La campaña ya está cerrada.');
+        c.estado = 'CERRADA'; c.cerrada = ctx.ahora();
+        repo.guardarCampanaDatos(c);
+        repo.log('PERFIL_CAMPANA_CERRADA', s.clave, id);
+        return ok(vistaCampana(c, hoyCaracas(ctx)));
+      }
+    
+      /** Datos de todo el personal activo (para consultar y exportar a Excel) y los cambios más recientes. */
+      function datosPersonal(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var perfiles = {}; repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+        var filas = activosConCedula(repo).map(function (e) {
+          var k = Empleados.claveCedula(e), p = perfiles[k];
+          return Object.assign({ clave: k, nombre: e.nombre, cargo: e.puesto || '', fechaIngreso: fechaIso(e.fechaIngreso), datos: p ? p.datos : {},
+            actualizado: p ? p.actualizado : 0, faltan: Perfil.faltantes(p && p.datos) }, ubicacion(e));
+        }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+        var cambios = repo.cambiosPerfil().sort(function (a, b) { return b.cuando - a.cuando; }).slice(0, 300);
+        return ok({ filas: filas, cambios: cambios });
+      }
+    
+      /* ---------- Cumpleaños y aniversarios ---------- */
+    
+      function esBisiesto(y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; }
+      /** ¿La fecha f ({y,m,d}) «cae» hoy (texto aaaa-mm-dd)? El 29 de febrero se celebra el 28 en años no bisiestos. */
+      function caeHoy(f, hoy) {
+        if (!f) return false;
+        var y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7)), d = Number(hoy.slice(8, 10));
+        var fd = f.m === 2 && f.d === 29 && !esBisiesto(y) ? 28 : f.d;
+        return f.m === m && fd === d;
+      }
+      function primerNombreDe(nombre) { var p = String(nombre || '').trim().split(/\s+/)[0] || ''; return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(); }
+      function nombreCorto(nombre) {
+        var p = String(nombre || '').trim().split(/\s+/), cap = function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); };
+        // «NOMBRE1 NOMBRE2 APELLIDO1 APELLIDO2» → «Nombre1 Apellido1»
+        return (p.length >= 4 ? [p[0], p[2]] : p.length === 3 ? [p[0], p[1]] : p).map(cap).join(' ');
+      }
+      function nombreBonito(nombre) { return String(nombre || '').trim().split(/\s+/).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join(' '); }
+    
+      /** Quiénes celebran hoy: { cumpleanos: [emp], aniversarios: [{ emp, anios }] }. Solo activos. */
+      function celebracionesDelDia(repo, hoy) {
+        var y = Number(hoy.slice(0, 4)), out = { cumpleanos: [], aniversarios: [] };
+        activosConCedula(repo).forEach(function (e) {
+          if (caeHoy(e.fechaNacimiento, hoy)) out.cumpleanos.push(e);
+          if (e.fechaIngreso && caeHoy(e.fechaIngreso, hoy) && y - e.fechaIngreso.y >= 1) out.aniversarios.push({ emp: e, anios: y - e.fechaIngreso.y });
+        });
+        return out;
+      }
+    
+      /**
+       * Avisos de cumpleaños y aniversarios del día (los envía la tarea diaria de la mañana; no se repiten si corre dos veces).
+       * Cumpleaños: a la persona, su felicitación; y a todos, quién cumple hoy. Aniversario: solo a la persona.
+       */
+      function avisosCelebraciones(repo, ctx) {
+        if (!repo.agregarNotificaciones) return { cumpleanos: 0, aniversarios: 0 };
+        var hoy = hoyCaracas(ctx), c = celebracionesDelDia(repo, hoy), ya = {};
+        var inicioDia = ctx.ahora() - 20 * 3600 * 1000;
+        (repo.notificacionesRecientes ? repo.notificacionesRecientes() : []).forEach(function (n) {
+          if (n.creada >= inicioDia && /^(CUMPLEANOS|ANIVERSARIO)/.test(n.tipo)) ya[n.tipo + ':' + n.clave] = true;
+        });
+        var cumple = c.cumpleanos.filter(function (e) { return !ya['CUMPLEANOS:' + Empleados.claveCedula(e)]; });
+        cumple.forEach(function (e) { notificar(repo, ctx, [Empleados.claveCedula(e)], avisoCumple(e)); });
+        if (cumple.length && !ya['CUMPLEANOS_TODOS:*']) {
+          var nombres = cumple.map(function (e) { return nombreCorto(e.nombre); });
+          var lista = nombres.length === 1 ? nombres[0] : nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1];
+          notificar(repo, ctx, '*', { tipo: 'CUMPLEANOS_TODOS', ruta: '', titulo: nombres.length === 1 ? '🎉 Hoy está de cumpleaños ' + lista : '🎉 Hoy están de cumpleaños ' + lista,
+            texto: '¡Acompáñanos a felicitar' + (nombres.length === 1 ? 'le' : 'los') + ' en su día!' });
+        }
+        var aniv = c.aniversarios.filter(function (a) { return !ya['ANIVERSARIO:' + Empleados.claveCedula(a.emp)]; });
+        aniv.forEach(function (a) { notificar(repo, ctx, [Empleados.claveCedula(a.emp)], avisoAniversario(a.emp, a.anios)); });
+        if (cumple.length || aniv.length) repo.log('CELEBRACIONES', 'SISTEMA', hoy + ' · ' + cumple.length + ' cumpleaños · ' + aniv.length + ' aniversarios');
+        return { cumpleanos: cumple.length, aniversarios: aniv.length };
+      }
+    
+      function avisoCumple(e) {
+        return { tipo: 'CUMPLEANOS', ruta: 'celebracion', titulo: '🎂 ¡Feliz cumpleaños, ' + primerNombreDe(e.nombre) + '!', texto: 'Hoy todo el Grupo Prosein celebra contigo. ¡Que tengas un gran día!' };
+      }
+      function avisoAniversario(e, anios) {
+        return { tipo: 'ANIVERSARIO', ruta: 'celebracion', titulo: '🎉 ¡Feliz aniversario, ' + primerNombreDe(e.nombre) + '!',
+          texto: 'Hoy cumples ' + (anios === 1 ? 'tu primer año' : anios + ' años') + ' en el Grupo Prosein. ¡Gracias por tu compromiso!' };
+      }
+    
+      /**
+       * RRHH vuelve a enviar la felicitación de hoy a una persona (campanita y celular). Solo a esa persona:
+       * el aviso de cumpleaños «a todos» no se repite.
+       */
+      function reenviarCelebracion(repo, ctx, token, clave, tipo) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var e = repo.empleadoPorClave(clave), hoy = hoyCaracas(ctx);
+        if (!e || e.estado === 'Inactivo') return err('NO_ENCONTRADO', 'No encontramos a esa persona activa.');
+        var k = Empleados.claveCedula(e), anios = e.fechaIngreso ? Number(hoy.slice(0, 4)) - e.fechaIngreso.y : 0, r;
+        if (tipo === 'CUMPLEANOS') {
+          if (!caeHoy(e.fechaNacimiento, hoy)) return err('VALIDACION', 'Hoy no es el cumpleaños de ' + nombreBonito(e.nombre) + '.');
+          r = notificar(repo, ctx, [k], avisoCumple(e));
+        } else if (tipo === 'ANIVERSARIO') {
+          if (!e.fechaIngreso || !caeHoy(e.fechaIngreso, hoy) || anios < 1) return err('VALIDACION', 'Hoy no es el aniversario de ' + nombreBonito(e.nombre) + '.');
+          r = notificar(repo, ctx, [k], avisoAniversario(e, anios));
+        } else return err('VALIDACION', 'Tipo de celebración no válido.');
+        repo.log('CELEBRACION_REENVIADA', s.clave, tipo + ' · ' + k);
+        return ok({ nombre: nombreBonito(e.nombre), push: (r && r.estado) || 'SIN_CONFIGURAR' });
+      }
+    
+      /** El colaborador: ¿celebra algo hoy? Para mostrarle su tarjeta en el CAC. */
+      function miCelebracion(repo, ctx, token) {
+        var s = leerToken(ctx, token, ['TRABAJADOR']);
+        if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+        var e = repo.empleadoPorClave(s.clave), hoy = hoyCaracas(ctx);
+        if (!e || e.estado === 'Inactivo') return ok({ cumpleanos: false, aniversario: 0 });
+        var y = Number(hoy.slice(0, 4)), anios = e.fechaIngreso && caeHoy(e.fechaIngreso, hoy) ? y - e.fechaIngreso.y : 0;
+        return ok({ nombre: nombreBonito(e.nombre), cumpleanos: caeHoy(e.fechaNacimiento, hoy), aniversario: anios >= 1 ? anios : 0 });
+      }
+    
+      /** RRHH: cumpleaños y aniversarios de un mes (aaaa-mm), para ver quién celebra y descargar las tarjetas. */
+      function celebracionesDelMes(repo, ctx, token, mes) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var hoy = hoyCaracas(ctx);
+        mes = /^\d{4}-\d{2}$/.test(String(mes || '')) ? mes : hoy.slice(0, 7);
+        var y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7)), filas = [], sinNacimiento = 0;
+        var diaDe = function (f) { return f.m === 2 && f.d === 29 && !esBisiesto(y) ? 28 : f.d; };
+        activosConCedula(repo).forEach(function (e) {
+          var base = Object.assign({ clave: Empleados.claveCedula(e), nombre: nombreBonito(e.nombre), cargo: e.puesto || '' }, ubicacion(e));
+          if (!e.fechaNacimiento) sinNacimiento++;
+          else if (e.fechaNacimiento.m === m) filas.push(Object.assign({ tipo: 'CUMPLEANOS', dia: diaDe(e.fechaNacimiento) }, base));
+          if (e.fechaIngreso && e.fechaIngreso.m === m && y - e.fechaIngreso.y >= 1) filas.push(Object.assign({ tipo: 'ANIVERSARIO', dia: diaDe(e.fechaIngreso), anios: y - e.fechaIngreso.y }, base));
+        });
+        filas.sort(function (a, b) { return a.dia - b.dia || (a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : a.tipo < b.tipo ? 1 : -1); });
+        return ok({ mes: mes, hoy: hoy, filas: filas, sinNacimiento: sinNacimiento });
+      }
+    
       var api = {
+        avisosCelebraciones: function (repo, ctx) { return ok(avisosCelebraciones(repo, ctx)); }, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes, reenviarCelebracion: reenviarCelebracion,
+        miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
+        panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
+        solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
+        rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
+        quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,
         omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
         omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
         omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,
@@ -3568,9 +4591,9 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-09.2';
+var VERSION = '2026-11-24.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -3581,6 +4604,7 @@ function modulosCargados_() {
     Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
     Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
     Omega: typeof Omega !== 'undefined' && !!Omega,
+    Comisiones: typeof Comisiones !== 'undefined' && !!Comisiones,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -3588,13 +4612,13 @@ function modulosCargados_() {
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
-  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina'],
+  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina', 'fechaNacimiento'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo',
     'nombre', 'salarioDiario', 'alicUtilidades', 'alicVacaciones', 'diasVacaciones', 'diasAntiguedad'],
   CANCELACIONES: ['id', 'clave', 'nombre', 'empresa', 'fechaIngreso', 'fechaEgreso', 'monto', 'estado', 'creada', 'por', 'actualizada'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo', 'ventana', 'acepto'],
-  CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
+  CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor', 'destinatario'],
   APERTURAS_ANTICIPO: ['id', 'clave', 'inicio', 'fin', 'por', 'actualizada'],
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
@@ -3610,10 +4634,16 @@ var HOJAS = {
   RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   PINES: ['clave', 'sal', 'hash', 'creado'],
   OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
+  NOMINAS_ESPECIALES: ['id', 'concepto', 'moneda', 'fechaPago', 'observacion', 'items', 'personas', 'total', 'estado', 'solicitadaPor', 'solicitadaPorNombre', 'solicitada',
+    'atendidaPor', 'atendidaPorNombre', 'atendida', 'referencia', 'motivo', 'verificacion'],
+  ALIAS_COMISIONES: ['alias', 'clave', 'actualizado'],
   OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
   OMEGA_CONFIG: ['clave', 'valor'],
-  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada'],
+  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada', 'pasos'],
   OMEGA_PAGOS: ['quincena', 'lote', 'clave', 'cedula', 'nombre', 'usd', 'montoBs', 'anticipoBs', 'dias', 'detalle', 'validado'],
+  PERFILES: ['clave', 'datos', 'confirmadas', 'actualizado', 'por'],
+  CAMBIOS_PERFIL: ['cuando', 'clave', 'nombre', 'seccion', 'campo', 'antes', 'despues'],
+  CAMPANAS_DATOS: ['id', 'titulo', 'estado', 'creada', 'por', 'cerrada', 'detalle'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -3653,7 +4683,7 @@ var RUTAS_TRABAJADOR = {
   cancelarVacaciones: function (repo, ctx, d) { return Servicio.cancelarVacaciones(repo, ctx, d.token, d.id); },
   equipoVacaciones: function (repo, ctx, d) { return Servicio.equipoVacaciones(repo, ctx, d.token); },
   decidirVacacionesJefe: function (repo, ctx, d) { return Servicio.decidirVacacionesJefe(repo, ctx, d.token, d.id, !!d.aprobar, d.motivo); },
-  emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
+  emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token, d.destinatario); },
   misConstancias: function (repo, ctx, d) { return Servicio.misConstancias(repo, ctx, d.token); },
   verificarConstancia: function (repo, ctx, d) { return Servicio.verificarConstancia(repo, ctx, d.id); },   // pública (QR)
   login: function (repo, ctx, d) { return Servicio.iniciarSesion(repo, ctx, d.cedula, d.pin); },
@@ -3709,6 +4739,35 @@ var RUTAS_RRHH = {
   listarPlanificacionesVac: function (repo, ctx, d) { return Servicio.listarPlanificacionesVac(repo, ctx, d.token); },
   panelPlanificacionVac: function (repo, ctx, d) { return Servicio.panelPlanificacionVac(repo, ctx, d.token, d.ciclo); },
   recordarPlanificacionVac: function (repo, ctx, d) { return Servicio.recordarPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  solicitarNominaEspecial: function (repo, ctx, d) { return Servicio.solicitarNominaEspecial(repo, ctx, d.token, d); },
+  listarNominasEspeciales: function (repo, ctx, d) { return Servicio.listarNominasEspeciales(repo, ctx, d.token); },
+  registrarNominaEspecial: function (repo, ctx, d) { return Servicio.registrarNominaEspecial(repo, ctx, d.token, d.id, d.referencia); },
+  rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
+  cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
+  datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
+  miCelebracion: function (repo, ctx, d) { return Servicio.miCelebracion(repo, ctx, d.token); },
+  reenviarCelebracion: function (repo, ctx, d) { return Servicio.reenviarCelebracion(repo, ctx, d.token, d.clave, d.tipo); },
+  celebracionesDelMes: function (repo, ctx, d) { return Servicio.celebracionesDelMes(repo, ctx, d.token, d.mes); },
+  miPerfil: function (repo, ctx, d) { return Servicio.miPerfil(repo, ctx, d.token); },
+  guardarMiPerfil: function (repo, ctx, d) { return Servicio.guardarMiPerfil(repo, ctx, d.token, d.datos); },
+  crearCampanaDatos: function (repo, ctx, d) { return Servicio.crearCampanaDatos(repo, ctx, d.token, d); },
+  listarCampanasDatos: function (repo, ctx, d) { return Servicio.listarCampanasDatos(repo, ctx, d.token); },
+  panelCampanaDatos: function (repo, ctx, d) { return Servicio.panelCampanaDatos(repo, ctx, d.token, d.id); },
+  recordarCampanaDatos: function (repo, ctx, d) { return Servicio.recordarCampanaDatos(repo, ctx, d.token, d.id); },
+  cerrarCampanaDatos: function (repo, ctx, d) { return Servicio.cerrarCampanaDatos(repo, ctx, d.token, d.id); },
+  editarCampanaDatos: function (repo, ctx, d) { return Servicio.editarCampanaDatos(repo, ctx, d.token, d.id, d); },
+  lanzarCampanaDatos: function (repo, ctx, d) { return Servicio.lanzarCampanaDatos(repo, ctx, d.token, d.id, d.hasta); },
+  eliminarCampanaDatos: function (repo, ctx, d) { return Servicio.eliminarCampanaDatos(repo, ctx, d.token, d.id); },
+  cargarPlanCampanas: function (repo, ctx, d) { return Servicio.cargarPlanCampanas(repo, ctx, d.token); },
+  datosPersonal: function (repo, ctx, d) { return Servicio.datosPersonal(repo, ctx, d.token); },
+  guardarAliasNombre: function (repo, ctx, d) { return Servicio.guardarAliasNombre(repo, ctx, d.token, d.nombre, d.clave); },
+  guardarVerificacionNomina: function (repo, ctx, d) { return Servicio.guardarVerificacionNomina(repo, ctx, d.token, d.id, d.resumen); },
+  quincenaListar: function (repo, ctx, d) { return Servicio.quincenaListar(repo, ctx, d.token); },
+  quincenaVer: function (repo, ctx, d) { return Servicio.quincenaVer(repo, ctx, d.token, d.id); },
+  quincenaAbrir: function (repo, ctx, d) { return Servicio.quincenaAbrir(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
+  quincenaPaso: function (repo, ctx, d) { return Servicio.quincenaPaso(repo, ctx, d.token, d.id, d.paso, d); },
+  previaDetalle: function (repo, ctx, d) { return Servicio.previaDetalle(repo, ctx, d.token, d.filas); },
+  vacacionesQuincena: function (repo, ctx, d) { return Servicio.vacacionesQuincena(repo, ctx, d.token, d.id); },
   omegaInicio: function (repo, ctx, d) { return Servicio.omegaInicio(repo, ctx, d.token); },
   omegaGuardarConfig: function (repo, ctx, d) { return Servicio.omegaGuardarConfig(repo, ctx, d.token, d); },
   omegaTarjetas: function (repo, ctx, d) { return Servicio.omegaTarjetas(repo, ctx, d.token); },
@@ -3730,7 +4789,7 @@ var RUTAS_RRHH = {
   loginAdmin: function (repo, ctx, d) { return Servicio.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave); },
   bandejaAnticipos: function (repo, ctx, d) { return Servicio.bandejaAnticipos(repo, ctx, d.token, d.estado); },
   decidirAnticipo: function (repo, ctx, d) { return Servicio.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo); },
-  archivoAnticipos: function (repo, ctx, d) { return Servicio.generarArchivoAnticipos(repo, ctx, d.token, d.empresa); },
+  archivoAnticipos: function (repo, ctx, d) { return Servicio.generarArchivoAnticipos(repo, ctx, d.token, d.empresa, !!d.repetir); },
   pagarAnticipos: function (repo, ctx, d) { return Servicio.marcarAnticiposPagados(repo, ctx, d.token, d.ids || []); },
   cargarEmpleados: function (repo, ctx, d) { return Servicio.cargarEmpleados(repo, ctx, d.token, d.filas); },
   listarEmpleados: function (repo, ctx, d) { return Servicio.listarEmpleados(repo, ctx, d.token, { buscar: d.buscar, departamento: d.departamento, sinJefe: !!d.sinJefe }); },
@@ -3750,7 +4809,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -3902,7 +4961,8 @@ function refrescarDatos() {
 
 function leer_(nombre) {
   var vals = valores_(nombre);
-  var cab = vals[0], filas = [];
+  // encabezado vacío (columna nueva en una hoja ya creada): se toma el nombre que le toca por posición
+  var cab = (vals[0] || []).map(function (h, j) { return String(h || '').trim() || (HOJAS[nombre] && HOJAS[nombre][j]) || ''; }), filas = [];
   for (var i = 1; i < vals.length; i++) {
     var o = { _fila: i + 1 };
     for (var j = 0; j < cab.length; j++) o[cab[j]] = vals[i][j];
@@ -3927,7 +4987,7 @@ function empleado_(f) {
   return {
     cedulaLetra: texto_(f.cedulaLetra), cedulaNumero: texto_(f.cedulaNumero), nombre: texto_(f.nombre),
     organizacion: texto_(f.organizacion), departamento: texto_(f.departamento), puesto: texto_(f.puesto),
-    estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso),
+    estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso), fechaNacimiento: f.fechaNacimiento ? Calculo.aFecha(f.fechaNacimiento) : null,
     empresaDetalle: texto_(f.empresaDetalle) || 'PCA', empresaFideicomiso: texto_(f.empresaFideicomiso),
     revisarCedula: f.revisarCedula === true || f.revisarCedula === 'TRUE', motivoRevision: texto_(f.motivoRevision),
     salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), genero: texto_(f.genero),
@@ -4000,7 +5060,7 @@ function constancias_() {
     return {
       _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), nombre: texto_(f.nombre), cedula: texto_(f.cedula), empresa: texto_(f.empresa),
       cargo: texto_(f.cargo), organizacion: texto_(f.organizacion), fechaIngreso: fechaIngresoConstancia_(f), salario: Number(f.salario),
-      emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor),
+      emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor), destinatario: texto_(f.destinatario),
     };
   }));
 }
@@ -4029,6 +5089,7 @@ function crearRepo_() {
     /** Reemplaza toda la hoja VAC_PERIODOS de una vez (importación del cierre). */
     guardarVacPeriodos: function (filas) {
       var h = hoja_('VAC_PERIODOS'), cab = HOJAS.VAC_PERIODOS, ultima = h.getLastRow();
+      h.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold');   // columnas nuevas (p. ej. fechaNacimiento) en hojas ya creadas
       if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
       invalidar_('VAC_PERIODOS');
       if (!filas.length) return;
@@ -4073,7 +5134,7 @@ function crearRepo_() {
       if (!lista.length) return;
       var filas = lista.map(function (e) {
         return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
-          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || '', !!e.fueraNomina];
+          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || '', !!e.fueraNomina, fechaTexto_(e.fechaNacimiento)];
       });
       var rango = h.getRange(2, 1, filas.length, cab.length);
       rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte
@@ -4273,6 +5334,59 @@ function crearRepo_() {
       var copia = Object.assign({}, b); delete copia._fila; if (ya) copia._fila = ya._fila;
       escribirFila_('OMEGA_BENEFICIOS', copia);
     },
+    nominasEspeciales: function () { asegurarHoja_('NOMINAS_ESPECIALES'); return leer_('NOMINAS_ESPECIALES').filter(function (f) { return texto_(f.id); }).map(nominaEsp_); },
+    nominaEspecialPorId: function (id) {
+      asegurarHoja_('NOMINAS_ESPECIALES');
+      var f = leer_('NOMINAS_ESPECIALES').filter(function (x) { return texto_(x.id) === id; })[0];
+      return f ? nominaEsp_(f) : null;
+    },
+    guardarNominaEspecial: function (n) {
+      asegurarHoja_('NOMINAS_ESPECIALES');
+      var copia = Object.assign({}, n, { items: JSON.stringify(n.items || []), verificacion: n.verificacion ? JSON.stringify(n.verificacion) : '' });
+      if (!copia._fila) { var h = hoja_('NOMINAS_ESPECIALES'); h.getRange(h.getLastRow() + 1, 1, 1, 4).setNumberFormat('@'); }
+      escribirFila_('NOMINAS_ESPECIALES', copia);
+      n._fila = copia._fila;
+    },
+    aliasComisiones: function () {
+      asegurarHoja_('ALIAS_COMISIONES');
+      var m = {}; leer_('ALIAS_COMISIONES').forEach(function (f) { if (texto_(f.alias)) m[texto_(f.alias)] = texto_(f.clave); });
+      return m;
+    },
+    guardarAliasComisiones: function (mapa) {
+      asegurarHoja_('ALIAS_COMISIONES');
+      var filas = leer_('ALIAS_COMISIONES'), ahora = Date.now();
+      Object.keys(mapa).forEach(function (k) {
+        var ya = filas.filter(function (f) { return texto_(f.alias) === k; })[0];
+        escribirFila_('ALIAS_COMISIONES', { _fila: ya ? ya._fila : undefined, alias: k, clave: mapa[k], actualizado: ahora });
+      });
+    },
+    perfiles: function () { asegurarHoja_('PERFILES'); return leer_('PERFILES').filter(function (f) { return texto_(f.clave); }).map(perfil_); },
+    perfil: function (clave) {
+      asegurarHoja_('PERFILES');
+      var f = leer_('PERFILES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      return f ? perfil_(f) : null;
+    },
+    guardarPerfil: function (p) {
+      asegurarHoja_('PERFILES');
+      var ya = leer_('PERFILES').filter(function (x) { return texto_(x.clave) === p.clave; })[0];
+      escribirFila_('PERFILES', { _fila: ya ? ya._fila : undefined, clave: p.clave, datos: JSON.stringify(p.datos || {}), confirmadas: JSON.stringify(p.confirmadas || {}), actualizado: p.actualizado, por: p.por });
+    },
+    cambiosPerfil: function () {
+      asegurarHoja_('CAMBIOS_PERFIL');
+      return leer_('CAMBIOS_PERFIL').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { cuando: Number(f.cuando) || 0, clave: texto_(f.clave), nombre: texto_(f.nombre), seccion: texto_(f.seccion), campo: texto_(f.campo), antes: texto_(f.antes), despues: texto_(f.despues) };
+      });
+    },
+    agregarCambiosPerfil: function (lista) { asegurarHoja_('CAMBIOS_PERFIL'); agregarFilas_('CAMBIOS_PERFIL', lista); },
+    campanasDatos: function () { asegurarHoja_('CAMPANAS_DATOS'); return leer_('CAMPANAS_DATOS').filter(function (f) { return texto_(f.id); }).map(campana_); },
+    guardarCampanaDatos: function (c) {
+      asegurarHoja_('CAMPANAS_DATOS');
+      var ya = leer_('CAMPANAS_DATOS').filter(function (x) { return texto_(x.id) === c.id; })[0];
+      escribirFila_('CAMPANAS_DATOS', { _fila: ya ? ya._fila : undefined, id: c.id, titulo: c.titulo, estado: c.estado, creada: c.creada, por: c.por, cerrada: c.cerrada || '',
+        detalle: JSON.stringify({ mensaje: c.mensaje, secciones: c.secciones, alcance: c.alcance, hasta: c.hasta, orden: c.orden || 0, lanzada: c.lanzada || 0 }) });
+    },
+    nuevoIdCampana: function () { return 'CD-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+    nuevoIdNominaEsp: function () { return 'NE-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     omegaSinTarjeta: function () {
       asegurarHoja_('OMEGA_SIN_TARJETA');
       var r = {}; leer_('OMEGA_SIN_TARJETA').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = { nombre: texto_(f.nombre), desde: Number(f.desde) || 0, por: texto_(f.por) }; });
@@ -4300,18 +5414,20 @@ function crearRepo_() {
     omegaQuincenas: function () { asegurarHoja_('OMEGA_QUINCENAS'); return leer_('OMEGA_QUINCENAS').filter(function (f) { return texto_(f.id); }).map(omegaQuincena_); },
     omegaQuincena: function (id) {
       asegurarHoja_('OMEGA_QUINCENAS');
-      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === id; })[0];
+      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return idQuincena_(x) === id; })[0];
       return f ? omegaQuincena_(f) : null;
     },
     guardarOmegaQuincena: function (q) {
       asegurarHoja_('OMEGA_QUINCENAS');
-      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === q.id; })[0];
-      var copia = Object.assign({}, q, { lotes: JSON.stringify(q.lotes || {}), ajustes: JSON.stringify(q.ajustes || {}), _fila: ya ? ya._fila : undefined });
-      if (!copia._fila) { var h = hoja_('OMEGA_QUINCENAS'); h.getRange(h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@'); }
+      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return idQuincena_(x) === q.id; })[0];
+      var copia = Object.assign({}, q, { lotes: JSON.stringify(q.lotes || {}), ajustes: JSON.stringify(q.ajustes || {}), pasos: JSON.stringify(q.pasos || {}), _fila: ya ? ya._fila : undefined });
+      var h = hoja_('OMEGA_QUINCENAS');
+      // «2026-11-1» y «2026-11» los convierte Sheets en fecha si la celda no es de texto
+      h.getRange(copia._fila || h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@');
       escribirFila_('OMEGA_QUINCENAS', copia);
     },
     eliminarOmegaQuincena: function (id) {
-      quitarFilas_('OMEGA_QUINCENAS', function (f) { return texto_(f.id) === id; });
+      quitarFilas_('OMEGA_QUINCENAS', function (f) { return idQuincena_(f) === id; });
       quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === id; });
     },
     omegaPagos: function (q, lote) {
@@ -4347,9 +5463,41 @@ function plan_(f) {
     decidida: Number(f.decidida) || 0, decididaPor: texto_(f.decididaPor), motivo: texto_(f.motivo), actualizada: Number(f.actualizada) || 0 };
 }
 
+function jsonSeguro_(t, def) { try { return t ? JSON.parse(t) : def; } catch (e) { return def; } }
+function perfil_(f) {
+  return { clave: texto_(f.clave), datos: jsonSeguro_(f.datos, {}), confirmadas: jsonSeguro_(f.confirmadas, {}), actualizado: Number(f.actualizado) || 0, por: texto_(f.por) };
+}
+function campana_(f) {
+  var d = jsonSeguro_(f.detalle, {});
+  return { id: texto_(f.id), titulo: texto_(f.titulo), estado: texto_(f.estado), creada: Number(f.creada) || 0, por: texto_(f.por), cerrada: Number(f.cerrada) || 0,
+    mensaje: d.mensaje || '', secciones: d.secciones || [], alcance: d.alcance || { tipo: 'todos' }, hasta: d.hasta || '', orden: Number(d.orden) || 0, lanzada: Number(d.lanzada) || 0 };
+}
+
+function nominaEsp_(f) {
+  var it = []; try { it = f.items ? JSON.parse(f.items) : []; } catch (e) { /* vacío */ }
+  return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), moneda: texto_(f.moneda) || 'Bs.', fechaPago: texto_(f.fechaPago), observacion: texto_(f.observacion),
+    items: it, personas: Number(f.personas) || it.length, total: Number(f.total) || 0, estado: texto_(f.estado), solicitadaPor: texto_(f.solicitadaPor),
+    solicitadaPorNombre: texto_(f.solicitadaPorNombre), solicitada: Number(f.solicitada) || 0, atendidaPor: texto_(f.atendidaPor), atendidaPorNombre: texto_(f.atendidaPorNombre),
+    atendida: Number(f.atendida) || 0, referencia: texto_(f.referencia), motivo: texto_(f.motivo), verificacion: (function () { try { return f.verificacion ? JSON.parse(f.verificacion) : null; } catch (e) { return null; } })() };
+}
+
+/** Mes «2026-11» de una celda (texto, o fecha si Sheets la convirtió). */
+function mesTexto_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, 'America/Caracas', 'yyyy-MM');
+  var m = /^(\d{4})-(\d{1,2})/.exec(texto_(v));
+  return m ? m[1] + '-' + ('0' + m[2]).slice(-2) : texto_(v);
+}
+/** Id de una quincena («2026-11-1») aunque la celda se haya convertido en fecha. */
+function idQuincena_(f) {
+  var t = texto_(f.id);
+  if (/^\d{4}-\d{2}-[12]$/.test(t)) return t;
+  var mes = mesTexto_(f.mes), q = Number(f.quincena);
+  return /^\d{4}-\d{2}$/.test(mes) && (q === 1 || q === 2) ? mes + '-' + q : t;
+}
+
 function omegaQuincena_(f) {
   var j = function (v) { try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } };
-  return { _fila: f._fila, id: texto_(f.id), mes: texto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes),
+  return { _fila: f._fila, id: idQuincena_(f), mes: mesTexto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes), pasos: j(f.pasos),
     creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
 }
 
@@ -4516,13 +5664,20 @@ function enviarPush_(destinos, titulo, texto, ruta) {
   } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
 }
 
-/** Tarea diaria (la instala «Configurar hojas»): avisa al celular las constancias que vencieron desde la última vez. */
+/** Tarea diaria de las 7 a. m. (la instala «Configurar hojas»): constancias vencidas, cumpleaños y aniversarios del día. */
 function avisosDiarios() {
   var props = PropertiesService.getScriptProperties(), ahora = Date.now();
   var desde = Number(props.getProperty('AVISOS_DESDE')) || ahora - 86400000;
   memo_ = {}; constanciasCache = null;
   Servicio.avisosDiarios(crearRepo_(), crearCtx_(), desde);
   props.setProperty('AVISOS_DESDE', String(ahora));
+}
+
+/** Menú → envía ya los avisos de cumpleaños y aniversarios de hoy (los que no se hayan enviado). */
+function enviarAvisosDeHoy() {
+  memo_ = {};
+  var r = Servicio.avisosCelebraciones(crearRepo_(), crearCtx_()).data;
+  SpreadsheetApp.getUi().alert('Avisos de hoy', r.cumpleanos + ' cumpleaños y ' + r.aniversarios + ' aniversarios avisados ahora.\n(Los que ya se habían enviado hoy no se repiten.)', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function instalarTareaDiaria_() {
@@ -4629,6 +5784,7 @@ function onOpen() {
     .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
     .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
     .addItem('3 · Notificaciones al celular (OneSignal)', 'configurarNotificaciones')
+    .addItem('Enviar avisos de hoy (cumpleaños y aniversarios)', 'enviarAvisosDeHoy')
     .addItem('Refrescar datos', 'refrescarDatos')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
@@ -4704,6 +5860,11 @@ function diagnostico() {
   var cargados = modulosCargados_();
   MODULOS.forEach(function (m) { l.push((cargados[m] ? '✔ ' : '✘ FALTA ') + 'módulo ' + m); });
   l.push('Versión del código: ' + VERSION);
+  try {
+    var act = leer_('EMPLEADOS').filter(function (f) { return texto_(f.estado) !== 'Inactivo' && texto_(f.cedulaNumero); });
+    var conNac = act.filter(function (f) { return texto_(f.fechaNacimiento); }).length;
+    l.push((conNac ? '✔ ' : '· ') + 'fecha de nacimiento (cumpleaños): ' + conNac + ' de ' + act.length + ' empleados activos' + (conNac ? '' : ' — vuelve a cargar el Detalle de empleado en el CAC'));
+  } catch (e) { /* sin EMPLEADOS */ }
   try {
     var errores = leer_('LOG').filter(function (f) { return f.accion === 'ERROR'; }).slice(-3).map(function (f) { return '· ' + texto_(f.detalle).split('\n')[0]; });
     if (errores.length) l.push('Últimos errores:\n' + errores.join('\n'));

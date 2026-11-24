@@ -518,3 +518,95 @@ test('Omega Capital sobre las hojas: quincena, lotes, validar y textos que Sheet
   assert.equal(e.llamar({ action: 'omegaReabrirLote', token: t, id: '2026-11-1', lote: 'TR-PCA' }).data.estado, 'PENDIENTE');
   assert.equal(e.hojas.OMEGA_PAGOS.filas.filter((f) => f && f[0] === '2026-11-1').length, 0);
 });
+
+test('Quincena sobre las hojas: los pasos se guardan y se leen', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const t = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  assert.equal(e.llamar({ action: 'quincenaAbrir', token: t, mes: '2026-11', quincena: 1, tasa: 910 }).data.id, '2026-11-1');
+  e.llamar({ action: 'quincenaPaso', token: t, id: '2026-11-1', paso: 'cestaticket', hecho: true, resumen: { PCA: { ok: 100, faltan: 2 } } });
+  const v = e.llamar({ action: 'quincenaVer', token: t, id: '2026-11-1' });
+  assert.equal(v.data.pasos.cestaticket.hecho, true); assert.equal(v.data.pasos.cestaticket.PCA.ok, 100);
+  assert.equal(e.llamar({ action: 'quincenaListar', token: t }).data[0].hechos, 1);
+});
+
+test('Quincena: aunque Sheets convierta el id y el mes en fecha, la quincena se encuentra', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const t = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  assert.equal(e.llamar({ action: 'quincenaAbrir', token: t, mes: '2026-11', quincena: 1, tasa: 910 }).ok, true);
+  const fila = e.hojas.OMEGA_QUINCENAS.filas[1];
+  fila[0] = new Date(Date.UTC(2026, 10, 1, 12)); fila[1] = new Date(Date.UTC(2026, 10, 1, 12));   // como lo deja Google Sheets
+  const v = e.llamar({ action: 'quincenaVer', token: t, id: '2026-11-1' });
+  assert.equal(v.ok, true, JSON.stringify(v)); assert.equal(v.data.mes, '2026-11');
+  assert.equal(e.llamar({ action: 'quincenaPaso', token: t, id: '2026-11-1', paso: 'detalle', hecho: true }).ok, true);
+  assert.equal(e.hojas.OMEGA_QUINCENAS.filas.filter((f) => f && f[0]).length, 2);   // actualizó la misma fila, no duplicó
+  assert.equal(e.llamar({ action: 'quincenaListar', token: t }).data[0].id, '2026-11-1');
+});
+
+test('perfil del trabajador y campaña de actualización sobre las hojas', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', departamento: 'RRHH', fechaInicio: '10/03/2022' },
+    { cedula: 'V123456789', nombre: 'ANA PROSEIN', organizacion: 'PROSEIN CENTRAL', departamento: 'Ventas', fechaInicio: '01/01/2020' },
+  ] });
+  const hasta = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+  const c = e.llamar({ action: 'crearCampanaDatos', token: admin, titulo: 'Diciembre', secciones: ['contacto', 'emergencia'], alcance: { tipo: 'todos' }, hasta });
+  assert.equal(c.ok, true, JSON.stringify(c));
+  const ana = entrarTrabajador(e, '12345678').token;
+  const v = e.llamar({ action: 'miPerfil', token: ana }).data;
+  assert.equal(v.campanas[0].hasta, hasta);
+  const g = e.llamar({ action: 'guardarMiPerfil', token: ana, datos: {
+    contacto: { telefono: '04141234567', correo: 'ana@correo.com', estado: 'Lara', ciudad: 'Barquisimeto', direccion: 'Calle 1' },
+    emergencia: { nombre: 'Pedro', parentesco: 'Padre', telefono: '04241234567' } } });
+  assert.equal(g.ok, true, JSON.stringify(g));
+  assert.deepEqual(g.data.confirmadas, [c.data.id]);
+  const v2 = e.llamar({ action: 'miPerfil', token: ana }).data;
+  assert.equal(v2.datos.contacto.telefono, '0414-1234567');
+  assert.equal(v2.campanas.length, 0);
+  const l = e.llamar({ action: 'listarCampanasDatos', token: admin }).data[0];
+  assert.equal(l.completos, 1);
+  const p = e.llamar({ action: 'datosPersonal', token: admin }).data;
+  assert.equal(p.cambios.length, 8);
+  assert.equal(p.filas.find((f) => f.clave === 'V12345678').datos.emergencia.nombre, 'Pedro');
+});
+
+test('cumpleaños y aniversarios sobre las hojas: la fecha de nacimiento se guarda y la tarea diaria avisa', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  const hoy = new Date(Date.now() - 4 * 3600000);   // Caracas
+  const dd = String(hoy.getUTCDate()).padStart(2, '0'), mm = String(hoy.getUTCMonth() + 1).padStart(2, '0'), yy = hoy.getUTCFullYear();
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [
+    { cedula: 'V305803231', nombre: 'SAMUEL HERRERA', organizacion: 'PROSEIN CENTRAL', fechaInicio: '10/03/2022', fechaNacimiento: '01/01/1990' },
+    { cedula: 'V123456789', nombre: 'ANA PROSEIN', organizacion: 'PROSEIN CENTRAL', fechaInicio: `${dd}/${mm}/${yy - 3}`, fechaNacimiento: `${dd}/${mm}/1995` },
+  ] });
+  const cab = e.hojas.EMPLEADOS.filas[0];
+  assert.ok(cab.includes('fechaNacimiento'));
+  assert.equal(e.hojas.EMPLEADOS.filas.find((f) => f[cab.indexOf('nombre')] === 'ANA PROSEIN')[cab.indexOf('fechaNacimiento')], `${dd}/${mm}/1995`);
+  e.ejecutar('avisosDiarios');
+  const n = e.hojas.NOTIFICACIONES.filas.slice(1), H = e.hojas.NOTIFICACIONES.filas[0];
+  const tipos = n.map((f) => [f[H.indexOf('tipo')], f[H.indexOf('clave')]]);
+  assert.deepEqual(tipos, [['CUMPLEANOS', 'V12345678'], ['CUMPLEANOS_TODOS', '*'], ['ANIVERSARIO', 'V12345678']]);
+  e.ejecutar('avisosDiarios');                                     // si corre otra vez el mismo día, no repite
+  assert.equal(e.hojas.NOTIFICACIONES.filas.length, n.length + 1);
+  const ana = entrarTrabajador(e, '12345678').token;
+  assert.deepEqual(e.llamar({ action: 'miCelebracion', token: ana }).data, { nombre: 'Ana Prosein', cumpleanos: true, aniversario: 3 });
+  assert.equal(e.llamar({ action: 'celebracionesDelMes', token: admin }).data.filas.length, 2);
+});
+
+test('columna nueva con el encabezado vacío en la hoja: se lee igual por su posición', () => {
+  const e = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-de-samuel'] });
+  e.ejecutar('configurarInicial'); e.ejecutar('ponerClaveRRHH');
+  const admin = e.llamar({ action: 'loginAdmin', cedula: '30580323', clave: 'clave-de-samuel' }).data.token;
+  e.llamar({ action: 'cargarEmpleados', token: admin, filas: [{ cedula: 'V123456789', nombre: 'ANA PROSEIN', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2020', fechaNacimiento: '04/02/1995' }] });
+  const cab = e.hojas.EMPLEADOS.filas[0];
+  cab[cab.indexOf('fechaNacimiento')] = '';                      // como quedó en la hoja real
+  e.ejecutar('refrescarDatos');
+  const ana = entrarTrabajador(e, '12345678').token;
+  assert.ok(ana);
+  const r = e.llamar({ action: 'celebracionesDelMes', token: admin, mes: '2026-02' }).data;
+  assert.equal(r.filas.filter((f) => f.tipo === 'CUMPLEANOS').length, 1);
+});

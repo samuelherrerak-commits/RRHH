@@ -6,9 +6,9 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-09.2';
+var VERSION = '2026-11-24.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -19,6 +19,7 @@ function modulosCargados_() {
     Aportes: typeof Aportes !== 'undefined' && !!Aportes, Recibos: typeof Recibos !== 'undefined' && !!Recibos,
     Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
     Omega: typeof Omega !== 'undefined' && !!Omega,
+    Comisiones: typeof Comisiones !== 'undefined' && !!Comisiones,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -26,13 +27,13 @@ function modulosCargados_() {
 var HOJAS = {
   PARAMETROS: ['clave', 'valor'],
   EMPRESAS: ['empresa', 'fideicomiso', 'tipoTAporte', 'tipoTAnticipo', 'forma'],
-  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina'],
+  EMPLEADOS: ['cedulaLetra', 'cedulaNumero', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'empresaFideicomiso', 'revisarCedula', 'editados', 'motivoRevision', 'jefe', 'salarioMensual', 'genero', 'fueraNomina', 'fechaNacimiento'],
   APORTES: ['clave', 'anio', 'trimestre', 'empresa', 'total', 'monto', 'meses', 'diasAdicionales', 'adicionalesForzados', 'nuevo',
     'nombre', 'salarioDiario', 'alicUtilidades', 'alicVacaciones', 'diasVacaciones', 'diasAntiguedad'],
   CANCELACIONES: ['id', 'clave', 'nombre', 'empresa', 'fechaIngreso', 'fechaEgreso', 'monto', 'estado', 'creada', 'por', 'actualizada'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo', 'ventana', 'acepto'],
-  CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
+  CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor', 'destinatario'],
   APERTURAS_ANTICIPO: ['id', 'clave', 'inicio', 'fin', 'por', 'actualizada'],
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
@@ -48,10 +49,16 @@ var HOJAS = {
   RECIBOS: ['id', 'lote', 'clave', 'nombre', 'pagina', 'archivo', 'creado', 'visto', 'conforme'],
   PINES: ['clave', 'sal', 'hash', 'creado'],
   OMEGA_BENEFICIOS: ['clave', 'nombre', 'complemento', 'vehiculo', 'bono', 'comisiones', 'actualizado', 'por'],
+  NOMINAS_ESPECIALES: ['id', 'concepto', 'moneda', 'fechaPago', 'observacion', 'items', 'personas', 'total', 'estado', 'solicitadaPor', 'solicitadaPorNombre', 'solicitada',
+    'atendidaPor', 'atendidaPorNombre', 'atendida', 'referencia', 'motivo', 'verificacion'],
+  ALIAS_COMISIONES: ['alias', 'clave', 'actualizado'],
   OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
   OMEGA_CONFIG: ['clave', 'valor'],
-  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada'],
+  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada', 'pasos'],
   OMEGA_PAGOS: ['quincena', 'lote', 'clave', 'cedula', 'nombre', 'usd', 'montoBs', 'anticipoBs', 'dias', 'detalle', 'validado'],
+  PERFILES: ['clave', 'datos', 'confirmadas', 'actualizado', 'por'],
+  CAMBIOS_PERFIL: ['cuando', 'clave', 'nombre', 'seccion', 'campo', 'antes', 'despues'],
+  CAMPANAS_DATOS: ['id', 'titulo', 'estado', 'creada', 'por', 'cerrada', 'detalle'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -91,7 +98,7 @@ var RUTAS_TRABAJADOR = {
   cancelarVacaciones: function (repo, ctx, d) { return Servicio.cancelarVacaciones(repo, ctx, d.token, d.id); },
   equipoVacaciones: function (repo, ctx, d) { return Servicio.equipoVacaciones(repo, ctx, d.token); },
   decidirVacacionesJefe: function (repo, ctx, d) { return Servicio.decidirVacacionesJefe(repo, ctx, d.token, d.id, !!d.aprobar, d.motivo); },
-  emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
+  emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token, d.destinatario); },
   misConstancias: function (repo, ctx, d) { return Servicio.misConstancias(repo, ctx, d.token); },
   verificarConstancia: function (repo, ctx, d) { return Servicio.verificarConstancia(repo, ctx, d.id); },   // pública (QR)
   login: function (repo, ctx, d) { return Servicio.iniciarSesion(repo, ctx, d.cedula, d.pin); },
@@ -147,6 +154,35 @@ var RUTAS_RRHH = {
   listarPlanificacionesVac: function (repo, ctx, d) { return Servicio.listarPlanificacionesVac(repo, ctx, d.token); },
   panelPlanificacionVac: function (repo, ctx, d) { return Servicio.panelPlanificacionVac(repo, ctx, d.token, d.ciclo); },
   recordarPlanificacionVac: function (repo, ctx, d) { return Servicio.recordarPlanificacionVac(repo, ctx, d.token, d.ciclo); },
+  solicitarNominaEspecial: function (repo, ctx, d) { return Servicio.solicitarNominaEspecial(repo, ctx, d.token, d); },
+  listarNominasEspeciales: function (repo, ctx, d) { return Servicio.listarNominasEspeciales(repo, ctx, d.token); },
+  registrarNominaEspecial: function (repo, ctx, d) { return Servicio.registrarNominaEspecial(repo, ctx, d.token, d.id, d.referencia); },
+  rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
+  cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
+  datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
+  miCelebracion: function (repo, ctx, d) { return Servicio.miCelebracion(repo, ctx, d.token); },
+  reenviarCelebracion: function (repo, ctx, d) { return Servicio.reenviarCelebracion(repo, ctx, d.token, d.clave, d.tipo); },
+  celebracionesDelMes: function (repo, ctx, d) { return Servicio.celebracionesDelMes(repo, ctx, d.token, d.mes); },
+  miPerfil: function (repo, ctx, d) { return Servicio.miPerfil(repo, ctx, d.token); },
+  guardarMiPerfil: function (repo, ctx, d) { return Servicio.guardarMiPerfil(repo, ctx, d.token, d.datos); },
+  crearCampanaDatos: function (repo, ctx, d) { return Servicio.crearCampanaDatos(repo, ctx, d.token, d); },
+  listarCampanasDatos: function (repo, ctx, d) { return Servicio.listarCampanasDatos(repo, ctx, d.token); },
+  panelCampanaDatos: function (repo, ctx, d) { return Servicio.panelCampanaDatos(repo, ctx, d.token, d.id); },
+  recordarCampanaDatos: function (repo, ctx, d) { return Servicio.recordarCampanaDatos(repo, ctx, d.token, d.id); },
+  cerrarCampanaDatos: function (repo, ctx, d) { return Servicio.cerrarCampanaDatos(repo, ctx, d.token, d.id); },
+  editarCampanaDatos: function (repo, ctx, d) { return Servicio.editarCampanaDatos(repo, ctx, d.token, d.id, d); },
+  lanzarCampanaDatos: function (repo, ctx, d) { return Servicio.lanzarCampanaDatos(repo, ctx, d.token, d.id, d.hasta); },
+  eliminarCampanaDatos: function (repo, ctx, d) { return Servicio.eliminarCampanaDatos(repo, ctx, d.token, d.id); },
+  cargarPlanCampanas: function (repo, ctx, d) { return Servicio.cargarPlanCampanas(repo, ctx, d.token); },
+  datosPersonal: function (repo, ctx, d) { return Servicio.datosPersonal(repo, ctx, d.token); },
+  guardarAliasNombre: function (repo, ctx, d) { return Servicio.guardarAliasNombre(repo, ctx, d.token, d.nombre, d.clave); },
+  guardarVerificacionNomina: function (repo, ctx, d) { return Servicio.guardarVerificacionNomina(repo, ctx, d.token, d.id, d.resumen); },
+  quincenaListar: function (repo, ctx, d) { return Servicio.quincenaListar(repo, ctx, d.token); },
+  quincenaVer: function (repo, ctx, d) { return Servicio.quincenaVer(repo, ctx, d.token, d.id); },
+  quincenaAbrir: function (repo, ctx, d) { return Servicio.quincenaAbrir(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
+  quincenaPaso: function (repo, ctx, d) { return Servicio.quincenaPaso(repo, ctx, d.token, d.id, d.paso, d); },
+  previaDetalle: function (repo, ctx, d) { return Servicio.previaDetalle(repo, ctx, d.token, d.filas); },
+  vacacionesQuincena: function (repo, ctx, d) { return Servicio.vacacionesQuincena(repo, ctx, d.token, d.id); },
   omegaInicio: function (repo, ctx, d) { return Servicio.omegaInicio(repo, ctx, d.token); },
   omegaGuardarConfig: function (repo, ctx, d) { return Servicio.omegaGuardarConfig(repo, ctx, d.token, d); },
   omegaTarjetas: function (repo, ctx, d) { return Servicio.omegaTarjetas(repo, ctx, d.token); },
@@ -168,7 +204,7 @@ var RUTAS_RRHH = {
   loginAdmin: function (repo, ctx, d) { return Servicio.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave); },
   bandejaAnticipos: function (repo, ctx, d) { return Servicio.bandejaAnticipos(repo, ctx, d.token, d.estado); },
   decidirAnticipo: function (repo, ctx, d) { return Servicio.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo); },
-  archivoAnticipos: function (repo, ctx, d) { return Servicio.generarArchivoAnticipos(repo, ctx, d.token, d.empresa); },
+  archivoAnticipos: function (repo, ctx, d) { return Servicio.generarArchivoAnticipos(repo, ctx, d.token, d.empresa, !!d.repetir); },
   pagarAnticipos: function (repo, ctx, d) { return Servicio.marcarAnticiposPagados(repo, ctx, d.token, d.ids || []); },
   cargarEmpleados: function (repo, ctx, d) { return Servicio.cargarEmpleados(repo, ctx, d.token, d.filas); },
   listarEmpleados: function (repo, ctx, d) { return Servicio.listarEmpleados(repo, ctx, d.token, { buscar: d.buscar, departamento: d.departamento, sinJefe: !!d.sinJefe }); },
@@ -188,7 +224,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -340,7 +376,8 @@ function refrescarDatos() {
 
 function leer_(nombre) {
   var vals = valores_(nombre);
-  var cab = vals[0], filas = [];
+  // encabezado vacío (columna nueva en una hoja ya creada): se toma el nombre que le toca por posición
+  var cab = (vals[0] || []).map(function (h, j) { return String(h || '').trim() || (HOJAS[nombre] && HOJAS[nombre][j]) || ''; }), filas = [];
   for (var i = 1; i < vals.length; i++) {
     var o = { _fila: i + 1 };
     for (var j = 0; j < cab.length; j++) o[cab[j]] = vals[i][j];
@@ -365,7 +402,7 @@ function empleado_(f) {
   return {
     cedulaLetra: texto_(f.cedulaLetra), cedulaNumero: texto_(f.cedulaNumero), nombre: texto_(f.nombre),
     organizacion: texto_(f.organizacion), departamento: texto_(f.departamento), puesto: texto_(f.puesto),
-    estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso),
+    estado: texto_(f.estado) || 'Activo', fechaIngreso: Calculo.aFecha(f.fechaIngreso), fechaNacimiento: f.fechaNacimiento ? Calculo.aFecha(f.fechaNacimiento) : null,
     empresaDetalle: texto_(f.empresaDetalle) || 'PCA', empresaFideicomiso: texto_(f.empresaFideicomiso),
     revisarCedula: f.revisarCedula === true || f.revisarCedula === 'TRUE', motivoRevision: texto_(f.motivoRevision),
     salarioMensual: Empleados.numeroDeMonto(f.salarioMensual), genero: texto_(f.genero),
@@ -438,7 +475,7 @@ function constancias_() {
     return {
       _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), nombre: texto_(f.nombre), cedula: texto_(f.cedula), empresa: texto_(f.empresa),
       cargo: texto_(f.cargo), organizacion: texto_(f.organizacion), fechaIngreso: fechaIngresoConstancia_(f), salario: Number(f.salario),
-      emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor),
+      emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor), destinatario: texto_(f.destinatario),
     };
   }));
 }
@@ -467,6 +504,7 @@ function crearRepo_() {
     /** Reemplaza toda la hoja VAC_PERIODOS de una vez (importación del cierre). */
     guardarVacPeriodos: function (filas) {
       var h = hoja_('VAC_PERIODOS'), cab = HOJAS.VAC_PERIODOS, ultima = h.getLastRow();
+      h.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold');   // columnas nuevas (p. ej. fechaNacimiento) en hojas ya creadas
       if (ultima > 1) h.getRange(2, 1, ultima - 1, cab.length).clearContent();
       invalidar_('VAC_PERIODOS');
       if (!filas.length) return;
@@ -511,7 +549,7 @@ function crearRepo_() {
       if (!lista.length) return;
       var filas = lista.map(function (e) {
         return [e.cedulaLetra, String(e.cedulaNumero), e.nombre, e.organizacion, e.departamento, e.puesto, e.estado, fechaTexto_(e.fechaIngreso),
-          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || '', !!e.fueraNomina];
+          e.empresaDetalle, e.empresaFideicomiso || '', !!e.revisarCedula, JSON.stringify(e.editados || []), e.motivoRevision || '', e.jefe || '', e.salarioMensual == null ? '' : e.salarioMensual, e.genero || '', !!e.fueraNomina, fechaTexto_(e.fechaNacimiento)];
       });
       var rango = h.getRange(2, 1, filas.length, cab.length);
       rango.setNumberFormat('@');   // cédulas y fechas como texto: Sheets no les quita ceros ni las convierte
@@ -711,6 +749,59 @@ function crearRepo_() {
       var copia = Object.assign({}, b); delete copia._fila; if (ya) copia._fila = ya._fila;
       escribirFila_('OMEGA_BENEFICIOS', copia);
     },
+    nominasEspeciales: function () { asegurarHoja_('NOMINAS_ESPECIALES'); return leer_('NOMINAS_ESPECIALES').filter(function (f) { return texto_(f.id); }).map(nominaEsp_); },
+    nominaEspecialPorId: function (id) {
+      asegurarHoja_('NOMINAS_ESPECIALES');
+      var f = leer_('NOMINAS_ESPECIALES').filter(function (x) { return texto_(x.id) === id; })[0];
+      return f ? nominaEsp_(f) : null;
+    },
+    guardarNominaEspecial: function (n) {
+      asegurarHoja_('NOMINAS_ESPECIALES');
+      var copia = Object.assign({}, n, { items: JSON.stringify(n.items || []), verificacion: n.verificacion ? JSON.stringify(n.verificacion) : '' });
+      if (!copia._fila) { var h = hoja_('NOMINAS_ESPECIALES'); h.getRange(h.getLastRow() + 1, 1, 1, 4).setNumberFormat('@'); }
+      escribirFila_('NOMINAS_ESPECIALES', copia);
+      n._fila = copia._fila;
+    },
+    aliasComisiones: function () {
+      asegurarHoja_('ALIAS_COMISIONES');
+      var m = {}; leer_('ALIAS_COMISIONES').forEach(function (f) { if (texto_(f.alias)) m[texto_(f.alias)] = texto_(f.clave); });
+      return m;
+    },
+    guardarAliasComisiones: function (mapa) {
+      asegurarHoja_('ALIAS_COMISIONES');
+      var filas = leer_('ALIAS_COMISIONES'), ahora = Date.now();
+      Object.keys(mapa).forEach(function (k) {
+        var ya = filas.filter(function (f) { return texto_(f.alias) === k; })[0];
+        escribirFila_('ALIAS_COMISIONES', { _fila: ya ? ya._fila : undefined, alias: k, clave: mapa[k], actualizado: ahora });
+      });
+    },
+    perfiles: function () { asegurarHoja_('PERFILES'); return leer_('PERFILES').filter(function (f) { return texto_(f.clave); }).map(perfil_); },
+    perfil: function (clave) {
+      asegurarHoja_('PERFILES');
+      var f = leer_('PERFILES').filter(function (x) { return texto_(x.clave) === clave; })[0];
+      return f ? perfil_(f) : null;
+    },
+    guardarPerfil: function (p) {
+      asegurarHoja_('PERFILES');
+      var ya = leer_('PERFILES').filter(function (x) { return texto_(x.clave) === p.clave; })[0];
+      escribirFila_('PERFILES', { _fila: ya ? ya._fila : undefined, clave: p.clave, datos: JSON.stringify(p.datos || {}), confirmadas: JSON.stringify(p.confirmadas || {}), actualizado: p.actualizado, por: p.por });
+    },
+    cambiosPerfil: function () {
+      asegurarHoja_('CAMBIOS_PERFIL');
+      return leer_('CAMBIOS_PERFIL').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { cuando: Number(f.cuando) || 0, clave: texto_(f.clave), nombre: texto_(f.nombre), seccion: texto_(f.seccion), campo: texto_(f.campo), antes: texto_(f.antes), despues: texto_(f.despues) };
+      });
+    },
+    agregarCambiosPerfil: function (lista) { asegurarHoja_('CAMBIOS_PERFIL'); agregarFilas_('CAMBIOS_PERFIL', lista); },
+    campanasDatos: function () { asegurarHoja_('CAMPANAS_DATOS'); return leer_('CAMPANAS_DATOS').filter(function (f) { return texto_(f.id); }).map(campana_); },
+    guardarCampanaDatos: function (c) {
+      asegurarHoja_('CAMPANAS_DATOS');
+      var ya = leer_('CAMPANAS_DATOS').filter(function (x) { return texto_(x.id) === c.id; })[0];
+      escribirFila_('CAMPANAS_DATOS', { _fila: ya ? ya._fila : undefined, id: c.id, titulo: c.titulo, estado: c.estado, creada: c.creada, por: c.por, cerrada: c.cerrada || '',
+        detalle: JSON.stringify({ mensaje: c.mensaje, secciones: c.secciones, alcance: c.alcance, hasta: c.hasta, orden: c.orden || 0, lanzada: c.lanzada || 0 }) });
+    },
+    nuevoIdCampana: function () { return 'CD-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
+    nuevoIdNominaEsp: function () { return 'NE-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     omegaSinTarjeta: function () {
       asegurarHoja_('OMEGA_SIN_TARJETA');
       var r = {}; leer_('OMEGA_SIN_TARJETA').forEach(function (f) { if (texto_(f.clave)) r[texto_(f.clave)] = { nombre: texto_(f.nombre), desde: Number(f.desde) || 0, por: texto_(f.por) }; });
@@ -738,18 +829,20 @@ function crearRepo_() {
     omegaQuincenas: function () { asegurarHoja_('OMEGA_QUINCENAS'); return leer_('OMEGA_QUINCENAS').filter(function (f) { return texto_(f.id); }).map(omegaQuincena_); },
     omegaQuincena: function (id) {
       asegurarHoja_('OMEGA_QUINCENAS');
-      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === id; })[0];
+      var f = leer_('OMEGA_QUINCENAS').filter(function (x) { return idQuincena_(x) === id; })[0];
       return f ? omegaQuincena_(f) : null;
     },
     guardarOmegaQuincena: function (q) {
       asegurarHoja_('OMEGA_QUINCENAS');
-      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return texto_(x.id) === q.id; })[0];
-      var copia = Object.assign({}, q, { lotes: JSON.stringify(q.lotes || {}), ajustes: JSON.stringify(q.ajustes || {}), _fila: ya ? ya._fila : undefined });
-      if (!copia._fila) { var h = hoja_('OMEGA_QUINCENAS'); h.getRange(h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@'); }
+      var ya = leer_('OMEGA_QUINCENAS').filter(function (x) { return idQuincena_(x) === q.id; })[0];
+      var copia = Object.assign({}, q, { lotes: JSON.stringify(q.lotes || {}), ajustes: JSON.stringify(q.ajustes || {}), pasos: JSON.stringify(q.pasos || {}), _fila: ya ? ya._fila : undefined });
+      var h = hoja_('OMEGA_QUINCENAS');
+      // «2026-11-1» y «2026-11» los convierte Sheets en fecha si la celda no es de texto
+      h.getRange(copia._fila || h.getLastRow() + 1, 1, 1, 2).setNumberFormat('@');
       escribirFila_('OMEGA_QUINCENAS', copia);
     },
     eliminarOmegaQuincena: function (id) {
-      quitarFilas_('OMEGA_QUINCENAS', function (f) { return texto_(f.id) === id; });
+      quitarFilas_('OMEGA_QUINCENAS', function (f) { return idQuincena_(f) === id; });
       quitarFilas_('OMEGA_PAGOS', function (f) { return texto_(f.quincena) === id; });
     },
     omegaPagos: function (q, lote) {
@@ -785,9 +878,41 @@ function plan_(f) {
     decidida: Number(f.decidida) || 0, decididaPor: texto_(f.decididaPor), motivo: texto_(f.motivo), actualizada: Number(f.actualizada) || 0 };
 }
 
+function jsonSeguro_(t, def) { try { return t ? JSON.parse(t) : def; } catch (e) { return def; } }
+function perfil_(f) {
+  return { clave: texto_(f.clave), datos: jsonSeguro_(f.datos, {}), confirmadas: jsonSeguro_(f.confirmadas, {}), actualizado: Number(f.actualizado) || 0, por: texto_(f.por) };
+}
+function campana_(f) {
+  var d = jsonSeguro_(f.detalle, {});
+  return { id: texto_(f.id), titulo: texto_(f.titulo), estado: texto_(f.estado), creada: Number(f.creada) || 0, por: texto_(f.por), cerrada: Number(f.cerrada) || 0,
+    mensaje: d.mensaje || '', secciones: d.secciones || [], alcance: d.alcance || { tipo: 'todos' }, hasta: d.hasta || '', orden: Number(d.orden) || 0, lanzada: Number(d.lanzada) || 0 };
+}
+
+function nominaEsp_(f) {
+  var it = []; try { it = f.items ? JSON.parse(f.items) : []; } catch (e) { /* vacío */ }
+  return { _fila: f._fila, id: texto_(f.id), concepto: texto_(f.concepto), moneda: texto_(f.moneda) || 'Bs.', fechaPago: texto_(f.fechaPago), observacion: texto_(f.observacion),
+    items: it, personas: Number(f.personas) || it.length, total: Number(f.total) || 0, estado: texto_(f.estado), solicitadaPor: texto_(f.solicitadaPor),
+    solicitadaPorNombre: texto_(f.solicitadaPorNombre), solicitada: Number(f.solicitada) || 0, atendidaPor: texto_(f.atendidaPor), atendidaPorNombre: texto_(f.atendidaPorNombre),
+    atendida: Number(f.atendida) || 0, referencia: texto_(f.referencia), motivo: texto_(f.motivo), verificacion: (function () { try { return f.verificacion ? JSON.parse(f.verificacion) : null; } catch (e) { return null; } })() };
+}
+
+/** Mes «2026-11» de una celda (texto, o fecha si Sheets la convirtió). */
+function mesTexto_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, 'America/Caracas', 'yyyy-MM');
+  var m = /^(\d{4})-(\d{1,2})/.exec(texto_(v));
+  return m ? m[1] + '-' + ('0' + m[2]).slice(-2) : texto_(v);
+}
+/** Id de una quincena («2026-11-1») aunque la celda se haya convertido en fecha. */
+function idQuincena_(f) {
+  var t = texto_(f.id);
+  if (/^\d{4}-\d{2}-[12]$/.test(t)) return t;
+  var mes = mesTexto_(f.mes), q = Number(f.quincena);
+  return /^\d{4}-\d{2}$/.test(mes) && (q === 1 || q === 2) ? mes + '-' + q : t;
+}
+
 function omegaQuincena_(f) {
   var j = function (v) { try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } };
-  return { _fila: f._fila, id: texto_(f.id), mes: texto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes),
+  return { _fila: f._fila, id: idQuincena_(f), mes: mesTexto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes), pasos: j(f.pasos),
     creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
 }
 
@@ -954,13 +1079,20 @@ function enviarPush_(destinos, titulo, texto, ruta) {
   } catch (e) { registrarError_(e); return { estado: 'ERROR', detalle: String(e && e.message || e).slice(0, 200) }; }
 }
 
-/** Tarea diaria (la instala «Configurar hojas»): avisa al celular las constancias que vencieron desde la última vez. */
+/** Tarea diaria de las 7 a. m. (la instala «Configurar hojas»): constancias vencidas, cumpleaños y aniversarios del día. */
 function avisosDiarios() {
   var props = PropertiesService.getScriptProperties(), ahora = Date.now();
   var desde = Number(props.getProperty('AVISOS_DESDE')) || ahora - 86400000;
   memo_ = {}; constanciasCache = null;
   Servicio.avisosDiarios(crearRepo_(), crearCtx_(), desde);
   props.setProperty('AVISOS_DESDE', String(ahora));
+}
+
+/** Menú → envía ya los avisos de cumpleaños y aniversarios de hoy (los que no se hayan enviado). */
+function enviarAvisosDeHoy() {
+  memo_ = {};
+  var r = Servicio.avisosCelebraciones(crearRepo_(), crearCtx_()).data;
+  SpreadsheetApp.getUi().alert('Avisos de hoy', r.cumpleanos + ' cumpleaños y ' + r.aniversarios + ' aniversarios avisados ahora.\n(Los que ya se habían enviado hoy no se repiten.)', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function instalarTareaDiaria_() {
@@ -1067,6 +1199,7 @@ function onOpen() {
     .addItem('1 · Configurar hojas y usuarios', 'configurarInicial')
     .addItem('2 · Poner o cambiar clave de RRHH', 'ponerClaveRRHH')
     .addItem('3 · Notificaciones al celular (OneSignal)', 'configurarNotificaciones')
+    .addItem('Enviar avisos de hoy (cumpleaños y aniversarios)', 'enviarAvisosDeHoy')
     .addItem('Refrescar datos', 'refrescarDatos')
     .addItem('Diagnóstico', 'diagnostico')
     .addToUi();
@@ -1142,6 +1275,11 @@ function diagnostico() {
   var cargados = modulosCargados_();
   MODULOS.forEach(function (m) { l.push((cargados[m] ? '✔ ' : '✘ FALTA ') + 'módulo ' + m); });
   l.push('Versión del código: ' + VERSION);
+  try {
+    var act = leer_('EMPLEADOS').filter(function (f) { return texto_(f.estado) !== 'Inactivo' && texto_(f.cedulaNumero); });
+    var conNac = act.filter(function (f) { return texto_(f.fechaNacimiento); }).length;
+    l.push((conNac ? '✔ ' : '· ') + 'fecha de nacimiento (cumpleaños): ' + conNac + ' de ' + act.length + ' empleados activos' + (conNac ? '' : ' — vuelve a cargar el Detalle de empleado en el CAC'));
+  } catch (e) { /* sin EMPLEADOS */ }
   try {
     var errores = leer_('LOG').filter(function (f) { return f.accion === 'ERROR'; }).slice(-3).map(function (f) { return '· ' + texto_(f.detalle).split('\n')[0]; });
     if (errores.length) l.push('Últimos errores:\n' + errores.join('\n'));

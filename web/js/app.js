@@ -3,6 +3,7 @@ import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
+import { dibujarTarjeta, descargarTarjeta } from './tarjeta.js';
 import { vincular, desvincular, estadoPush, activarPush, esIphone, registrarServiceWorker, suscritoEnOneSignal } from './push.js';
 
 const URL_BASE = location.origin + location.pathname;
@@ -141,7 +142,7 @@ function vistaLogin() {
 // así funcionan los botones Atrás/Adelante del navegador y del celular.
 let cuenta = { cont: app, token: '', seccion: 'inicio' };
 const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
-const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'equipo'];
+const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'perfil', 'celebracion', 'equipo'];
 // Fideicomiso queda en «Próximamente» para los trabajadores hasta que esté la pantalla de aportes (cambiar a true para abrirlo).
 const FIDEICOMISO_ACTIVO = true;
 const seccionDesdeHash = () => { const m = /^#\/(\w+)$/.exec(location.hash); return m && SECCIONES.includes(m[1]) ? m[1] : 'inicio'; };
@@ -168,6 +169,7 @@ const ICONOS = {
   equipo: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   inicio: '<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/>',
   recibos: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+  perfil: '<circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/>',
   campana: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   volver: '<path d="m15 18-6-6 6-6"/>',
   ir: '<path d="m9 18 6-6-6-6"/>',
@@ -175,7 +177,7 @@ const ICONOS = {
 const icono = (n, clase = 'icono') => `<svg class="${clase}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[n]}</svg>`;
 const volver = () => `<button class="volver" type="button" data-ir="inicio">${icono('volver')} Volver al inicio</button>`;
 
-const MENU_TRABAJADOR = [['inicio', 'Inicio', 'inicio'], ['constancia', 'Constancia de trabajo', 'constancia'], ['vacaciones', 'Vacaciones', 'vacaciones'], ['fideicomiso', 'Fideicomiso', 'fideicomiso'], ['recibos', 'Recibos de pago', 'recibos']];
+const MENU_TRABAJADOR = [['inicio', 'Inicio', 'inicio'], ['constancia', 'Constancia de trabajo', 'constancia'], ['vacaciones', 'Vacaciones', 'vacaciones'], ['fideicomiso', 'Fideicomiso', 'fideicomiso'], ['recibos', 'Recibos de pago', 'recibos'], ['perfil', 'Mi perfil', 'perfil']];
 
 /** Sitio del trabajador: en computadora, menú lateral fijo; en el celular, el inicio con tarjetas y «Volver». */
 function marcoTrabajador() {
@@ -213,6 +215,8 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   else if (seccion === 'vacaciones') await seccionVacaciones(destino);
   else if (seccion === 'equipo') await seccionEquipo(destino);
   else if (seccion === 'recibos') await seccionRecibos(destino);
+  else if (seccion === 'perfil') await seccionPerfil(destino);
+  else if (seccion === 'celebracion') await seccionCelebracion(destino);
   else if (seccion === 'fideicomiso') await seccionFideicomiso(destino);
   else seccionInicio(destino);
   if (cont !== app && !token) destino.querySelectorAll('.volver').forEach((b) => b.remove());   // «Mi equipo» del panel de RRHH
@@ -222,7 +226,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
 /** Mientras la persona ve su inicio, se piden en segundo plano los datos de cada tarjeta. */
 async function precargarTrabajador(tk = {}) {
   // De una en una: así cada persona ocupa un solo cupo de Google a la vez (el límite es 30 simultáneas).
-  for (const accion of ['equipoVacaciones', 'misRecibos', 'datosVacaciones', 'misConstancias', 'datosAnticipo']) {
+  for (const accion of ['miCelebracion', 'equipoVacaciones', 'misRecibos', 'miPerfil', 'datosVacaciones', 'misConstancias', 'datosAnticipo']) {
     await obtener(accion, tk).catch(() => {});
   }
 }
@@ -250,6 +254,7 @@ function seccionInicio(cont) {
       ${tarjeta('vacaciones', 'Vacaciones', 'Consulta tus días pendientes y solicita tus vacaciones; tu jefe directo las aprueba.', 'azul')}
       ${tarjeta('fideicomiso', 'Fideicomiso', 'Solicita un anticipo de tus prestaciones sociales.', 'carbon', FIDEICOMISO_ACTIVO ? '' : '<span class="chip chip-neutro">Próximamente</span>')}
       ${tarjeta('recibos', 'Recibos de pago', 'Consulta tus recibos y confirma «Recibí conforme».', 'oro')}
+      ${tarjeta('perfil', 'Mi perfil', 'Tus datos principales y las actualizaciones de datos que pida Gestión Humana.', 'azul')}
     </nav>
     <div id="aviso-push"></div>`;
   // después de «Mi equipo» (en ese orden los precarga el inicio): así no se piden a la vez
@@ -258,7 +263,27 @@ function seccionInicio(cont) {
     const n = r.ok ? r.data.filter((x) => !x.conforme).length : 0;
     const t = cont.querySelector('[data-ir=recibos] .acceso-texto');
     if (n && t) t.insertAdjacentHTML('beforeend', `<span class="chip chip-espera">${n} por confirmar</span>`);
-  });
+  }).then(() => obtener('miPerfil', conToken())).then((r) => {
+    const t = cont.querySelector('[data-ir=perfil] .acceso-texto');
+    if (!r || !r.ok || !t) return;
+    const c = r.data.campanas[0];
+    if (c) {
+      t.insertAdjacentHTML('beforeend', '<span class="chip chip-espera">Actualiza tus datos</span>');
+      cont.querySelector('.bienvenida').insertAdjacentHTML('afterend', `<button type="button" class="aviso-campana aviso-inicio" data-ir="perfil">${icono('perfil')}
+        <span><b>${esc(c.titulo)}</b><span>Gestión Humana te pide actualizar tus datos antes del ${esc(V().corta(c.hasta))}.</span></span>${icono('ir')}</button>`);
+      cont.querySelector('.aviso-inicio').addEventListener('click', () => navegar('perfil'));
+    }
+  }).catch(() => {});
+  // ¿Celebra algo hoy? Su tarjeta, arriba de todo
+  obtener('miCelebracion', conToken()).then((r) => {
+    const b = cont.querySelector('.bienvenida');
+    if (!r.ok || !b || (!r.data.cumpleanos && !r.data.aniversario) || cont.querySelector('.aviso-celebracion')) return;
+    const a = r.data.aniversario, txt = r.data.cumpleanos && a ? `¡Feliz cumpleaños y feliz aniversario! Hoy cumples ${a === 1 ? 'tu primer año' : a + ' años'} con nosotros.`
+      : r.data.cumpleanos ? '¡Feliz cumpleaños! Todo el Grupo Prosein celebra contigo.' : `¡Feliz aniversario! Hoy cumples ${a === 1 ? 'tu primer año' : a + ' años'} con nosotros.`;
+    b.insertAdjacentHTML('afterend', `<button type="button" class="aviso-celebracion" data-ir="celebracion"><span class="emoji" aria-hidden="true">${r.data.cumpleanos ? '🎂' : '🎉'}</span>
+      <span><b>${esc(txt)}</b><span>Mira tu tarjeta de felicitación</span></span>${icono('ir')}</button>`);
+    cont.querySelector('.aviso-celebracion').addEventListener('click', () => navegar('celebracion'));
+  }).catch(() => {});
   if (!cuenta.token) pintarAvisoPush(cont.querySelector('#aviso-push'));
   // Si es jefe de alguien, aparece «Mi equipo» con las solicitudes por aprobar
   obtener('equipoVacaciones', conToken()).then((r) => {
@@ -278,30 +303,54 @@ async function seccionConstancia(cont) {
   const rc = await obtener('misConstancias', conToken());
   if (!rc.ok && rc.code === 'SESION') { toast(rc.message); return arrancar(); }
   const constancias = rc.ok ? rc.data : [];
-  const vigente = constancias.find((c) => c.estado === 'VIGENTE');
+  const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+  const vigenteDe = (dest) => constancias.find((c) => c.estado === 'VIGENTE' && norm(c.destinatario) === norm(dest));
+  const para = (c) => (c.destinatario ? `Dirigida a ${esc(c.destinatario)}` : 'A quien pueda interesar');
   cont.innerHTML = `${volver()}<div class="dos-col"><div class="col">
     <section class="tarjeta">
       <h2>Constancia de trabajo</h2>
       <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 30 días.</p>
-      ${vigente ? `<p class="aviso">Tienes una constancia vigente hasta el <b>${fechaCaracas(vigente.vence)}</b>. Puedes descargarla las veces que necesites; podrás generar una nueva cuando venza.</p>
-        <div><button class="btn" id="btn-vigente">Descargar mi constancia vigente</button></div>`
-        : '<div><button class="btn" id="btn-constancia">Generar constancia de trabajo</button></div>'}
-      <div class="error-msg" id="err-const" hidden></div>
+      <form id="fconst" class="form-vac" novalidate>
+        <fieldset class="destino"><legend>¿A quién va dirigida?</legend>
+          <label class="opcion-radio"><input type="radio" name="tipo" value="general" checked> <span><b>A quien pueda interesar</b><small>La constancia general, sirve para cualquier trámite.</small></span></label>
+          <label class="opcion-radio"><input type="radio" name="tipo" value="institucion"> <span><b>A una institución</b><small>Por ejemplo, un banco, una embajada o una universidad.</small></span></label>
+        </fieldset>
+        <label id="caja-inst" hidden>Nombre de la institución <input name="institucion" maxlength="120" placeholder="Ej.: Banco Nacional de Crédito" autocomplete="off"></label>
+        <p class="aviso" id="ya-vigente" hidden></p>
+        <div class="error-msg" id="err-const" hidden></div>
+        <div><button class="btn" type="submit" id="btn-constancia">Generar constancia de trabajo</button></div>
+      </form>
     </section>
     </div><div class="col">
-    ${constancias.length ? `<section class="tarjeta"><h2>Mis constancias</h2><div class="lista">${constancias.map((c) => `
-      <div class="item"><div class="item-cab"><div><b>Emitida el ${fechaCaracas(c.emision)}</b><p class="suave">Vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
+    ${constancias.length ? `<section class="tarjeta"><h2>Mis constancias</h2><div class="lista">${constancias.map((c, k) => `
+      <div class="item"><div class="item-cab"><div><b>${para(c)}</b><p class="suave">Emitida el ${fechaCaracas(c.emision)} · vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
+        ${c.estado === 'VIGENTE' ? `<div><button class="btn btn-sec btn-chico" type="button" data-bajar-const="${k}">Descargar</button></div>` : ''}
       </div>`).join('')}</div></section>` : ''}</div></div>`;
 
-  const errConst = cont.querySelector('#err-const');
+  const f = cont.querySelector('#fconst'), errConst = cont.querySelector('#err-const'), cajaInst = cont.querySelector('#caja-inst'), ya = cont.querySelector('#ya-vigente'), btn = cont.querySelector('#btn-constancia');
   const bajarPdf = async (c) => { try { await descargarConstanciaPdf(c, URL_BASE); } catch (e) { errorEn(errConst, e.message || 'No se pudo generar el PDF.'); } };
-  cont.querySelector('#btn-vigente')?.addEventListener('click', (e) => conBoton(e.currentTarget, () => bajarPdf(vigente)));
-  cont.querySelector('#btn-constancia')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+  const destino = () => (f.tipo.value === 'institucion' ? f.institucion.value.trim() : '');
+  const revisar = () => {
     errorEn(errConst, '');
-    const x = await llamar('emitirConstancia', conToken());
+    cajaInst.hidden = f.tipo.value !== 'institucion';
+    const v = f.tipo.value === 'institucion' && !destino() ? null : vigenteDe(destino());
+    ya.hidden = !v;
+    if (v) ya.innerHTML = `Ya tienes una constancia vigente ${v.destinatario ? `dirigida a <b>${esc(v.destinatario)}</b>` : '«A quien pueda interesar»'} hasta el <b>${fechaCaracas(v.vence)}</b>. Puedes descargarla las veces que necesites.`;
+    btn.textContent = v ? 'Descargar mi constancia vigente' : 'Generar constancia de trabajo';
+  };
+  f.querySelectorAll('[name=tipo]').forEach((r) => r.addEventListener('change', () => { revisar(); if (f.tipo.value === 'institucion') f.institucion.focus(); }));
+  f.institucion.addEventListener('input', revisar);
+  revisar();
+  cont.querySelectorAll('[data-bajar-const]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => bajarPdf(constancias[Number(b.dataset.bajarConst)]))));
+  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(btn, async () => {
+    errorEn(errConst, '');
+    if (f.tipo.value === 'institucion' && destino().length < 3) return errorEn(errConst, 'Escribe el nombre de la institución a la que va dirigida.');
+    const v = vigenteDe(destino());
+    if (v) return bajarPdf(v);
+    const x = await llamar('emitirConstancia', { destinatario: destino(), ...conToken() });
     if (!x.ok) return errorEn(errConst, x.message);
     await bajarPdf(x.data); toast('Constancia generada.'); vistaCuenta(cuenta.cont, cuenta.token, 'constancia');
-  }));
+  }); });
 }
 
 /* ---------- Vacaciones ---------- */
@@ -546,9 +595,12 @@ async function vistaRRHH() {
   const miEquipo = !!(sesion.leer() || {}).esJefe && !miCuenta;   // si es empleado, su equipo está en «Mi cuenta»
   if (['solicitudes', 'banco', 'anticipos', 'cierres'].includes(pestana)) { subFide = pestana === 'cierres' ? 'aportes' : 'anticipos'; pestana = 'fideicomiso'; }
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
+  // Quincena (con Omega Capital) y Nóminas especiales: por ahora solo en el sitio de pruebas
+  const soloPruebas = CONFIG.PRUEBAS ? [] : ['omega', 'nominas'];
+  if (soloPruebas.includes(pestana)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
-      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Omega Capital'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].map(([k, t]) =>
+      ${[['vacaciones', 'Vacaciones'], ['empleados', 'Empleados'], ['constancias', 'Constancias'], ['fideicomiso', 'Fideicomiso'], ['recibos', 'Recibos de pago'], ['omega', 'Quincena'], ['nominas', 'Nóminas especiales'], ['datos', 'Datos del personal'], ...(miCuenta ? [['micuenta', 'Mi cuenta']] : []), ...(miEquipo ? [['miequipo', 'Mi equipo']] : [])].filter(([k]) => !soloPruebas.includes(k)).map(([k, t]) =>
         `<button class="pestana" role="tab" data-p="${k}" aria-selected="${k === pestana}">${t}</button>`).join('')}
     </div>
     <div id="panel" class="contenido"></div></div>`;
@@ -557,6 +609,8 @@ async function vistaRRHH() {
   if (pestana === 'fideicomiso') return panelFideicomiso(panel);
   if (pestana === 'recibos') return panelRecibos(panel);
   if (pestana === 'omega') return panelOmega(panel);
+  if (pestana === 'nominas') return panelNominas(panel);
+  if (pestana === 'datos') return panelDatosPersonal(panel);
   if (pestana === 'empleados') return panelEmpleados(panel);
   if (pestana === 'constancias') return panelConstancias(panel);
   if (pestana === 'vacaciones') return panelVacaciones(panel);
@@ -848,7 +902,8 @@ async function panelAnticipos(panel) {
     </section>
     <section class="tarjeta"><h2>2 · Respuesta del banco (${enBanco.length})</h2>
       <p class="suave">Reporta las que el banco <b>rechazó</b> (por ejemplo, el monto superaba el disponible) y luego marca <b>las demás como pagadas</b>.</p>
-      ${enBanco.length ? `<div class="lista">${enBanco.map((a) => tarjetaAnticipo(a, `<div><button class="btn btn-sec btn-chico" data-rech-banco="${esc(a.id)}">Rechazada por el banco</button></div>`)).join('')}</div>
+      ${enBanco.length ? `<div class="fila">${['PCA', 'AIV'].filter((e) => enBanco.some((a) => a.empresa === e)).map((e) => `<button class="btn btn-sec btn-chico" data-gen-otra="${e}">Descargar de nuevo el archivo ${e} (${enBanco.filter((a) => a.empresa === e).length})</button>`).join('')}</div>
+      <div class="lista">${enBanco.map((a) => tarjetaAnticipo(a, `<div><button class="btn btn-sec btn-chico" data-rech-banco="${esc(a.id)}">Rechazada por el banco</button></div>`)).join('')}</div>
       <div><button class="btn" id="pagar">Marcar las ${enBanco.length} como pagadas</button></div>` : '<p class="vacio">No hay anticipos esperando respuesta del banco.</p>'}
     </section>
     </div><div class="col">
@@ -887,6 +942,12 @@ async function panelAnticipos(panel) {
     if (!r.ok) return toast(r.message);
     descargar(`ANTICIPOS_${b.dataset.gen}_${new Date().toISOString().slice(0, 10)}.csv`, r.data.csv);
     toast(`Archivo con ${r.data.cantidad} anticipos. Pasan a «Enviada al banco».`); panelAnticipos(panel);
+  })));
+  panel.querySelectorAll('[data-gen-otra]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const r = await llamar('archivoAnticipos', { empresa: b.dataset.genOtra, repetir: true });
+    if (!r.ok) return toast(r.message);
+    descargar(`ANTICIPOS_${b.dataset.genOtra}_${new Date().toISOString().slice(0, 10)}.csv`, r.data.csv);
+    toast(`Archivo descargado de nuevo: ${r.data.cantidad} anticipos (siguen en «Enviada al banco»).`);
   })));
   panel.querySelectorAll('[data-rech-banco]').forEach((b) => b.addEventListener('click', () => pedirMotivo('Rechazada por el banco', async (motivo) => {
     const r = await llamar('rechazarAnticipoBanco', { id: b.dataset.rechBanco, motivo });
@@ -1277,6 +1338,7 @@ async function vistaVerificar(id) {
       <tr><th>Cédula</th><td>${esc(c.cedula)}</td></tr>
       <tr><th>Empresa</th><td>${esc(c.empresaNombre)}</td></tr>
       <tr><th>Cargo</th><td>${esc(c.cargo)}</td></tr>
+      <tr><th>Dirigida a</th><td>${esc(c.destinatario || 'A quien pueda interesar')}</td></tr>
       <tr><th>Fecha de ingreso</th><td>${esc(c.fechaIngreso)}</td></tr>
       <tr><th>Salario mensual</th><td>${bs(c.salario)}</td></tr>
       <tr><th>Fecha de emisión</th><td>${fechaCaracas(c.emision)}</td></tr>
@@ -1318,7 +1380,7 @@ async function leerArchivoExcel(archivo) {
   return XLSX.utils.sheet_to_json(hoja, { defval: '', raw: true });
 }
 
-const COL_NOMBRES = { cedula: 'Cédula', nombre: 'Nombre', organizacion: 'Organización', departamento: 'Departamento', puesto: 'Puesto', estado: 'Estado', fechaInicio: 'Fecha Inicio', jefeNombre: 'Jefe directo', genero: 'Género', salarioMensual: 'Salario M.' };
+const COL_NOMBRES = { cedula: 'Cédula', nombre: 'Nombre', organizacion: 'Organización', departamento: 'Departamento', puesto: 'Puesto', estado: 'Estado', fechaInicio: 'Fecha Inicio', jefeNombre: 'Jefe directo', genero: 'Género', salarioMensual: 'Salario M.', fechaNacimiento: 'Cumpleaños' };
 
 async function panelEmpleados(panel) {
   panel.innerHTML = `<div class="dos-col izq-angosta"><div class="col">
@@ -1360,15 +1422,18 @@ async function panelEmpleados(panel) {
       if (m.faltantes.includes('cedula') || m.faltantes.includes('nombre')) {
         return errorEn(err, `Faltan columnas obligatorias: ${m.faltantes.filter((c) => ['cedula', 'nombre'].includes(c)).map((c) => COL_NOMBRES[c]).join(', ')}.`);
       }
-      const conJefe = m.filas.filter((f) => f.jefeNombre).length;
-      previa.innerHTML = `<div class="aviso">Listo para cargar <b>${m.filas.length}</b> empleados${m.omitidas ? ` (${m.omitidas} filas vacías omitidas)` : ''}.${conJefe ? ` Trae <b>jefe directo</b> para ${conJefe}.` : ''}${m.faltantes.length ? ` Columnas no encontradas: ${m.faltantes.map((c) => COL_NOMBRES[c]).join(', ')}.` : ''}</div>
+      const conJefe = m.filas.filter((f) => f.jefeNombre).length, conNac = m.filas.filter((f) => f.fechaNacimiento).length;
+      previa.innerHTML = `<div class="aviso">Listo para cargar <b>${m.filas.length}</b> empleados${m.omitidas ? ` (${m.omitidas} filas vacías omitidas)` : ''}.${conJefe ? ` Trae <b>jefe directo</b> para ${conJefe}.` : ''}${conNac ? ` Trae <b>fecha de nacimiento</b> (Cumpleaños) para ${conNac}.` : ''}${m.faltantes.length ? ` Columnas no encontradas: ${m.faltantes.map((c) => COL_NOMBRES[c]).join(', ')}.` : ''}</div>
         <div><button class="btn" id="subir">Cargar empleados</button></div>`;
       previa.querySelector('#subir').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
         const r = await llamar('cargarEmpleados', { filas: m.filas });
         if (!r.ok) return errorEn(err, r.message);
         const { resumen: x, revisar, sinFecha, total, jefes, sinCedula = [] } = r.data;
         const nf = (jefes && jefes.noEncontrados) || [];
-        previa.innerHTML = `<div class="aviso"><b>${x.agregados}</b> agregados · <b>${x.actualizados}</b> actualizados · <b>${x.inactivados}</b> pasaron a inactivos · ${total} en total.</div>
+        const nac = r.data.conNacimiento == null ? '<div class="error-msg">El Apps Script de esta hoja no está actualizado: no guardó las fechas de nacimiento. Pega la versión nueva de RRHH.gs y vuelve a cargar el Detalle.</div>'
+          : conNac && !r.data.conNacimiento ? '<div class="error-msg">No se guardó ninguna fecha de nacimiento. Revisa que el Apps Script esté actualizado.</div>'
+          : `<div class="aviso">Fecha de nacimiento (cumpleaños): <b>${r.data.conNacimiento}</b> de ${r.data.activos} empleados activos.</div>`;
+        previa.innerHTML = `<div class="aviso"><b>${x.agregados}</b> agregados · <b>${x.actualizados}</b> actualizados · <b>${x.inactivados}</b> pasaron a inactivos · ${total} en total.</div>${nac}
           ${sinCedula.length ? `<div class="error-msg"><b>${sinCedula.length} fila${sinCedula.length === 1 ? '' : 's'} sin cédula válida no se importaron:</b> ${sinCedula.map(esc).join(', ')}. Si es un directivo que no es empleado (como la CEO), no hace falta que esté en el detalle: créale su usuario de RRHH en la hoja.</div>` : ''}
           ${jefes && jefes.traeColumna ? `<div class="aviso">Jefe directo asignado a <b>${jefes.asignados}</b> empleados.${jefes.sinJefeEnArchivo ? ` ${jefes.sinJefeEnArchivo} vienen sin jefe en el archivo.` : ''}</div>` : ''}
           ${nf.length ? `<div class="error-msg"><b>Jefes que no se encontraron entre los empleados</b> (esas personas conservan el jefe que tenían; asígnalo abajo):
@@ -1578,6 +1643,7 @@ function irAviso(ruta) {
   cerrarAvisos();
   const s = sesion.leer() || {};
   const destino = SECCIONES.includes(ruta) ? ruta : 'inicio';
+  if (s.rol !== 'TRABAJADOR' && ruta === 'nominas' && CONFIG.PRUEBAS) { pestana = 'nominas'; subNom = 'pendientes'; return vistaRRHH(); }
   if (s.rol === 'TRABAJADOR') return navegar(destino);
   if (destino === 'equipo' && s.esJefe && !s.tokenTrabajador) pestana = 'miequipo';
   else if (s.tokenTrabajador) { pestana = 'micuenta'; seccionMiCuenta = destino; }
@@ -1971,12 +2037,12 @@ const irOmega = (panel, cambios) => { Object.assign(omegaUI, cambios); panelOmeg
 async function panelOmega(panel) {
   panel.innerHTML = `<section class="tarjeta"><h2>Omega Capital</h2>${esqueleto(2)}</section>`;
   try {
-    if (omegaUI.vista === 'quincena') return await vistaQuincenaOmega(panel);
+    if (omegaUI.vista === 'quincena') return await vistaProcesoQuincena(panel);
     if (omegaUI.vista === 'lote') return await vistaLoteOmega(panel);
     if (omegaUI.vista === 'tarjetas') return await vistaTarjetasOmega(panel);
     if (omegaUI.vista === 'beneficios') return await vistaBeneficiosOmega(panel);
     if (omegaUI.vista === 'empresas') return await vistaEmpresasOmega(panel);
-    return await vistaInicioOmega(panel);
+    return await vistaInicioQuincena(panel);
   } catch (ex) { panel.innerHTML = `<p class="error-msg">${esc(ex.message || 'Error')}</p>`; }
 }
 function respuestaOmega(panel, r) {
@@ -1986,7 +2052,7 @@ function respuestaOmega(panel, r) {
   panel.querySelector('#om-volver').addEventListener('click', () => irOmega(panel, { vista: 'inicio' }));
   return null;
 }
-const volverOmega = (texto = 'Omega Capital') => `<button class="btn btn-sec btn-chico" data-om-volver>‹ ${esc(texto)}</button>`;
+const volverOmega = (texto = 'Quincenas') => `<button class="btn btn-sec btn-chico" data-om-volver>‹ ${esc(texto)}</button>`;
 
 async function vistaInicioOmega(panel) {
   const d = respuestaOmega(panel, await llamar('omegaInicio', {}));
@@ -2114,15 +2180,38 @@ function pintarLoteOmega(panel, d) {
         <label class="grow">Buscar <input id="q-om" value="${esc(omegaUI.buscar)}" placeholder="Nombre o cédula"></label>
         <label>Ver <select id="f-om"><option value="">Todas (${d.lineas.length})</option><option value="avisos"${omegaUI.filtro === 'avisos' ? ' selected' : ''}>Con avisos</option><option value="ajustadas"${omegaUI.filtro === 'ajustadas' ? ' selected' : ''}>Monto cambiado</option><option value="excluidas"${omegaUI.filtro === 'excluidas' ? ' selected' : ''}>Excluidas</option></select></label>
       </div>
-      <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th class="num">Mes en $</th>${q.quincena === 2 ? '<th class="num">Anticipo 1Q</th>' : ''}<th class="num">Monto Bs.</th>${validado ? '' : '<th>Incluir</th>'}</tr></thead>
+      <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th class="num">Mes en $</th>${q.quincena === 2 ? '<th class="num">Anticipo 1Q</th>' : ''}<th class="num">Monto Bs.</th>${l.tipo === 'TRANSFERENCIA' ? '<th class="num">Adicional Bs.</th>' : ''}${validado ? '' : '<th>Incluir</th>'}</tr></thead>
       <tbody>${lineas.map((x) => `<tr class="${x.excluida ? 'inactivo' : ''}">
         <td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(detalle(x))}${notas(x).length ? ' · ' + notas(x).map(esc).join(' · ') : ''}</span>
           ${x.avisos.map((a) => `<span class="chip chip-${a.tipo === 'error' ? 'error' : 'espera'}">${esc(a.texto)}</span>`).join(' ')}</td>
         <td class="num">${esc(x.cedula)}</td><td class="num">${usd(x.usd)}</td>${q.quincena === 2 ? `<td class="num">${bs(x.anticipoBs)}</td>` : ''}
-        <td class="num">${validado || x.excluida ? `<b>${bs(x.montoBs)}</b>` : `<input class="monto-om${x.ajustado ? ' ajustado' : ''}" data-monto="${esc(x.clave)}" value="${x.montoBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" aria-label="Monto en Bs.">`}</td>
-        ${validado ? '' : `<td><input type="checkbox" data-incluir="${esc(x.clave)}"${x.excluida ? '' : ' checked'} aria-label="Incluir en el lote"></td>`}</tr>`).join('') || '<tr><td colspan="6" class="vacio">Nadie coincide.</td></tr>'}</tbody></table></div>
+        <td class="num">${validado || x.excluida || x.agregada ? `<b>${bs(x.montoBs - (validado ? 0 : x.adicional || 0))}</b>` : `<input class="monto-om${x.ajustado ? ' ajustado' : ''}" data-monto="${esc(x.clave)}" value="${(x.montoBs - (x.adicional || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" aria-label="Monto en Bs.">`}</td>
+        ${l.tipo === 'TRANSFERENCIA' ? `<td class="num">${validado ? (x.detalle && x.detalle.adicionalBs ? `${bs(x.detalle.adicionalBs)}<br><span class="suave">${esc(x.detalle.notaAdicional || '')}</span>` : '') : `<input class="monto-om${x.adicional ? ' ajustado' : ''}" data-adic="${esc(x.clave)}" value="${x.adicional ? x.adicional.toLocaleString('es-VE', { minimumFractionDigits: 2 }) : ''}" placeholder="0,00" inputmode="decimal" aria-label="Monto adicional">${x.notaAdicional ? `<br><span class="suave">${esc(x.notaAdicional)}</span>` : ''}`}</td>` : ''}
+        ${validado ? '' : `<td><input type="checkbox" data-incluir="${esc(x.clave)}"${x.excluida ? '' : ' checked'} aria-label="Incluir en el lote"></td>`}</tr>`).join('') || '<tr><td colspan="7" class="vacio">Nadie coincide.</td></tr>'}</tbody></table></div>
+      ${l.tipo === 'TRANSFERENCIA' && !validado ? `<label class="buscador-nom">Agregar a alguien con un monto adicional en esta quincena <input id="busca-adic" placeholder="Nombre o cédula" autocomplete="off"><div id="res-adic" class="resultados-nom" hidden></div></label>` : ''}
     </section>`;
   panel.querySelector('[data-om-volver]').addEventListener('click', () => irOmega(panel, { vista: 'quincena' }));
+  panel.querySelectorAll('[data-adic]').forEach((i) => i.addEventListener('change', () => {
+    const v = numVe(i.value); if (v !== '' && !isFinite(v)) { toast('Monto no válido.'); return; }
+    const nota = v ? (prompt('¿Por qué es este monto adicional? (opcional)', (d.lineas.find((x) => x.clave === i.dataset.adic) || {}).notaAdicional || '') || '') : '';
+    ajustar(i.dataset.adic, { adicional: v === '' ? 0 : v, nota });
+  }));
+  const ba = panel.querySelector('#busca-adic');
+  if (ba) {
+    const ra = panel.querySelector('#res-adic'); let tb;
+    ba.addEventListener('input', () => { clearTimeout(tb); tb = setTimeout(async () => {
+      if (ba.value.trim().length < 2) { ra.hidden = true; return; }
+      const x = await llamar('listarEmpleados', { buscar: ba.value.trim() });
+      const lista = x.ok ? x.data.empleados.filter((e) => e.estado !== 'Inactivo' && e.empresa === l.empresa).slice(0, 8) : [];
+      ra.innerHTML = lista.map((e) => `<button type="button" class="opcion-nom" data-agr="${esc(e.clave)}"${d.lineas.some((y) => y.clave === e.clave) ? ' disabled' : ''}><b>${esc(e.nombre)}</b><span>${esc(e.clave)}${e.puesto ? ' · ' + esc(e.puesto) : ''}${d.lineas.some((y) => y.clave === e.clave) ? ' · ya está en el lote' : ''}</span></button>`).join('') || `<p class="suave">Nadie activo de ${esc(l.empresa)} coincide.</p>`;
+      ra.hidden = false;
+      ra.querySelectorAll('[data-agr]').forEach((o) => o.addEventListener('click', () => {
+        const monto = numVe(prompt('Monto adicional en Bs.:') || ''); if (!(monto > 0)) return;
+        const nota = prompt('¿Por qué? (opcional)') || '';
+        ajustar(o.dataset.agr, { adicional: monto, nota, agregar: true });
+      }));
+    }, 300); });
+  }
   const ajustar = async (clave, cambio) => {
     const x = await llamar('omegaAjustarLinea', { id: q.id, lote: l.id, clave, cambio });
     if (!x.ok) return toast(x.message);
@@ -2312,4 +2401,1086 @@ async function vistaEmpresasOmega(panel) {
     if (!x.ok) return errorEn(err, x.message);
     toast('Guardado.'); irOmega(panel, { vista: 'inicio' });
   }); });
+}
+
+/* ---------- RRHH: Nóminas especiales (el jefe solicita un pago especial; Gestión Humana lo registra en la nómina) ---------- */
+
+let subNom = 'solicitar';
+let borradorNomina = { concepto: '', moneda: 'Bs.', fechaPago: '', observacion: '', items: [] };
+const ESTADOS_NOM = { SOLICITADA: ['Por registrar', 'espera'], REGISTRADA: ['Registrada', 'ok'], RECHAZADA: ['Rechazada', 'error'], CANCELADA: ['Cancelada', 'neutro'] };
+const montoNom = (n, moneda) => (moneda === '$' ? usd(n) : bs(n));
+
+async function panelNominas(panel) {
+  const r = await llamar('listarNominasEspeciales', {});
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } panel.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const { yo, solicitudes } = r.data, pend = solicitudes.filter((x) => x.estado === 'SOLICITADA');
+  const SUB = [['solicitar', 'Solicitar nómina'], ['pendientes', `Por registrar${pend.length ? ` (${pend.length})` : ''}`], ['historial', 'Historial']];
+  panel.innerHTML = `<div class="submodulos" role="tablist">${SUB.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subNom}">${t}</button>`).join('')}</div><div id="sub"></div>`;
+  panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subNom = b.dataset.sub; panelNominas(panel); }));
+  const sub = panel.querySelector('#sub');
+  if (subNom === 'pendientes') return pintarListaNominas(panel, sub, pend, yo, true);
+  if (subNom === 'historial') return pintarListaNominas(panel, sub, solicitudes, yo, false);
+  return pintarSolicitarNomina(panel, sub);
+}
+
+function pintarSolicitarNomina(panel, sub) {
+  const b = borradorNomina, total = b.items.reduce((t, x) => t + (Number(x.monto) || 0), 0);
+  sub.innerHTML = `<section class="tarjeta">
+      <div><h2>Solicitar nómina de pago especial</h2><p class="suave">Busca a cada persona, asígnale el monto y envía la solicitud. Gestión Humana la recibe con cédula, nombre y monto para registrarla en el sistema de nómina.</p></div>
+      <form id="fnom" class="form-vac" novalidate>
+        <div class="fila">
+          <label class="grow">Concepto <input name="concepto" maxlength="120" value="${esc(b.concepto)}" placeholder="Ej.: Bono por cierre de inventario"></label>
+          <label>Moneda <select name="moneda">${['Bs.', '$'].map((m) => `<option${m === b.moneda ? ' selected' : ''}>${m}</option>`).join('')}</select></label>
+          <label>Fecha de pago (opcional) <input type="date" name="fechaPago" value="${esc(b.fechaPago)}"></label>
+        </div>
+        <label>Observación (opcional) <textarea name="observacion" maxlength="500">${esc(b.observacion)}</textarea></label>
+        <div class="carga-nom"><label class="grow">¿Te enviaron un Excel de comisiones? Cárgalo y el sistema busca a cada persona <input type="file" id="xls-nom" accept=".xlsx,.xls"></label></div>
+        <div id="cruce-nom"></div>
+        <label class="buscador-nom">Agregar persona <input id="busca-nom" placeholder="Escribe el nombre o la cédula" autocomplete="off"><div id="res-nom" class="resultados-nom" hidden></div></label>
+        <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th>Empresa</th><th class="num">Monto (${esc(b.moneda)})</th><th></th></tr></thead><tbody>
+          ${b.items.map((x, i) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.manual ? 'No está en el CAC: escrita a mano' : x.puesto || '')}${x.nombresReporte && x.nombresReporte.length ? ' · en el Excel: ' + esc(x.nombresReporte.join(', ')) : ''}</span></td><td class="num">${esc(x.manual ? x.cedula : x.clave.slice(1))}</td><td>${esc(x.empresa || '')}</td>
+            <td class="num"><input class="monto-om" data-monto-nom="${i}" value="${x.monto === '' || x.monto == null ? '' : Number(x.monto).toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" placeholder="0,00" aria-label="Monto"></td>
+            <td><button class="btn btn-sec btn-chico" type="button" data-quitar-nom="${i}">Quitar</button></td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Todavía no has agregado personas.</td></tr>'}
+          </tbody>${b.items.length ? `<tfoot><tr class="fila-total"><td colspan="3"><b>${b.items.length} persona${b.items.length === 1 ? '' : 's'}</b></td><td class="num"><b>${montoNom(total, b.moneda)}</b></td><td></td></tr></tfoot>` : ''}</table></div>
+        <div class="error-msg" id="err-nom" hidden></div>
+        <div class="fila"><button class="btn" type="submit">Solicitar</button>${b.items.length ? '<button class="btn btn-sec" type="button" id="limpiar-nom">Empezar de nuevo</button>' : ''}</div>
+      </form></section>`;
+  const f = sub.querySelector('#fnom'), err = sub.querySelector('#err-nom');
+  ['concepto', 'moneda', 'fechaPago', 'observacion'].forEach((k) => f[k].addEventListener('change', () => { b[k] = f[k].value; if (k === 'moneda') pintarSolicitarNomina(panel, sub); }));
+  sub.querySelectorAll('[data-monto-nom]').forEach((i) => i.addEventListener('change', () => { b.items[Number(i.dataset.montoNom)].monto = numVe(i.value); pintarSolicitarNomina(panel, sub); }));
+  sub.querySelectorAll('[data-quitar-nom]').forEach((x) => x.addEventListener('click', () => { b.items.splice(Number(x.dataset.quitarNom), 1); pintarSolicitarNomina(panel, sub); }));
+  sub.querySelector('#limpiar-nom')?.addEventListener('click', () => { if (confirm('¿Borrar esta solicitud sin enviarla?')) { borradorNomina = { concepto: '', moneda: 'Bs.', fechaPago: '', observacion: '', items: [] }; pintarSolicitarNomina(panel, sub); } });
+  const busca = sub.querySelector('#busca-nom'), res = sub.querySelector('#res-nom'); let tb, ultima = '';
+  busca.addEventListener('input', () => { clearTimeout(tb); tb = setTimeout(async () => {
+    const q = busca.value.trim(); ultima = q;
+    if (q.length < 2) { res.hidden = true; return; }
+    const x = await llamar('listarEmpleados', { buscar: q });
+    if (q !== ultima) return;
+    const lista = x.ok ? x.data.empleados.filter((e) => e.estado !== 'Inactivo').slice(0, 8) : [];
+    res.innerHTML = lista.map((e) => `<button type="button" class="opcion-nom" data-agregar='${esc(JSON.stringify({ clave: e.clave, nombre: e.nombre, empresa: e.empresa, puesto: e.puesto }))}'${b.items.some((y) => y.clave === e.clave) ? ' disabled' : ''}>
+      <b>${esc(e.nombre)}</b><span>${esc(e.clave)} · ${esc(e.empresa)}${e.puesto ? ' · ' + esc(e.puesto) : ''}${b.items.some((y) => y.clave === e.clave) ? ' · ya agregado' : ''}</span></button>`).join('') || '<p class="suave">Nadie activo coincide.</p>';
+    res.hidden = false;
+    res.querySelectorAll('[data-agregar]').forEach((o) => o.addEventListener('click', () => {
+      b.items.push(Object.assign(JSON.parse(o.dataset.agregar), { monto: '' }));
+      pintarSolicitarNomina(panel, sub);
+      const m = sub.querySelector(`[data-monto-nom="${b.items.length - 1}"]`); if (m) m.focus();
+    }));
+  }, 300); });
+  activarCruceNomina(panel, sub);
+  f.addEventListener('submit', (e) => { e.preventDefault(); errorEn(err, '');
+    if (cruceNom && cruceNom.origen === 'solicitar') return errorEn(err, 'Termina de revisar el Excel: toca «Agregar a la solicitud» o descártalo.');
+    ['concepto', 'moneda', 'fechaPago', 'observacion'].forEach((k) => { b[k] = f[k].value; });
+    sub.querySelectorAll('[data-monto-nom]').forEach((i) => { b.items[Number(i.dataset.montoNom)].monto = numVe(i.value); });
+    if (!b.concepto.trim()) return errorEn(err, 'Escribe el concepto del pago.');
+    if (!b.items.length) return errorEn(err, 'Agrega al menos una persona.');
+    const sinMonto = b.items.find((x) => !(Number(x.monto) > 0));
+    if (sinMonto) return errorEn(err, `Falta el monto de ${sinMonto.nombre}.`);
+    const tot = b.items.reduce((t, x) => t + Number(x.monto), 0);
+    if (!confirm(`¿Solicitar «${b.concepto}» para ${b.items.length} persona${b.items.length === 1 ? '' : 's'} por ${montoNom(tot, b.moneda)}?`)) return;
+    conBoton(f.querySelector('button[type=submit]'), async () => {
+      const x = await llamar('solicitarNominaEspecial', { concepto: b.concepto, moneda: b.moneda, fechaPago: b.fechaPago, observacion: b.observacion,
+        items: b.items.map((y) => (y.manual ? { cedula: y.cedula, nombre: y.nombre, monto: y.monto } : { clave: y.clave, monto: y.monto, nombresReporte: y.nombresReporte || [] })) });
+      if (!x.ok) return errorEn(err, x.message);
+      borradorNomina = { concepto: '', moneda: 'Bs.', fechaPago: '', observacion: '', items: [] };
+      toast('Solicitud enviada a Gestión Humana.'); subNom = 'historial'; panelNominas(panel);
+    });
+  });
+}
+
+function pintarListaNominas(panel, sub, lista, yo, pendientes) {
+  const digit = (c) => String(c || '').replace(/\D/g, '');
+  sub.innerHTML = lista.length ? lista.map((n) => {
+    const [txt, tono] = ESTADOS_NOM[n.estado] || [n.estado, 'neutro'], mia = digit(n.solicitadaPor) === yo;
+    return `<section class="tarjeta">
+      <div class="item-cab"><div><h2>${esc(n.concepto)}</h2><p class="suave">Solicitada por ${esc(n.solicitadaPorNombre)} · ${esc(fechaHoraMin(n.solicitada))}${n.fechaPago ? ` · pagar el ${esc(window.Vacaciones ? window.Vacaciones.corta(n.fechaPago) : n.fechaPago)}` : ''}</p></div><span class="chip chip-${tono}">${txt}</span></div>
+      ${n.observacion ? `<p class="aviso">${esc(n.observacion)}</p>` : ''}
+      <div class="tabla-caja"><table class="tabla-omega tabla-nom"><thead><tr><th class="num">Cédula</th><th>Nombre</th><th>Empresa</th><th class="num">Monto (${esc(n.moneda)})</th></tr></thead><tbody>
+        ${n.items.map((x) => `<tr><td class="num">${esc(x.cedula)}</td><td>${esc(x.nombre)}</td><td>${esc(x.empresa)}</td><td class="num">${montoNom(x.monto, n.moneda)}</td></tr>`).join('')}
+      </tbody><tfoot><tr class="fila-total"><td colspan="3"><b>${n.personas} persona${n.personas === 1 ? '' : 's'}</b></td><td class="num"><b>${montoNom(n.total, n.moneda)}</b></td></tr></tfoot></table></div>
+      ${n.verificacion ? `<p class="${n.verificacion.menor || n.verificacion.no ? 'error-msg' : 'aviso'}">Verificada con «${esc(n.verificacion.archivo)}» el ${esc(fechaHoraMin(n.verificacion.cuando))}: ${n.verificacion.ok} correctas${n.verificacion.mayor ? `, ${n.verificacion.mayor} con otras asignaciones mayores` : ''}${n.verificacion.menor ? `, <b>${n.verificacion.menor} con monto menor</b>` : ''}${n.verificacion.no ? `, <b>${n.verificacion.no} sin registrar</b>` : ''}.</p>` : ''}
+      <div id="verif-${esc(n.id)}"></div>
+      ${n.estado === 'REGISTRADA' ? `<p class="suave">Registrada por ${esc(n.atendidaPorNombre)} · ${esc(fechaHoraMin(n.atendida))}${n.referencia ? ` · referencia ${esc(n.referencia)}` : ''}</p>` : ''}
+      ${n.estado === 'RECHAZADA' ? `<p class="error-msg">Rechazada por ${esc(n.atendidaPorNombre)}: ${esc(n.motivo)}</p>` : ''}
+      <div class="fila">
+        <button class="btn btn-sec btn-chico" data-copiar-nom="${esc(n.id)}">Copiar cédula, nombre y monto</button>
+        <button class="btn btn-sec btn-chico" data-xls-nom="${esc(n.id)}">Descargar Excel</button>
+        <button class="btn btn-sec btn-chico" data-verif-nom="${esc(n.id)}">Verificar con el Resumen de Pago (PDF)</button>
+        ${n.estado === 'SOLICITADA' ? `<button class="btn btn-chico" data-reg-nom="${esc(n.id)}">Marcar como registrada</button><button class="btn btn-sec btn-chico" data-rech-nom="${esc(n.id)}">Rechazar</button>` : ''}
+        ${n.estado === 'SOLICITADA' && mia ? `<button class="btn btn-sec btn-chico" data-canc-nom="${esc(n.id)}">Cancelar mi solicitud</button>` : ''}
+      </div></section>`;
+  }).join('') : `<section class="tarjeta"><p class="vacio">${pendientes ? 'No hay nóminas especiales por registrar.' : 'Todavía no hay solicitudes.'}</p></section>`;
+  const porId = (id) => lista.find((n) => n.id === id);
+  sub.querySelectorAll('[data-copiar-nom]').forEach((b) => b.addEventListener('click', async () => {
+    const n = porId(b.dataset.copiarNom);
+    const texto = ['Cédula\tNombre\tMonto', ...n.items.map((x) => `${x.cedula}\t${x.nombre}\t${x.monto.toFixed(2).replace('.', ',')}`)].join('\n');
+    try { await navigator.clipboard.writeText(texto); toast('Copiado: pégalo en Excel o en el sistema de nómina.'); } catch { toast('No se pudo copiar; usa «Descargar Excel».'); }
+  }));
+  sub.querySelectorAll('[data-xls-nom]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const n = porId(b.dataset.xlsNom), XLSX = await cargarXlsx(), libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(n.items.map((x) => ({ 'Cédula': Number(x.cedula), Nombre: x.nombre, Empresa: x.empresa, [`Monto (${n.moneda})`]: x.monto }))), 'Nómina especial');
+    XLSX.writeFile(libro, `Nomina-especial-${n.concepto.replace(/[^\w\sáéíóúñÁÉÍÓÚÑ-]/g, '').replace(/\s+/g, '-').slice(0, 40)}-${n.id}.xlsx`);
+  })));
+  const atender = (accion, datos, mensaje) => async () => {
+    const x = await llamar(accion, datos);
+    if (!x.ok) { toast(x.message); return x; }
+    toast(mensaje); panelNominas(panel); return x;
+  };
+  sub.querySelectorAll('[data-verif-nom]').forEach((b) => b.addEventListener('click', () => {
+    const n = porId(b.dataset.verifNom), inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'application/pdf,.pdf' });
+    inp.addEventListener('change', () => conBoton(b, async () => {
+      const archivo = inp.files[0]; if (!archivo) return;
+      try { await verificarNominaPdf(panel, sub, n, archivo, b); } catch (ex) { toast(ex.message || 'No se pudo leer el PDF.'); }
+    }));
+    inp.click();
+  }));
+  sub.querySelectorAll('[data-reg-nom]').forEach((b) => b.addEventListener('click', () => {
+    const n = porId(b.dataset.regNom);
+    dlg.innerHTML = `<form id="freg" novalidate><h2>Marcar como registrada</h2><p class="suave">«${esc(n.concepto)}»: ${n.personas} persona${n.personas === 1 ? '' : 's'} por ${montoNom(n.total, n.moneda)}. Se le avisa a ${esc(n.solicitadaPorNombre)}.</p>
+      <label>Referencia de la nómina (opcional) <input name="referencia" maxlength="80" placeholder="Ej.: NE-015"></label>
+      <div class="fila"><button class="btn grow" type="submit">Registrada</button><button class="btn btn-sec" type="button" id="no">Cerrar</button></div></form>`;
+    const f = dlg.querySelector('#freg');
+    dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+    f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(f.querySelector('button'), async () => { dlg.close(); await atender('registrarNominaEspecial', { id: n.id, referencia: f.referencia.value }, 'Marcada como registrada.')(); }); });
+    dlg.showModal(); f.referencia.focus();
+  }));
+  sub.querySelectorAll('[data-rech-nom]').forEach((b) => b.addEventListener('click', () => pedirMotivo('Rechazar nómina especial', async (motivo) => {
+    const x = await llamar('rechazarNominaEspecial', { id: b.dataset.rechNom, motivo });
+    if (x.ok) { toast('Rechazada.'); panelNominas(panel); }
+    return x;
+  })));
+  sub.querySelectorAll('[data-canc-nom]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm('¿Cancelar tu solicitud?')) return;
+    await atender('cancelarNominaEspecial', { id: b.dataset.cancNom }, 'Solicitud cancelada.')();
+  })));
+}
+
+/* ---- Cargar el Excel de comisiones de la gerencia: nombres sin cédula → empleados del CAC ---- */
+let cruceNom = null;   // { archivo, filas: [{ hoja, sucursal, nombre, monto, nota, clave, estado, candidatos, incluir, manual }], empleados }
+const ESTADO_CRUCE = { alias: ['Ya conocido', 'ok'], exacto: ['Coincide', 'ok'], sugerido: ['Sugerido', 'austral'], ambiguo: ['Elige', 'espera'], sin: ['No encontrado', 'error'], manual: ['A mano', 'neutro'], elegido: ['Elegido', 'ok'] };
+
+function activarCruceNomina(panel, sub) {
+  const inp = sub.querySelector('#xls-nom'), caja = sub.querySelector('#cruce-nom');
+  const destino = { origen: 'solicitar', caja,
+    alDescartar: () => { cruceNom = null; pintarSolicitarNomina(panel, sub); },
+    alAgregar: (grupos, avisos) => {
+      const b = borradorNomina;
+      grupos.forEach((g) => {
+        const ya = b.items.find((y) => (g.manual ? y.manual && y.cedula === g.cedula : y.clave === g.clave));
+        if (ya) { ya.monto = Math.round(((Number(ya.monto) || 0) + g.monto) * 100) / 100; ya.nombresReporte = [...new Set([...(ya.nombresReporte || []), ...g.nombresReporte])]; }
+        else b.items.push(g);
+      });
+      if (!b.concepto) b.concepto = cruceNom.archivo.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').slice(0, 120);
+      cruceNom = null; pintarSolicitarNomina(panel, sub);
+      toast(avisos.length ? `Agregado. ${avisos.join('; ')}.` : 'Agregado a la solicitud. Revisa y toca «Solicitar».');
+    } };
+  inp.addEventListener('change', () => { const archivo = inp.files[0]; if (archivo) iniciarCruce(archivo, destino); });
+  if (cruceNom && cruceNom.origen === 'solicitar') { Object.assign(cruceNom, destino); pintarCruceNomina(); }
+}
+
+/** Lee el Excel de comisiones y prepara la revisión. destino: { origen, caja, alAgregar(grupos, avisos), alDescartar() } */
+async function iniciarCruce(archivo, destino) {
+  const caja = destino.caja;
+  {
+    caja.innerHTML = '<p class="suave">Leyendo el Excel…</p>';
+    try {
+      const XLSX = await cargarXlsx(), libro = await leerLibro(archivo);
+      const hojas = libro.SheetNames.map((nombre) => ({ nombre, matriz: XLSX.utils.sheet_to_json(libro.Sheets[nombre], { header: 1, defval: null, raw: true }) }));
+      const filas = window.Comisiones.leerExcelComisiones(hojas);
+      if (!filas.length) { caja.innerHTML = '<p class="error-msg">No encontré la columna «Total a pagar» o «Monto a pagar» en ninguna hoja.</p>'; return; }
+      const r = await obtener('datosCruceNomina', {});
+      if (!r.ok) { caja.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+      const emp = r.data.empleados;
+      cruceNom = { ...destino, archivo: archivo.name, empleados: emp, filas: filas.map((f) => {
+        const c = window.Comisiones.cruzarNombre(f.nombre, f.sucursal, emp, r.data.alias);
+        return { ...f, ...c, incluir: f.monto !== 0 && !!c.clave && !window.Comisiones.notaExcluye(f.nota) };
+      }) };
+      pintarCruceNomina();
+    } catch (ex) { caja.innerHTML = `<p class="error-msg">${esc(ex.message || 'No se pudo leer el Excel.')}</p>`; }
+  }
+}
+
+function pintarCruceNomina() {
+  const c = cruceNom;
+  if (!c) return;
+  const caja = c.caja;
+  const emp = c.empleados.filter((e) => e.estado !== 'Inactivo').sort((a, b) => (a.nombre < b.nombre ? -1 : 1));
+  const porClave = Object.fromEntries(c.empleados.map((e) => [e.clave, e]));
+  const visibles = c.filas.map((f, i) => [f, i]).filter(([f]) => f.monto !== 0 || f.nota);
+  const ocultas = c.filas.length - visibles.length;
+  const revisar = c.filas.filter((f) => f.monto !== 0 && !f.clave && !f.manual && !window.Comisiones.notaExcluye(f.nota)).length;
+  const incluidas = c.filas.filter((f) => f.incluir), total = incluidas.reduce((t, f) => t + f.monto, 0);
+  const opciones = (f) => {
+    const cand = (f.candidatos || []).map((x) => x.clave);
+    const op = (e) => `<option value="${esc(e.clave)}"${e.clave === f.clave ? ' selected' : ''}>${esc(e.nombre)} · ${esc(e.clave)}${e.organizacion ? ' · ' + esc(e.organizacion.replace(/^SUCURSAL /i, '')) : ''}</option>`;
+    return `<option value="">— Elige a la persona —</option>${cand.length ? `<optgroup label="Sugeridos">${cand.map((k) => porClave[k]).filter(Boolean).map(op).join('')}</optgroup>` : ''}
+      <optgroup label="Todos los activos">${emp.filter((e) => !cand.includes(e.clave)).map(op).join('')}</optgroup>
+      <option value="__manual">Otra persona (no está en el CAC)…</option>`;
+  };
+  caja.innerHTML = `<div class="revision-nom">
+    <div class="item-cab"><div><b>Revisa el Excel «${esc(c.archivo)}»</b><p class="suave">${c.filas.length} filas${ocultas ? ` (${ocultas} en cero ocultas)` : ''}. El sistema buscó a cada persona por su nombre; confirma las sugeridas y elige las que falten. Lo que elijas aquí lo recordará la próxima vez.</p></div>
+      ${revisar ? `<span class="chip chip-espera">${revisar} por revisar</span>` : '<span class="chip chip-ok">Todo cruzado</span>'}</div>
+    <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>En el Excel</th><th class="num">Monto</th><th>Persona en el CAC</th><th>Incluir</th></tr></thead><tbody>
+    ${visibles.map(([f, i]) => { const [t, tono] = ESTADO_CRUCE[f.manual ? 'manual' : f.estado] || ['', 'neutro'];
+      return `<tr class="${f.incluir ? '' : 'inactivo'}"><td><b>${esc(f.nombre)}</b><br><span class="suave">${esc(f.sucursal.replace(/^SUCURSAL /i, ''))} · ${esc(f.hoja)}</span>
+        ${f.nota ? `<br><span class="chip chip-${window.Comisiones.notaExcluye(f.nota) ? 'error' : 'austral'}">${esc(f.nota)}</span>` : ''}${f.monto < 0 ? '<br><span class="chip chip-espera">Monto negativo: se resta</span>' : ''}</td>
+        <td class="num">${bs(f.monto)}</td>
+        <td>${f.manual ? `<b>${esc(f.manual.nombre)}</b> · ${esc(f.manual.cedula)} <button type="button" class="btn btn-sec btn-chico" data-quitar-manual="${i}">Cambiar</button>`
+          : `<select class="sel-nom" data-sel-nom="${i}">${opciones(f)}</select>`}<br><span class="chip chip-${tono}">${t}</span></td>
+        <td><input type="checkbox" data-incl-nom="${i}"${f.incluir ? ' checked' : ''} aria-label="Incluir"></td></tr>`; }).join('')}
+    </tbody><tfoot><tr class="fila-total"><td><b>${incluidas.length} filas incluidas</b></td><td class="num"><b>${bs(total)}</b></td><td colspan="2"></td></tr></tfoot></table></div>
+    <div class="error-msg" id="err-cruce" hidden></div>
+    <div class="fila"><button type="button" class="btn" id="agregar-cruce">Agregar a la solicitud</button><button type="button" class="btn btn-sec" id="descartar-cruce">Descartar el Excel</button></div></div>`;
+  const repintar = () => pintarCruceNomina();
+  caja.querySelectorAll('[data-incl-nom]').forEach((x) => x.addEventListener('change', () => { c.filas[Number(x.dataset.inclNom)].incluir = x.checked; repintar(); }));
+  caja.querySelectorAll('[data-quitar-manual]').forEach((x) => x.addEventListener('click', () => { const f = c.filas[Number(x.dataset.quitarManual)]; f.manual = null; f.clave = ''; repintar(); }));
+  caja.querySelectorAll('[data-sel-nom]').forEach((x) => x.addEventListener('change', () => {
+    const f = c.filas[Number(x.dataset.selNom)];
+    if (x.value === '__manual') {
+      const ced = prompt(`Cédula de «${f.nombre}» (solo números):`); if (!ced || !/\d{5,}/.test(ced)) { repintar(); return; }
+      const nom = prompt('Nombre y apellido como va en la nómina:', f.nombre.replace(/-\s*POS\b/i, '').trim()); if (!nom) { repintar(); return; }
+      f.manual = { cedula: ced.replace(/\D/g, ''), nombre: nom.trim().toUpperCase() }; f.clave = ''; f.incluir = f.monto !== 0;
+    } else { f.clave = x.value; f.estado = x.value ? 'elegido' : f.estado; f.incluir = !!x.value && f.monto !== 0; }
+    repintar();
+  }));
+  caja.querySelector('#descartar-cruce').addEventListener('click', () => c.alDescartar());
+  caja.querySelector('#agregar-cruce').addEventListener('click', () => {
+    const err = caja.querySelector('#err-cruce');
+    const sinPersona = c.filas.filter((f) => f.incluir && !f.clave && !f.manual);
+    if (sinPersona.length) return errorEn(err, `Elige la persona de: ${sinPersona.map((f) => f.nombre).join(', ')} (o desmárcalas).`);
+    const avisos = [], grupos = {};
+    c.filas.filter((f) => f.incluir).forEach((f) => {
+      const k = f.manual ? 'M' + f.manual.cedula : f.clave;
+      if (!grupos[k]) {
+        const e = porClave[f.clave];
+        grupos[k] = f.manual ? { clave: '', manual: true, cedula: f.manual.cedula, nombre: f.manual.nombre, empresa: '', monto: 0, nombresReporte: [] }
+          : { clave: e.clave, nombre: e.nombre, empresa: e.empresa, puesto: e.puesto, monto: 0, nombresReporte: [] };
+      }
+      grupos[k].monto = Math.round((grupos[k].monto + f.monto) * 100) / 100;
+      if (!grupos[k].nombresReporte.includes(f.nombre)) grupos[k].nombresReporte.push(f.nombre);
+    });
+    const lista = Object.values(grupos).filter((g) => { if (g.monto > 0) return true; avisos.push(`${g.nombre} suma ${bs(g.monto)} y no se agregó`); return false; });
+    c.alAgregar(lista, avisos);
+  });
+}
+
+/* ---- Verificar una nómina especial contra el «Resumen de Pago» (PDF de la nómina): otras asignaciones por persona ---- */
+async function lineasPdf(archivo, progreso) {
+  const pdfjs = await cargarPdfJs(), doc = await pdfjs.getDocument({ data: new Uint8Array(await archivo.arrayBuffer()) }).promise, lineas = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const tc = await (await doc.getPage(i)).getTextContent(), filas = new Map();
+    tc.items.forEach((it) => { if (!it.str.trim()) return; const y = Math.round(it.transform[5] / 3); if (!filas.has(y)) filas.set(y, []); filas.get(y).push(it); });
+    [...filas.entries()].sort((a, b) => b[0] - a[0]).forEach(([, its]) => lineas.push(its.sort((a, b) => a.transform[4] - b.transform[4]).map((it) => it.str).join('  ')));
+    if (progreso) progreso(i, doc.numPages);
+  }
+  return lineas;
+}
+
+async function verificarNominaPdf(panel, sub, n, archivo, boton) {
+  const lineas = await lineasPdf(archivo, (i, t) => { boton.textContent = `Leyendo página ${i} de ${t}…`; });
+  const personas = window.Comisiones.leerResumenPago(lineas);
+  if (!personas.length) throw new Error('Ese PDF no parece un «Resumen de Pago» de la nómina (no encontré los «Total NOMBRE»).');
+  const v = window.Comisiones.verificar(n.items, personas);
+  const cuenta = (e) => v.filter((x) => x.estado === e).length;
+  const r = await llamar('guardarVerificacionNomina', { id: n.id, resumen: { archivo: archivo.name, ok: cuenta('ok'), mayor: cuenta('mayor'), menor: cuenta('menor'), no: cuenta('no'), detalle: v } });
+  if (r.ok) n.verificacion = r.data.verificacion;
+  const ETQ = { ok: ['Registrada', 'ok'], mayor: ['Registrada (otras asignaciones mayores)', 'austral'], menor: ['Monto menor', 'error'], no: ['No aparece en otras asignaciones', 'error'] };
+  const caja = sub.querySelector(`#verif-${CSS.escape(n.id)}`);
+  caja.innerHTML = `<div class="revision-nom"><b>Resultado con «${esc(archivo.name)}» (${personas.length} personas en el reporte)</b>
+    <p class="suave">${cuenta('ok')} correctas · ${cuenta('mayor')} con otras asignaciones mayores (pueden incluir otros pagos) · ${cuenta('menor')} con monto menor · ${cuenta('no')} sin registrar.</p>
+    <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Persona</th><th class="num">Solicitado</th><th class="num">Otras asignaciones</th><th class="num">Diferencia</th><th>Estado</th></tr></thead><tbody>
+    ${v.sort((a, b) => ['no', 'menor', 'mayor', 'ok'].indexOf(a.estado) - ['no', 'menor', 'mayor', 'ok'].indexOf(b.estado)).map((x) => `<tr><td><b>${esc(x.nombre)}</b>${x.enReporte && x.enReporte !== x.nombre ? `<br><span class="suave">En el reporte: ${esc(x.enReporte)}</span>` : ''}</td>
+      <td class="num">${montoNom(x.monto, n.moneda)}</td><td class="num">${x.enReporte ? bs(x.otras) : '—'}</td><td class="num">${x.estado === 'ok' ? '' : bs(x.diferencia)}</td>
+      <td><span class="chip chip-${ETQ[x.estado][1]}">${ETQ[x.estado][0]}</span></td></tr>`).join('')}</tbody></table></div>
+    ${n.estado === 'SOLICITADA' && !cuenta('no') && !cuenta('menor') ? '<p class="aviso">Todo quedó registrado: ya puedes marcarla como registrada.</p>' : ''}</div>`;
+  boton.textContent = 'Verificar con el Resumen de Pago (PDF)';
+}
+
+/* ======================= Quincena: proceso completo de nómina =======================
+ * 1 Detalle de empleado (ingresos y egresos) · 2 Vacaciones con pago · 3 Comisiones y Resumen de Pago
+ * 4 Cestaticket (reporte del sistema de nómina) · 5 Complemento de alimentación (Omega Transferencia) */
+const PASOS_Q = [['detalle', 'Detalle de empleado'], ['vacaciones', 'Vacaciones'], ['comisiones', 'Comisiones'], ['cestaticket', 'Cestaticket'], ['complemento', 'Complemento']];
+const repPdf = {};   // resultados de reportes PDF leídos en esta sesión, por quincena y paso
+
+async function vistaInicioQuincena(panel) {
+  const [lq, ini] = await Promise.all([llamar('quincenaListar', {}), llamar('omegaInicio', {})]);
+  const lista = respuestaOmega(panel, lq); if (!lista) return;
+  const d = respuestaOmega(panel, ini); if (!d) return;
+  const h = new Date(Date.now() - 4 * 3600e3), mesHoy = h.toISOString().slice(0, 7), qHoy = h.getUTCDate() <= 15 ? 1 : 2;
+  const faltaRif = Object.entries(d.config.empresas).filter(([, e]) => !e.rif).map(([k]) => k);
+  panel.innerHTML = `
+    <section class="tarjeta">
+      <div><h2>Quincena</h2><p class="suave">El proceso completo de la nómina quincenal: detalle de empleado (ingresos y egresos), vacaciones con pago, comisiones, cestaticket y complemento de alimentación, con los archivos para Omega.</p></div>
+      <form id="fq" class="form-vac" novalidate>
+        <div class="fila">
+          <label class="grow">Mes <input type="month" name="mes" value="${mesHoy}"></label>
+          <label class="grow">Quincena <select name="quincena"><option value="1"${qHoy === 1 ? ' selected' : ''}>1.ª quincena</option><option value="2"${qHoy === 2 ? ' selected' : ''}>2.ª quincena</option></select></label>
+          <label class="grow">Tasa estimada (Bs. por $) <input name="tasa" inputmode="decimal" placeholder="0,00"></label>
+        </div>
+        <div class="error-msg" id="err-q" hidden></div>
+        <div><button class="btn" type="submit">Abrir quincena</button></div>
+      </form>
+    </section>
+    <section class="tarjeta"><h2>Quincenas</h2>
+      ${lista.length ? `<div class="lista">${lista.map((q) => `<div class="item"><div class="item-cab"><div><b>${esc(etiquetaQ(q))}</b><p class="suave">Tasa Bs. ${q.tasa.toLocaleString('es-VE')} · ${q.hechos} de 5 pasos listos</p></div>
+        ${q.hechos === 5 ? '<span class="chip chip-ok">Completa</span>' : '<span class="chip chip-espera">En proceso</span>'}</div>
+        <div><button class="btn btn-chico" data-om-q="${esc(q.id)}">Abrir</button></div></div>`).join('')}</div>` : '<p class="vacio">Todavía no has abierto ninguna quincena.</p>'}
+    </section>
+    <section class="tarjeta"><h2>Configuración de Omega</h2>
+      <div class="accesos">
+        <button class="acceso acceso-azul" type="button" data-om-ir="tarjetas"><span class="acceso-texto"><b>Tarjetas de alimentación</b><span>${d.sinTarjeta} sin tarjeta: su cestaticket va por Transferencia.</span></span></button>
+        <button class="acceso acceso-rojo" type="button" data-om-ir="beneficios"><span class="acceso-texto"><b>Complemento de alimentación</b><span>${d.beneficiosCargados} personas con montos en $ (complemento, vehículo, bono, comisiones garantizadas).</span></span></button>
+        <button class="acceso acceso-carbon" type="button" data-om-ir="empresas"><span class="acceso-texto"><b>Empresas y porcentajes</b><span>Razón social y RIF para los archivos de Omega.</span>${faltaRif.length ? `<span class="chip chip-error">Falta el RIF de ${faltaRif.join(' y ')}</span>` : ''}</span></button>
+      </div></section>`;
+  panel.querySelectorAll('[data-om-ir]').forEach((b) => b.addEventListener('click', () => irOmega(panel, { vista: b.dataset.omIr, buscar: '', filtro: '' })));
+  panel.querySelectorAll('[data-om-q]').forEach((b) => b.addEventListener('click', () => irOmega(panel, { vista: 'quincena', id: b.dataset.omQ, paso: '' })));
+  const f = panel.querySelector('#fq'), err = panel.querySelector('#err-q');
+  f.addEventListener('submit', (e) => { e.preventDefault(); errorEn(err, ''); conBoton(f.querySelector('button'), async () => {
+    const x = await llamar('quincenaAbrir', { mes: f.mes.value, quincena: Number(f.quincena.value), tasa: numVe(f.tasa.value) });
+    if (!x.ok) {
+      if (x.code === 'DUPLICADO') return irOmega(panel, { vista: 'quincena', id: `${f.mes.value}-${f.quincena.value}`, paso: '' });
+      return errorEn(err, x.message);
+    }
+    irOmega(panel, { vista: 'quincena', id: x.data.id, paso: 'detalle' });
+  }); });
+}
+
+async function vistaProcesoQuincena(panel) {
+  const q = respuestaOmega(panel, await llamar('quincenaVer', { id: omegaUI.id }));
+  if (!q) return;
+  if (!omegaUI.paso) omegaUI.paso = (PASOS_Q.find(([k]) => !(q.pasos[k] && q.pasos[k].hecho)) || PASOS_Q[0])[0];
+  const hayValidados = q.lotes.some((l) => l.estado === 'VALIDADO');
+  panel.innerHTML = `<div>${volverOmega()}</div>
+    <section class="tarjeta">
+      <div class="item-cab"><div><h2>${esc(etiquetaQ(q))}</h2><p class="suave">${q.quincena === 1 ? `Cestaticket: anticipo de $20 a la tasa estimada.` : 'Cestaticket: $40 a la tasa estimada menos el anticipo de la 1.ª quincena.'}</p></div>
+        <form id="ft" class="fila" novalidate><label>Tasa estimada <input name="tasa" inputmode="decimal" value="${q.tasa.toLocaleString('es-VE')}" ${hayValidados ? 'disabled' : ''} style="max-width:140px"></label>${hayValidados ? '' : '<div><button class="btn btn-sec btn-chico" type="submit">Cambiar</button></div>'}</form></div>
+      <ol class="pasos-q">${PASOS_Q.map(([k, t], i) => `<li><button type="button" data-paso="${k}" aria-current="${k === omegaUI.paso ? 'step' : 'false'}" class="${q.pasos[k] && q.pasos[k].hecho ? 'hecho' : ''}"><span class="num-paso">${q.pasos[k] && q.pasos[k].hecho ? '✓' : i + 1}</span>${t}</button></li>`).join('')}</ol>
+    </section>
+    <div id="paso-q">${esqueleto(2)}</div>`;
+  panel.querySelector('[data-om-volver]').addEventListener('click', () => irOmega(panel, { vista: 'inicio' }));
+  panel.querySelectorAll('[data-paso]').forEach((b) => b.addEventListener('click', () => irOmega(panel, { paso: b.dataset.paso })));
+  const ft = panel.querySelector('#ft');
+  ft.addEventListener('submit', (e) => { e.preventDefault(); conBoton(ft.querySelector('button'), async () => {
+    const x = await llamar('omegaCambiarTasa', { id: q.id, tasa: numVe(ft.tasa.value) });
+    if (!x.ok) return toast(x.message);
+    toast('Tasa cambiada.'); panelOmega(panel);
+  }); });
+  const cont = panel.querySelector('#paso-q');
+  const ctx = { panel, cont, q, guardar: async (paso, datos) => { const x = await llamar('quincenaPaso', { id: q.id, paso, ...datos }); if (!x.ok) toast(x.message); return x; } };
+  const PINTA = { detalle: pasoDetalleQ, vacaciones: pasoVacacionesQ, comisiones: pasoComisionesQ, cestaticket: pasoCestaticketQ, complemento: pasoComplementoQ };
+  try { await PINTA[omegaUI.paso](ctx); } catch (ex) { cont.innerHTML = `<p class="error-msg">${esc(ex.message || 'Error')}</p>`; }
+}
+
+/** Botón «Marcar este paso como listo» (o «Reabrir»). */
+function botonListo(ctx, paso, texto = 'Marcar este paso como listo') {
+  const hecho = ctx.q.pasos[paso] && ctx.q.pasos[paso].hecho;
+  const sig = PASOS_Q[PASOS_Q.findIndex(([k]) => k === paso) + 1];
+  return `<div class="fila listo-q">${hecho ? `<span class="chip chip-ok">Listo · ${esc(fechaHoraMin(ctx.q.pasos[paso].cuando))}</span><button type="button" class="btn btn-sec btn-chico" data-listo="0">Reabrir este paso</button>`
+    : `<button type="button" class="btn" data-listo="1">${texto}</button>`}${sig ? `<button type="button" class="btn btn-sec" data-ir-paso="${sig[0]}">Siguiente: ${sig[1]} ›</button>` : ''}</div>`;
+}
+function activarListo(ctx, paso, resumen = () => ({})) {
+  ctx.cont.querySelectorAll('[data-listo]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const hecho = b.dataset.listo === '1', x = await ctx.guardar(paso, { hecho, resumen: hecho ? resumen() : {} });
+    if (!x.ok) return;
+    if (hecho) { const sig = PASOS_Q[PASOS_Q.findIndex(([k]) => k === paso) + 1]; omegaUI.paso = sig ? sig[0] : paso; }
+    panelOmega(ctx.panel);
+  })));
+  ctx.cont.querySelectorAll('[data-ir-paso]').forEach((b) => b.addEventListener('click', () => irOmega(ctx.panel, { paso: b.dataset.irPaso })));
+}
+
+/* ---- Paso 1: Detalle de empleado ---- */
+async function pasoDetalleQ(ctx) {
+  const { cont, q } = ctx, p = q.pasos.detalle || {};
+  const datos = await obtener('datosCruceNomina', {});
+  if (!datos.ok) { cont.innerHTML = `<p class="error-msg">${esc(datos.message)}</p>`; return; }
+  const emp = datos.data.empleados, porClave = Object.fromEntries(emp.map((e) => [e.clave, e]));
+  const ingresos = (p.ingresos || []).map((x) => porClave[x.clave] || x);
+  cont.innerHTML = `<section class="tarjeta">
+      <div><h2>1 · Detalle de empleado</h2><p class="suave">Sube el «Detalle de Empleado» de esta quincena tal como lo bajas del sistema de nómina (no hace falta limpiarlo: las filas de conteo y los números sueltos se ignoran). El CAC te muestra los <b>ingresos</b> y los <b>egresos</b> antes de guardar.</p></div>
+      <label>Detalle de empleado <input type="file" id="det-q" accept=".xlsx,.xls,.csv"></label>
+      <div id="previa-det"></div>
+    </section>
+    ${ingresos.length || (p.egresos || []).length ? `<section class="tarjeta"><h2>Cargado ${p.archivo ? `«${esc(p.archivo)}»` : ''}</h2>
+      ${ingresos.length ? `<h3>Ingresos (${ingresos.length})</h3><p class="suave">Asígnales el jefe directo. Los nuevos ingresos quedan <b>sin tarjeta</b> de alimentación: su cestaticket va por Omega Transferencia hasta que la tengan.</p>
+        <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th>Ingreso</th><th>Jefe directo</th><th>Sin tarjeta</th></tr></thead><tbody>
+        ${ingresos.map((e) => `<tr><td><b>${esc(e.nombre)}</b><br><span class="suave">${esc(e.clave)} · ${esc(e.organizacion || '')} · ${esc(e.puesto || '')}</span></td><td>${esc(e.fechaIngreso ? window.Vacaciones.corta(e.fechaIngreso) : e.ingreso || '')}</td>
+          <td>${e.jefe ? `${esc((porClave[e.jefe] || {}).nombre || e.jefe)} ` : '<span class="chip chip-espera">Sin jefe</span> '}<button class="btn btn-sec btn-chico" data-jefe-q="${esc(e.clave)}">${e.jefe ? 'Cambiar' : 'Asignar'}</button></td>
+          <td><input type="checkbox" data-tarj-q="${esc(e.clave)}"${e.sinTarjeta ? ' checked' : ''} aria-label="Sin tarjeta"></td></tr>`).join('')}</tbody></table></div>` : '<p class="suave">Sin ingresos.</p>'}
+      ${(p.egresos || []).length ? `<h3>Egresos (${p.egresos.length})</h3><p class="suave">Pasaron a inactivos: no cobran cestaticket ni complemento (se les paga en la liquidación).</p>
+        <div class="lista">${p.egresos.map((x) => `<div class="item"><b>${esc(x.nombre)}</b><span class="suave">${esc(x.clave)} · ${esc(x.organizacion || '')}</span></div>`).join('')}</div>` : '<p class="suave">Sin egresos.</p>'}
+      </section>` : ''}
+    ${botonListo(ctx, 'detalle')}`;
+  activarListo(ctx, 'detalle', () => ({ ingresos: p.ingresos || [], egresos: p.egresos || [], archivo: p.archivo || '' }));
+  cont.querySelectorAll('[data-jefe-q]').forEach((b) => b.addEventListener('click', () => elegirJefe(`Jefe de ${(porClave[b.dataset.jefeQ] || {}).nombre || ''}`, async (jefe) => {
+    const r = await llamar('asignarJefe', { claves: [b.dataset.jefeQ], jefe });
+    if (r.ok) { toast('Jefe asignado.'); panelOmega(ctx.panel); }
+    return r;
+  })));
+  cont.querySelectorAll('[data-tarj-q]').forEach((c) => c.addEventListener('change', async () => {
+    const x = await llamar('omegaMarcarTarjeta', { claves: [c.dataset.tarjQ], sinTarjeta: c.checked });
+    if (!x.ok) { toast(x.message); c.checked = !c.checked; } else toast(c.checked ? 'Sin tarjeta: cobra por Transferencia.' : 'Con tarjeta.');
+  }));
+  const previa = cont.querySelector('#previa-det');
+  cont.querySelector('#det-q').addEventListener('change', async (ev) => {
+    const archivo = ev.target.files[0]; if (!archivo) return;
+    previa.innerHTML = '<p class="suave">Leyendo…</p>';
+    try {
+      const m = window.Empleados.mapearDetalle(await leerArchivoExcel(archivo));
+      if (!m.filas.length || m.faltantes.includes('cedula')) { previa.innerHTML = '<p class="error-msg">No encontré las columnas Cédula y Nombre.</p>'; return; }
+      const r = await llamar('previaDetalle', { filas: m.filas });
+      if (!r.ok) { previa.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+      const x = r.data, lista = (arr) => arr.map((e) => `<div class="item"><b>${esc(e.nombre)}</b><span class="suave">${esc(e.clave)} · ${esc(e.organizacion)} · ${esc(e.puesto)}${e.ingreso ? ' · ingresó ' + esc(e.ingreso) : ''}</span></div>`).join('');
+      previa.innerHTML = `<div class="revision-nom"><b>${x.filas} empleados en el archivo</b>${m.omitidas ? `<span class="suave">${m.omitidas} filas de conteo o vacías ignoradas.</span>` : ''}
+        <h3>Ingresos (${x.ingresos.length})</h3>${lista(x.ingresos) || '<p class="suave">Ninguno.</p>'}
+        ${x.reingresos.length ? `<h3>Reingresos (${x.reingresos.length})</h3>${lista(x.reingresos)}` : ''}
+        <h3>Egresos (${x.egresos.length})</h3><p class="suave">Estaban activos y ya no vienen en el detalle.</p>${lista(x.egresos) || '<p class="suave">Ninguno.</p>'}
+        <p class="suave">${x.actualizados} personas se actualizan (cargo, organización, sueldo…).</p>
+        <div class="fila"><button class="btn" id="conf-det">Confirmar y cargar</button></div></div>`;
+      previa.querySelector('#conf-det').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+        const c = await llamar('cargarEmpleados', { filas: m.filas });
+        if (!c.ok) { toast(c.message); return; }
+        const nuevos = x.ingresos.concat(x.reingresos);
+        if (nuevos.length) await llamar('omegaMarcarTarjeta', { claves: nuevos.map((n) => n.clave), sinTarjeta: true });
+        await ctx.guardar('detalle', { resumen: { archivo: archivo.name, ingresos: nuevos.map((n) => ({ clave: n.clave, nombre: n.nombre })), egresos: x.egresos.map((n) => ({ clave: n.clave, nombre: n.nombre, organizacion: n.organizacion })) } });
+        toast('Detalle cargado.'); panelOmega(ctx.panel);
+      }));
+    } catch (ex) { previa.innerHTML = `<p class="error-msg">${esc(ex.message || 'No se pudo leer el archivo.')}</p>`; }
+  });
+}
+
+/* ---- Paso 2: Vacaciones con pago ---- */
+async function pasoVacacionesQ(ctx) {
+  const { cont, q } = ctx, r = await llamar('vacacionesQuincena', { id: q.id });
+  if (!r.ok) { cont.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const lista = r.data, ref = `Quincena ${etiquetaQ(q)}`;
+  cont.innerHTML = `<section class="tarjeta">
+    <div><h2>2 · Vacaciones con pago</h2><p class="suave">Solicitudes aprobadas de «Disfrute de días con pago» que se pagan en esta quincena (la última quincena antes de salir de vacaciones). Regístralas en la nómina y márcalas aquí.</p></div>
+    ${lista.length ? `<div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th class="num">Cédula</th><th>Sale · reintegro</th><th class="num">Días</th><th>Período que se paga</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${lista.map((x) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.empresa)}</span></td><td class="num">${esc(x.cedula)}</td>
+        <td>${esc(window.Vacaciones.corta(x.inicio))} · ${esc(x.reintegro ? window.Vacaciones.corta(x.reintegro) : '')}</td><td class="num">${x.dias}</td>
+        <td>${x.periodos.map((p) => `${esc(p.periodo)} (${p.dias} días)`).join('<br>')}</td>
+        <td>${x.estado === 'REGISTRADA' ? `<span class="chip chip-ok">Registrada</span><br><span class="suave">${esc(x.nomina)}</span>` : '<span class="chip chip-espera">Por registrar</span>'}</td>
+        <td>${x.estado === 'REGISTRADA' ? '' : `<button class="btn btn-chico" data-reg-vac-q="${esc(x.id)}">Registrada en nómina</button>`}</td></tr>`).join('')}</tbody></table></div>
+      <div class="fila"><button class="btn btn-sec btn-chico" id="copiar-vac-q">Copiar cédula, nombre y días</button></div>` : '<p class="vacio">No hay vacaciones con pago para esta quincena.</p>'}
+    </section>${botonListo(ctx, 'vacaciones')}`;
+  activarListo(ctx, 'vacaciones', () => ({ total: lista.length, registradas: lista.filter((x) => x.estado === 'REGISTRADA').length }));
+  cont.querySelectorAll('[data-reg-vac-q]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('registrarVacaciones', { id: b.dataset.regVacQ, nomina: ref });
+    if (!x.ok) return toast(x.message);
+    toast('Registrada.'); panelOmega(ctx.panel);
+  })));
+  cont.querySelector('#copiar-vac-q')?.addEventListener('click', async () => {
+    const t = ['Cédula\tNombre\tSale\tDías\tPeríodo pagado', ...lista.map((x) => `${x.cedula}\t${x.nombre}\t${window.Vacaciones.corta(x.inicio)}\t${x.dias}\t${x.periodos.map((p) => `${p.periodo} (${p.dias})`).join(', ')}`)].join('\n');
+    try { await navigator.clipboard.writeText(t); toast('Copiado.'); } catch { toast('No se pudo copiar.'); }
+  });
+}
+
+/** Lee un reporte PDF de la nómina y lo revisa contra los empleados del CAC. */
+async function revisarPdfNomina(archivo, opciones = {}, boton) {
+  const lineas = await lineasPdf(archivo, boton ? (i, t) => { boton.textContent = `Leyendo página ${i} de ${t}…`; } : null);
+  const personas = window.Comisiones.leerResumenPago(lineas);
+  if (!personas.length) throw new Error('Ese PDF no parece un reporte de la nómina (no encontré los «Total NOMBRE»).');
+  const d = await llamar('datosCruceNomina', {});
+  if (!d.ok) throw new Error(d.message);
+  const rev = window.Comisiones.revisarReporte(personas, d.data.empleados, { alias: d.data.alias, excluirFaltantes: opciones.excluir });
+  return { archivo: archivo.name, personas, rev, empleados: d.data.empleados };
+}
+
+/** Bloque con el resultado de un reporte: faltan, egresados, no están en el CAC, otra empresa. */
+function htmlRevision(r, extra = '') {
+  const v = r.rev, item = (x, t) => `<div class="item"><b>${esc(x.nombre)}</b><span class="suave">${t || ''}</span></div>`;
+  return `<div class="revision-nom"><div class="item-cab"><b>«${esc(r.archivo)}» · ${esc(v.empresas.join(', ') || 'empresa no identificada')} · ${r.personas.length} personas</b>
+      ${!v.faltan.length && !v.egresados.length && !v.noEnCac.length ? '<span class="chip chip-ok">Todo cuadra</span>' : '<span class="chip chip-espera">Hay diferencias</span>'}</div>
+    <p class="suave">${v.ok.length} activos en el reporte${v.esperados.length ? ` · ${v.esperados.length} activos no van en este reporte (${[...new Set(v.esperados.map((x) => x.motivo))].join(', ')})` : ''}.</p>
+    ${v.egresados.length ? `<h3>Egresados en el reporte (${v.egresados.length})</h3><p class="error-msg">No deberían cobrar: quítalos en el sistema de nómina.</p>${v.egresados.map((x) => item(x, `${x.clave} · en el reporte: ${x.enReporte}`)).join('')}` : ''}
+    ${v.faltan.length ? `<h3>Activos que faltan en el reporte (${v.faltan.length})</h3>${v.faltan.map((x) => `<div class="item"><div class="item-cab"><div><b>${esc(x.nombre)}</b><span class="suave"> ${esc(x.clave)} · ${esc(x.empresa)}</span></div>${extra === 'cesta' ? `<button class="btn btn-sec btn-chico" data-sin-tarjeta="${esc(x.clave)}">No tiene tarjeta: va por Transferencia</button>` : ''}</div></div>`).join('')}` : ''}
+    ${v.noEnCac.length ? `<h3>En el reporte pero no se encontraron en el CAC (${v.noEnCac.length})</h3>${v.noEnCac.map((x) => `<div class="item"><div class="item-cab"><div><b>${esc(x.nombre)}</b>${x.posible ? `<span class="suave"> ¿Es ${esc(x.posible.nombre)}?</span>` : '<span class="suave"> Puede ser un egresado o un nombre distinto en el CAC.</span>'}</div>
+      ${x.posible ? `<button class="btn btn-sec btn-chico" data-alias-nom="${esc(x.nombre)}" data-alias-clave="${esc(x.posible.clave)}">Sí, es la misma persona</button>` : ''}</div></div>`).join('')}` : ''}
+    ${v.otraEmpresa.length ? `<p class="suave">De otra empresa en el CAC: ${v.otraEmpresa.map((x) => `${esc(x.nombre)} (${esc(x.empresa)})`).join(', ')}.</p>` : ''}
+  </div>`;
+}
+function resumenRevision(r) { const v = r.rev; return { archivo: r.archivo, personas: r.personas.length, ok: v.ok.length, faltan: v.faltan.length, egresados: v.egresados.length, noEnCac: v.noEnCac.length }; }
+function activarRevision(ctx, caja, reabrir) {
+  caja.querySelectorAll('[data-alias-nom]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('guardarAliasNombre', { nombre: b.dataset.aliasNom, clave: b.dataset.aliasClave });
+    if (!x.ok) return toast(x.message);
+    toast('Listo: lo recordará la próxima vez.'); reabrir();
+  })));
+  caja.querySelectorAll('[data-sin-tarjeta]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const x = await llamar('omegaMarcarTarjeta', { claves: [b.dataset.sinTarjeta], sinTarjeta: true });
+    if (!x.ok) return toast(x.message);
+    toast('Marcado sin tarjeta: cobra por Transferencia.'); reabrir();
+  })));
+}
+
+/* ---- Paso 3: Comisiones ---- */
+async function pasoComisionesQ(ctx) {
+  const { cont, q } = ctx, n = q.comisiones, guardados = (q.pasos.comisiones || {}).reportes || {};
+  const clave = q.id + ':comisiones', leidos = repPdf[clave] = repPdf[clave] || {};
+  cont.innerHTML = `<section class="tarjeta">
+      <div><h2>3 · Comisiones</h2><p class="suave">Sube el Excel de comisiones de la gerencia: el CAC busca a cada persona aunque el nombre esté incompleto o mal escrito. Regístralas en <b>Otras Asignaciones</b> y después valida con el «Resumen de Pago».</p></div>
+      ${n ? `<div class="aviso">Comisiones cargadas: <b>${n.personas} personas por ${bs(n.total)}</b> (${esc(ESTADOS_NOM[n.estado][0])}).</div>
+        <div class="tabla-caja"><table class="tabla-omega tabla-nom"><thead><tr><th class="num">Cédula</th><th>Nombre</th><th>Empresa</th><th class="num">Monto</th></tr></thead><tbody>
+          ${n.items.map((x) => `<tr><td class="num">${esc(x.cedula)}</td><td>${esc(x.nombre)}</td><td>${esc(x.empresa)}</td><td class="num">${bs(x.monto)}</td></tr>`).join('')}</tbody></table></div>
+        <div class="fila"><button class="btn btn-sec btn-chico" id="copiar-com-q">Copiar cédula, nombre y monto</button>${n.estado === 'SOLICITADA' ? '<button class="btn btn-sec btn-chico" id="otra-com-q">Cargar otro Excel</button>' : ''}</div>`
+        : `<label>Excel de comisiones <input type="file" id="xls-com-q" accept=".xlsx,.xls"></label>`}
+      <div id="cruce-com-q"></div>
+    </section>
+    <section class="tarjeta"><div><h2>Validar con el «Resumen de Pago»</h2><p class="suave">Sube el PDF del Resumen de Pago de cada empresa (después de registrar). El CAC revisa que las comisiones estén en Otras Asignaciones, que estén <b>todos los activos</b> de la empresa y que <b>no haya egresados</b>.</p></div>
+      <label>Resumen de Pago (PDF) <input type="file" id="pdf-com-q" accept="application/pdf,.pdf"></label>
+      <div id="res-com-q">${Object.keys(leidos).map((k) => leidos[k].html).join('') || Object.entries(guardados).map(([emp, x]) => `<p class="suave">${esc(emp)}: «${esc(x.archivo)}» · ${x.ok} activos · ${x.faltan} faltan · ${x.egresados} egresados · comisiones: ${x.comOk || 0} correctas, ${x.comMal || 0} por revisar.</p>`).join('')}</div>
+    </section>${botonListo(ctx, 'comisiones')}`;
+  activarListo(ctx, 'comisiones', () => ({ nomina: n ? n.id : '', reportes: { ...guardados, ...Object.fromEntries(Object.entries(leidos).map(([k, v]) => [k, v.resumen])) } }));
+  const copiar = cont.querySelector('#copiar-com-q');
+  if (copiar) copiar.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(['Cédula\tNombre\tMonto', ...n.items.map((x) => `${x.cedula}\t${x.nombre}\t${x.monto.toFixed(2).replace('.', ',')}`)].join('\n')); toast('Copiado.'); } catch { toast('No se pudo copiar.'); }
+  });
+  const iniciar = (archivo) => iniciarCruce(archivo, { origen: 'quincena', caja: cont.querySelector('#cruce-com-q'),
+    alDescartar: () => { cruceNom = null; panelOmega(ctx.panel); },
+    alAgregar: async (grupos) => {
+      if (n && n.estado === 'SOLICITADA') await llamar('cancelarNominaEspecial', { id: n.id });
+      const x = await llamar('solicitarNominaEspecial', { concepto: `Comisiones · ${etiquetaQ(q)}`, moneda: 'Bs.',
+        items: grupos.map((y) => (y.manual ? { cedula: y.cedula, nombre: y.nombre, monto: y.monto } : { clave: y.clave, monto: y.monto, nombresReporte: y.nombresReporte })) });
+      if (!x.ok) { toast(x.message); return; }
+      cruceNom = null;
+      await ctx.guardar('comisiones', { resumen: { nomina: x.data.id } });
+      toast('Comisiones guardadas.'); panelOmega(ctx.panel);
+    } });
+  cont.querySelector('#xls-com-q')?.addEventListener('change', (e) => { if (e.target.files[0]) iniciar(e.target.files[0]); });
+  cont.querySelector('#otra-com-q')?.addEventListener('click', () => {
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.xlsx,.xls' });
+    inp.addEventListener('change', () => { if (inp.files[0]) iniciar(inp.files[0]); }); inp.click();
+  });
+  if (cruceNom && cruceNom.origen === 'quincena') { cruceNom.caja = cont.querySelector('#cruce-com-q'); pintarCruceNomina(); }
+  const pdf = cont.querySelector('#pdf-com-q'), res = cont.querySelector('#res-com-q');
+  pdf.addEventListener('change', async () => {
+    const archivo = pdf.files[0]; if (!archivo) return;
+    res.insertAdjacentHTML('afterbegin', '<p class="suave" id="leyendo-q">Leyendo el PDF…</p>');
+    try {
+      const r = await revisarPdfNomina(archivo, { excluir: () => '' });
+      const emp = r.rev.empresas.join('+') || 'SIN EMPRESA';
+      let comHtml = '', comOk = 0, comMal = 0;
+      if (n) {
+        const deEmpresa = n.items.filter((x) => !x.empresa || r.rev.empresas.includes(x.empresa));
+        const v = window.Comisiones.verificar(deEmpresa, r.personas);
+        comOk = v.filter((x) => x.estado === 'ok').length; comMal = v.length - comOk;
+        await llamar('guardarVerificacionNomina', { id: n.id, resumen: { archivo: archivo.name, ok: comOk, mayor: v.filter((x) => x.estado === 'mayor').length, menor: v.filter((x) => x.estado === 'menor').length, no: v.filter((x) => x.estado === 'no').length, detalle: v } });
+        const ETQ = { ok: ['Correcta', 'ok'], mayor: ['Otras asignaciones mayores', 'austral'], menor: ['Monto menor', 'error'], no: ['No está en otras asignaciones', 'error'] };
+        comHtml = `<h3>Comisiones (${v.length})</h3><div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Persona</th><th class="num">Comisión</th><th class="num">Otras asignaciones</th><th>Estado</th></tr></thead><tbody>
+          ${v.sort((a, b) => (a.estado === 'ok') - (b.estado === 'ok')).map((x) => `<tr><td>${esc(x.nombre)}</td><td class="num">${bs(x.monto)}</td><td class="num">${x.enReporte ? bs(x.otras) : '—'}</td><td><span class="chip chip-${ETQ[x.estado][1]}">${ETQ[x.estado][0]}</span></td></tr>`).join('')}</tbody></table></div>`;
+      }
+      leidos[emp] = { html: htmlRevision(r).replace(/<\/div>$/, comHtml + '</div>'), resumen: { ...resumenRevision(r), comOk, comMal } };
+      await ctx.guardar('comisiones', { resumen: { reportes: { ...guardados, ...Object.fromEntries(Object.entries(leidos).map(([k, v]) => [k, v.resumen])) } } });
+      res.innerHTML = Object.values(leidos).map((x) => x.html).join('');
+      activarRevision(ctx, res, () => { delete leidos[emp]; toast('Vuelve a subir el PDF para revisar de nuevo.'); panelOmega(ctx.panel); });
+    } catch (ex) { cont.querySelector('#leyendo-q')?.remove(); toast(ex.message || 'No se pudo leer el PDF.'); }
+    pdf.value = '';
+  });
+  activarRevision(ctx, res, () => panelOmega(ctx.panel));
+}
+
+/* ---- Paso 4: Cestaticket ---- */
+async function pasoCestaticketQ(ctx) {
+  const { cont, q } = ctx, guardados = (q.pasos.cestaticket || {}).reportes || {};
+  const clave = q.id + ':cesta', leidos = repPdf[clave] = repPdf[clave] || {};
+  const lotes = q.lotes.filter((l) => l.tipo === 'CESTATICKET');
+  const esperado = q.quincena === 1 ? `$20 × ${q.tasa.toLocaleString('es-VE')} = ${bs(20 * q.tasa)}` : `$40 × ${q.tasa.toLocaleString('es-VE')} − el anticipo de la 1.ª quincena`;
+  cont.innerHTML = `<section class="tarjeta">
+      <div><h2>4 · Cestaticket</h2><p class="suave">Sube el reporte «Nómina Bono de Alimentación» (PDF) que bajas del sistema de nómina. El CAC revisa que estén <b>todos los activos con tarjeta</b>, que <b>no haya egresados</b> y el monto de cada persona (${esc(esperado)}). Los nuevos ingresos sin tarjeta no van aquí: cobran por Omega Transferencia.</p></div>
+      <label>Reporte de cestaticket (PDF) <input type="file" id="pdf-ct-q" accept="application/pdf,.pdf"></label>
+      <div id="res-ct-q">${Object.values(leidos).map((x) => x.html).join('') || Object.entries(guardados).map(([emp, x]) => `<p class="suave">${esc(emp)}: «${esc(x.archivo)}» · ${x.ok} activos · ${x.faltan} faltan · ${x.egresados} egresados · ${x.montosMal || 0} montos distintos.</p>`).join('')}</div>
+    </section>
+    <section class="tarjeta"><div><h2>Archivo para Omega</h2><p class="suave">Entra a cada lote, revisa, valida y genera el TXT.</p></div>
+      <div class="lotes-omega">${lotes.map(htmlLoteQ).join('')}</div></section>
+    ${botonListo(ctx, 'cestaticket')}`;
+  activarListo(ctx, 'cestaticket', () => ({ reportes: { ...guardados, ...Object.fromEntries(Object.entries(leidos).map(([k, v]) => [k, v.resumen])) } }));
+  activarLotesQ(ctx);
+  const pdf = cont.querySelector('#pdf-ct-q'), res = cont.querySelector('#res-ct-q');
+  pdf.addEventListener('change', async () => {
+    const archivo = pdf.files[0]; if (!archivo) return;
+    res.insertAdjacentHTML('afterbegin', '<p class="suave" id="leyendo-q">Leyendo el PDF…</p>');
+    try {
+      const mesIng = (e) => e.fechaIngreso && e.fechaIngreso.slice(0, 7) === q.mes;
+      const r = await revisarPdfNomina(archivo, { excluir: (e) => (e.sinTarjeta ? 'sin tarjeta' : mesIng(e) ? 'ingresó este mes' : '') });
+      const emp = r.rev.empresas.join('+') || 'SIN EMPRESA';
+      // montos: contra el lote de cestaticket del CAC
+      const montos = [], soloLote = [], soloReporte = [];
+      for (const e of r.rev.empresas) {
+        const l = await llamar('omegaLote', { id: q.id, lote: 'CT-' + e });
+        if (!l.ok) continue;
+        const porClave = Object.fromEntries(l.data.lineas.map((x) => [x.clave, x])), enRep = new Set(r.rev.ok.map((x) => x.clave));
+        l.data.lineas.filter((x) => !x.excluida && !enRep.has(x.clave)).forEach((x) => soloLote.push(x.nombre));
+        r.rev.ok.filter((x) => x.empresa === e && !porClave[x.clave]).forEach((x) => soloReporte.push(x.nombre));
+        r.rev.ok.filter((x) => x.empresa === e).forEach((x) => { const c = porClave[x.clave]; if (c && Math.abs(c.montoBs - x.monto) >= 0.01) montos.push({ nombre: x.nombre, reporte: x.monto, cac: c.montoBs }); });
+      }
+      const cambiar = r.rev.faltan.length || soloReporte.length;
+      const tarj = `<h3>Lote de cestaticket del CAC</h3><p class="suave">${soloLote.length ? `En el lote pero no en el reporte: ${soloLote.map(esc).join(', ')}. ` : ''}${soloReporte.length ? `En el reporte pero no en el lote (el CAC los tiene sin tarjeta): ${soloReporte.map(esc).join(', ')}. ` : ''}${!soloLote.length && !soloReporte.length ? 'El lote tiene a las mismas personas que el reporte.' : ''}</p>
+        ${cambiar ? `<div><button class="btn btn-sec btn-chico" id="usar-rep-ct">Usar este reporte para las tarjetas</button> <span class="suave">Quien sale en el reporte tiene tarjeta; los activos de ${esc(r.rev.empresas.join(', '))} que no salen, no (cobran por Transferencia).</span></div>` : ''}`;
+      const html = htmlRevision(r, 'cesta').replace(/<\/div>$/, tarj + (montos.length ? `<h3>Montos distintos al cálculo del CAC (${montos.length})</h3><div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Persona</th><th class="num">En el reporte</th><th class="num">Según el CAC</th></tr></thead><tbody>
+        ${montos.map((x) => `<tr><td>${esc(x.nombre)}</td><td class="num">${bs(x.reporte)}</td><td class="num">${bs(x.cac)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="suave">Los montos coinciden con el cálculo del CAC.</p>') + '</div>');
+      leidos[emp] = { html, resumen: { ...resumenRevision(r), montosMal: montos.length } };
+      await ctx.guardar('cestaticket', { resumen: { reportes: { ...guardados, ...Object.fromEntries(Object.entries(leidos).map(([k, v]) => [k, v.resumen])) } } });
+      res.innerHTML = Object.values(leidos).map((x) => x.html).join('');
+      activarRevision(ctx, res, () => { delete leidos[emp]; toast('Vuelve a subir el PDF para revisar de nuevo.'); panelOmega(ctx.panel); });
+      res.querySelector('#usar-rep-ct')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+        const con = r.rev.ok.map((x) => x.clave), sin = r.rev.faltan.map((x) => x.clave);
+        if (!confirm(`¿Marcar ${con.length} con tarjeta y ${sin.length} sin tarjeta según este reporte?`)) return;
+        if (con.length) await llamar('omegaMarcarTarjeta', { claves: con, sinTarjeta: false });
+        if (sin.length) await llamar('omegaMarcarTarjeta', { claves: sin, sinTarjeta: true });
+        delete leidos[emp]; toast('Tarjetas actualizadas. Vuelve a subir el reporte para confirmar.'); panelOmega(ctx.panel);
+      }));
+    } catch (ex) { cont.querySelector('#leyendo-q')?.remove(); toast(ex.message || 'No se pudo leer el PDF.'); }
+    pdf.value = '';
+  });
+}
+
+function htmlLoteQ(l) {
+  return `<section class="tarjeta lote-omega">
+    <div class="item-cab"><h3>${esc(l.nombre)}</h3>${l.estado === 'VALIDADO' ? '<span class="chip chip-ok">Validado</span>' : '<span class="chip chip-espera">Por validar</span>'}</div>
+    <div class="cifras-lote"><div><b>${l.personas}</b><span>personas</span></div><div><b>${bs(l.totales.subtotal)}</b><span>monto del lote</span></div><div><b>${bs(l.totales.totalPagar)}</b><span>a pagar a Omega</span></div></div>
+    ${l.falta1Q ? '<p class="aviso">Primero valida este lote en la 1.ª quincena.</p>' : ''}
+    <div><button class="btn btn-chico" data-om-lote="${l.id}">Entrar</button></div></section>`;
+}
+function activarLotesQ(ctx) { ctx.cont.querySelectorAll('[data-om-lote]').forEach((b) => b.addEventListener('click', () => irOmega(ctx.panel, { vista: 'lote', lote: b.dataset.omLote, buscar: '', filtro: '' }))); }
+
+/* ---- Paso 5: Complemento de alimentación (Omega Transferencia) ---- */
+async function pasoComplementoQ(ctx) {
+  const { cont, q } = ctx, lotes = q.lotes.filter((l) => l.tipo === 'TRANSFERENCIA');
+  cont.innerHTML = `<section class="tarjeta">
+      <div><h2>5 · Complemento de alimentación</h2><p class="suave">Omega Transferencia: complemento, ayuda de vehículo, bono especial, comisiones garantizadas y el cestaticket de quien no tiene tarjeta (los nuevos ingresos, proporcional a sus días). En cada lote puedes <b>añadir un monto adicional</b> que se pague en esta quincena, validar y generar el TXT.</p></div>
+      <div class="lotes-omega">${lotes.map(htmlLoteQ).join('')}</div>
+      <p class="suave">Los montos en $ por persona se editan en «Complemento de alimentación» (pantalla de Quincenas).</p>
+    </section>${botonListo(ctx, 'complemento')}`;
+  activarListo(ctx, 'complemento', () => ({ lotes: lotes.map((l) => ({ id: l.id, estado: l.estado, personas: l.personas, total: l.totales.subtotal })) }));
+  activarLotesQ(ctx);
+}
+
+/* ---------- Mi perfil (colaborador): resumen y actualización pregunta por pregunta ---------- */
+
+const PF = () => window.Perfil;
+const cuantasPreguntas = (n) => (n === 1 ? 'Es una pregunta corta' : `Son ${n} preguntas cortas`);
+const NOMBRE_SECCION = (id) => (PF().seccion(id) || {}).nombre || id;
+let asistente = null;   // actualización en curso: { d, secciones, campana, i, datos, familia, tieneFamilia }
+
+function controlCampo(c, valor, nombre, foco) {
+  const v = esc(valor || ''), af = foco ? ' autofocus' : '';
+  if (c.tipo === 'lista') return `<select name="${nombre}"${af}><option value="">Elige…</option>${PF().LISTAS[c.lista].map((o) => `<option${o === valor ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  if (c.tipo === 'fecha') return `<input type="date" name="${nombre}" value="${v}"${af}>`;
+  if (c.tipo === 'correo') return `<input type="email" name="${nombre}" value="${v}" autocomplete="email" maxlength="120" placeholder="nombre@correo.com"${af}>`;
+  if (c.tipo === 'telefono') return `<input type="tel" name="${nombre}" value="${v}" inputmode="tel" placeholder="0414-1234567" maxlength="16"${af}>`;
+  if (c.tipo === 'numero' || c.tipo === 'cuenta') return `<input name="${nombre}" value="${v}" inputmode="numeric" maxlength="${c.tipo === 'cuenta' ? 24 : 15}"${af}>`;
+  if (c.largo > 120) return `<textarea name="${nombre}" maxlength="${c.largo}"${af}>${v}</textarea>`;
+  return `<input name="${nombre}" value="${v}" maxlength="120"${af}>`;
+}
+
+async function seccionPerfil(cont) {
+  cont.innerHTML = `${volver()}${esqueleto(3)}`;
+  const r = await obtener('miPerfil', conToken());
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } cont.innerHTML = `${volver()}<p class="error-msg">${esc(r.message)}</p>`; return; }
+  if (asistente && asistente.d.nomina.cedula === r.data.nomina.cedula) { asistente.d = r.data; return pintarAsistente(cont); }
+  asistente = null;
+  pintarPerfil(cont, r.data);
+}
+
+const valorTexto = (c, v) => (!v ? '' : c.tipo === 'fecha' ? V().corta(v) : v);
+const textoFamiliar = (f) => `${esc(f.nombre)} · ${esc(f.parentesco)}${f.fechaNacimiento ? ` · ${esc(V().corta(f.fechaNacimiento))}` : ''}`;
+
+/** Resumen: datos de nómina, lo que tiene cargado y el botón para actualizar (una pregunta a la vez). */
+function pintarPerfil(cont, d) {
+  const datos = d.datos || {}, n = d.nomina;
+  const preguntas = (secs) => secs.reduce((t, id) => t + (PF().seccion(id).lista ? 1 : PF().seccion(id).campos.length), 0);
+  cont.innerHTML = `${volver()}
+    ${d.campanas.map((c, k) => `<section class="tarjeta aviso-campana">
+      <h2>${esc(c.titulo)}</h2>${c.mensaje ? `<p>${esc(c.mensaje)}</p>` : ''}
+      <p class="suave">Gestión Humana te pide revisar: <b>${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. Tienes hasta el <b>${esc(V().corta(c.hasta))}</b>.
+        ${cuantasPreguntas(preguntas(c.secciones))}, una a la vez.</p>
+      <div><button class="btn" type="button" data-empezar="${k}">Empezar</button></div></section>`).join('')}
+    <section class="tarjeta">
+      <div><h2>Mi perfil</h2><p class="suave">Tus datos principales en el Grupo Prosein.${d.actualizado ? ` Última actualización de tus datos: ${fechaHoraMin(d.actualizado)}.` : ''}</p></div>
+      <dl class="datos-nomina">
+        <div><dt>Nombre</dt><dd>${esc(n.nombre)}</dd></div><div><dt>Cédula</dt><dd>${esc(n.cedula.slice(1))}</dd></div>
+        <div><dt>Cargo</dt><dd>${esc(n.cargo || '—')}</dd></div><div><dt>Empresa</dt><dd>${n.empresa === 'AIV' ? 'Austral' : 'Prosein'}</dd></div>
+        <div><dt>Departamento</dt><dd>${esc(n.departamento || '—')}</dd></div><div><dt>Localidad</dt><dd>${esc(n.localidad || '—')}</dd></div>
+        <div><dt>Fecha de ingreso</dt><dd>${n.fechaIngreso ? esc(V().corta(n.fechaIngreso)) : '—'}</dd></div>
+      </dl>
+      <p class="suave">Estos datos vienen de la nómina. Si alguno está mal, avísale a Gestión Humana.</p>
+    </section>
+    ${!d.campanas.length ? '<p class="suave" style="text-align:center">No hay actualizaciones de datos abiertas. Gestión Humana te avisará cuando abra una.</p>' : ''}`;
+  cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+  const empezar = (secciones, campana) => {
+    const fam = (datos.familia || []).map((f) => ({ ...f }));
+    asistente = { d, secciones, campana, i: 0, datos: JSON.parse(JSON.stringify(datos)), familia: fam, tieneFamilia: fam.length ? true : datos.sinFamilia ? false : null };
+    PF().SECCIONES.forEach((s) => { if (!s.lista) asistente.datos[s.id] = asistente.datos[s.id] || {}; });
+    pintarAsistente(cont);
+  };
+  cont.querySelectorAll('[data-empezar]').forEach((b) => b.addEventListener('click', () => { const c = d.campanas[Number(b.dataset.empezar)]; empezar(c.secciones, c); }));
+}
+
+/** Los pasos de la actualización: una pregunta por pantalla (cada familiar es un paso) y al final, revisar. */
+function pasosAsistente(a) {
+  const p = [];
+  PF().SECCIONES.filter((s) => a.secciones.includes(s.id)).forEach((s) => {
+    if (s.lista) { p.push({ tipo: 'tieneFamilia', s }); if (a.tieneFamilia) a.familia.forEach((_, k) => p.push({ tipo: 'familiar', s, k })); }
+    else s.campos.forEach((c) => p.push({ tipo: 'campo', s, c }));
+  });
+  p.push({ tipo: 'revisar' });
+  return p;
+}
+
+function pintarAsistente(cont) {
+  const a = asistente, pasos = pasosAsistente(a);
+  a.i = Math.max(0, Math.min(a.i, pasos.length - 1));
+  const paso = pasos[a.i], total = pasos.length - 1, ultimo = paso.tipo === 'revisar';
+  const opciones = (lista, actual, attr) => `<div class="opciones">${lista.map((o) => `<button type="button" class="opcion" ${attr}="${esc(o)}" aria-pressed="${o === actual}">${esc(o)}</button>`).join('')}</div>`;
+  let cuerpo = '';
+  if (paso.tipo === 'campo') {
+    const { s, c } = paso, val = a.datos[s.id][c.id] || '';
+    cuerpo = `<p class="kicker-perfil">${esc(s.nombre)}</p><h2 class="pregunta">${esc(c.pregunta || c.nombre)}</h2>
+      ${c.ayuda || !c.req ? `<p class="suave">${esc(c.ayuda || '')}${c.req ? '' : `${c.ayuda ? ' ' : ''}<span class="chip chip-neutro">Opcional</span>`}</p>` : ''}
+      ${c.tipo === 'lista' && PF().LISTAS[c.lista].length <= 10 ? opciones(PF().LISTAS[c.lista], val, 'data-opcion') : `<label class="respuesta"><span class="sr">${esc(c.nombre)}</span>${controlCampo(c, val, 'resp', true)}</label>`}`;
+  } else if (paso.tipo === 'tieneFamilia') {
+    cuerpo = `<p class="kicker-perfil">${esc(paso.s.nombre)}</p><h2 class="pregunta">¿Tienes carga familiar?</h2>
+      <p class="suave">Hijos, cónyuge, padres u otras personas que dependen de ti.</p>
+      <div class="opciones"><button type="button" class="opcion" data-fam="si" aria-pressed="${a.tieneFamilia === true}">Sí</button>
+        <button type="button" class="opcion" data-fam="no" aria-pressed="${a.tieneFamilia === false}">No, no tengo carga familiar</button></div>`;
+  } else if (paso.tipo === 'familiar') {
+    const f = a.familia[paso.k] || {};
+    cuerpo = `<p class="kicker-perfil">${esc(paso.s.nombre)} · familiar ${paso.k + 1} de ${a.familia.length}</p><h2 class="pregunta">Cuéntanos de tu familiar</h2>
+      <div class="campos-familiar">${paso.s.campos.map((c, j) => `<label><span>${esc(c.nombre)}${c.req ? ' <span class="req" aria-hidden="true">*</span>' : ''}</span>${controlCampo(c, f[c.id], 'fam-' + c.id, j === 0)}</label>`).join('')}</div>
+      <div class="fila"><button type="button" class="btn btn-sec btn-chico" id="otro-fam">Agregar otro familiar</button>
+        <button type="button" class="btn btn-sec btn-chico" id="quitar-fam">Quitar este familiar</button></div>`;
+  } else {
+    const fila = (txt, valor, idx) => `<div class="revisa-fila"><div><span class="suave">${esc(txt)}</span><b>${valor || '<span class="suave">—</span>'}</b></div><button type="button" class="enlace" data-ir-paso="${idx}">Cambiar</button></div>`;
+    cuerpo = `<h2 class="pregunta">Revisa tus respuestas</h2><p class="suave">Si todo está bien, pulsa «Guardar». Puedes cambiar cualquier respuesta.</p>
+      <div class="revisa">${pasos.slice(0, -1).map((p, idx) => p.tipo === 'campo' ? fila(p.c.nombre, esc(valorTexto(p.c, a.datos[p.s.id][p.c.id])), idx)
+        : p.tipo === 'tieneFamilia' ? fila('Carga familiar', a.tieneFamilia ? `${a.familia.length} familiar${a.familia.length === 1 ? '' : 'es'}` : 'No tengo carga familiar', idx)
+        : fila(`Familiar ${p.k + 1}`, textoFamiliar(a.familia[p.k]), idx)).join('')}</div>`;
+  }
+  cont.innerHTML = `<div><button class="btn btn-sec btn-chico" type="button" id="salir-asis">✕ Salir sin guardar</button></div>
+    <form class="tarjeta asistente" id="fpaso" novalidate>
+      ${a.campana ? `<p class="suave">${esc(a.campana.titulo)}</p>` : ''}
+      <div class="avance-asis"><div class="barra-avance"><span style="width:${Math.round((a.i / total) * 100)}%"></span></div>
+        <span class="suave">${ultimo ? 'Último paso' : `Pregunta ${a.i + 1} de ${total}`}</span></div>
+      ${cuerpo}
+      <div class="error-msg" id="err-paso" hidden></div>
+      <div class="fila nav-asis">${a.i > 0 ? '<button class="btn btn-sec" type="button" id="atras">Atrás</button>' : ''}
+        <button class="btn" type="submit">${ultimo ? 'Guardar' : 'Siguiente'}</button></div>
+    </form>`;
+  window.scrollTo(0, 0);
+  const f = cont.querySelector('#fpaso'), err = cont.querySelector('#err-paso');
+  const ir = (i) => { a.i = i; pintarAsistente(cont); };
+  /** Toma la respuesta de la pantalla; devuelve el error a mostrar o ''. */
+  const tomar = () => {
+    if (paso.tipo === 'campo') {
+      const { s, c } = paso, el = f.elements.resp, r = PF().limpiarCampo(c, el ? el.value : a.datos[s.id][c.id]);
+      if (r.error) return r.error.replace(/^[^:]+: /, '');
+      if (c.req && !r.valor) return 'Responde esta pregunta para continuar.';
+      a.datos[s.id][c.id] = r.valor; return '';
+    }
+    if (paso.tipo === 'tieneFamilia') return a.tieneFamilia == null ? 'Elige una opción.' : '';
+    if (paso.tipo === 'familiar') {
+      const o = {}, errores = [];
+      paso.s.campos.forEach((c) => { const r = PF().limpiarCampo(c, f.elements['fam-' + c.id].value); o[c.id] = r.valor; if (r.error) errores.push(r.error); else if (c.req && !r.valor) errores.push(`Falta: ${c.nombre.toLowerCase()}.`); });
+      a.familia[paso.k] = o;
+      return errores.join(' ');
+    }
+    return '';
+  };
+  const siguiente = () => { const e = tomar(); if (e) return errorEn(err, e); ir(a.i + 1); };
+  cont.querySelector('#salir-asis').addEventListener('click', () => { if (confirm('¿Salir sin guardar? Se perderán las respuestas de esta actualización.')) { const d = a.d; asistente = null; pintarPerfil(cont, d); } });
+  cont.querySelector('#atras')?.addEventListener('click', () => { if (paso.tipo === 'campo' || paso.tipo === 'familiar') tomar(); ir(a.i - 1); });
+  cont.querySelectorAll('[data-opcion]').forEach((b) => b.addEventListener('click', () => { a.datos[paso.s.id][paso.c.id] = b.dataset.opcion; ir(a.i + 1); }));
+  cont.querySelectorAll('[data-fam]').forEach((b) => b.addEventListener('click', () => {
+    a.tieneFamilia = b.dataset.fam === 'si';
+    if (a.tieneFamilia && !a.familia.length) a.familia.push({});
+    ir(a.i + 1);
+  }));
+  cont.querySelector('#otro-fam')?.addEventListener('click', () => {
+    const e = tomar(); if (e) return errorEn(err, e);
+    if (a.familia.length >= PF().MAX_FAMILIA) return errorEn(err, `Puedes registrar hasta ${PF().MAX_FAMILIA} familiares.`);
+    a.familia.push({}); ir(pasosAsistente(a).findIndex((p) => p.tipo === 'familiar' && p.k === a.familia.length - 1));
+  });
+  cont.querySelector('#quitar-fam')?.addEventListener('click', () => {
+    a.familia.splice(paso.k, 1);
+    if (!a.familia.length) { a.tieneFamilia = null; return ir(pasosAsistente(a).findIndex((p) => p.tipo === 'tieneFamilia')); }
+    const k = Math.min(paso.k, a.familia.length - 1);
+    ir(pasosAsistente(a).findIndex((p) => p.tipo === 'familiar' && p.k === k));
+  });
+  cont.querySelectorAll('[data-ir-paso]').forEach((b) => b.addEventListener('click', () => ir(Number(b.dataset.irPaso))));
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!ultimo) return siguiente();
+    conBoton(e.submitter || f.querySelector('button[type=submit]'), async () => {
+      const envio = {};
+      a.secciones.forEach((id) => { if (PF().seccion(id).lista) { envio.familia = a.tieneFamilia ? a.familia : []; envio.sinFamilia = a.tieneFamilia === false; } else envio[id] = a.datos[id]; });
+      const x = await llamar('guardarMiPerfil', { datos: envio, ...conToken() });
+      if (!x.ok) { if (x.code === 'SESION') { toast(x.message); return arrancar(); } return errorEn(err, x.message); }
+      const d = { ...a.d, datos: x.data.datos, actualizado: x.data.actualizado, campanas: x.data.campanas, faltan: x.data.faltan };
+      asistente = null;
+      toast(x.data.confirmadas.length ? '¡Gracias! Tus datos quedaron actualizados.' : 'Datos guardados.');
+      pintarPerfil(cont, d); window.scrollTo(0, 0);
+    });
+  });
+}
+
+/* ---------- Datos del personal (Gestión Humana) ---------- */
+
+let subDatos = 'campanas', campanaAbierta = '', buscaDatos = '';
+
+async function panelDatosPersonal(panel) {
+  const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes'], ['celebraciones', 'Cumpleaños y aniversarios']];
+  panel.innerHTML = `<div class="submodulos" role="tablist">${SUB.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subDatos}">${t}</button>`).join('')}</div><div id="sub">${esqueleto(2)}</div>`;
+  panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subDatos = b.dataset.sub; campanaAbierta = ''; editandoCamp = null; panelDatosPersonal(panel); }));
+  const sub = panel.querySelector('#sub');
+  if (subDatos === 'campanas') return campanaAbierta ? pintarCampana(panel, sub, campanaAbierta) : pintarCampanas(panel, sub);
+  if (subDatos === 'celebraciones') return pintarCelebraciones(sub);
+  const r = await obtener('datosPersonal', {});
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  if (subDatos === 'cambios') return pintarCambiosPerfil(sub, r.data.cambios);
+  return pintarConsultaDatos(sub, r.data.filas);
+}
+
+const alcanceTexto = (a) => (a.tipo === 'empresas' ? a.empresas.map((e) => (e === 'AIV' ? 'Austral' : 'Prosein')).join(' y ') : a.tipo === 'personas' ? `${a.claves.length} persona${a.claves.length === 1 ? '' : 's'}` : 'Todo el personal');
+
+let editandoCamp = null;   // campaña planificada que se está editando en el formulario
+
+const fechaIsoLocal = (dias = 0) => { const t = new Date(Date.now() + dias * 86400000); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
+
+async function pintarCampanas(panel, sub) {
+  const r = await obtener('listarCampanasDatos', {});
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const plan = r.data.filter((c) => c.estado === 'PLANIFICADA'), otras = r.data.filter((c) => c.estado !== 'PLANIFICADA');
+  const e = editandoCamp, hoy = fechaIsoLocal(), al = !e ? 'todos' : e.alcance.tipo === 'empresas' ? e.alcance.empresas[0] : 'todos';
+  const pctCamp = (c) => (c.personas ? Math.round((c.completos / c.personas) * 100) : 0);
+  const preguntas = (c) => c.secciones.reduce((t, id) => t + (PF().seccion(id).lista ? 1 : PF().seccion(id).campos.length), 0);
+  sub.innerHTML = `
+    ${!r.data.length ? `<section class="tarjeta aviso-campana"><h2>Plan sugerido: el perfil en 4 campañas</h2>
+      <p class="suave">Una campaña por sección, para que cada una tome 2 o 3 minutos: <b>1</b> tu contacto · <b>2</b> contacto de emergencia · <b>3</b> carga familiar · <b>4</b> tallas y datos personales.
+        Quedan <b>planificadas</b> (nadie las ve todavía) y tú lanzas cada una cuando quieras, con su fecha límite.</p>
+      <div><button class="btn" id="cargar-plan">Cargar las 4 campañas</button></div></section>` : ''}
+    ${plan.length ? `<section class="tarjeta"><div><h2>Planificadas</h2><p class="suave">Todavía no las ven los colaboradores. Al lanzar una, les llega el aviso y la ven en su inicio.</p></div>
+      <div class="lista">${plan.map((c, k) => `<div class="item"><div class="item-cab"><div><b>${esc(c.titulo)}</b>
+          <p class="suave">${alcanceTexto(c.alcance)} · ${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')} · ${preguntas(c)} pregunta${preguntas(c) === 1 ? '' : 's'}</p>${c.mensaje ? `<p class="suave">«${esc(c.mensaje)}»</p>` : ''}</div>
+          <span class="chip chip-neutro">${k === 0 ? 'Siguiente' : 'Planificada'}</span></div>
+        <div class="fila"><button class="btn btn-chico" data-lanzar="${esc(c.id)}">Lanzar</button>
+          <button class="btn btn-sec btn-chico" data-editar-camp="${esc(c.id)}">Editar</button>
+          <button class="btn btn-sec btn-chico" data-eliminar-camp="${esc(c.id)}">Eliminar</button></div></div>`).join('')}</div></section>` : ''}
+    <div class="dos-col"><div class="col"><section class="tarjeta" id="caja-fcamp">
+      <div><h2>${e ? 'Editar campaña planificada' : 'Nueva campaña'}</h2><p class="suave">Cada colaborador recibe un aviso y responde una pregunta a la vez. Lo que guardan queda registrado directo, y aquí ves quién completó.</p></div>
+      <form id="fcamp" class="form-vac" novalidate>
+        <label>Título <input name="titulo" maxlength="100" value="${esc(e ? e.titulo : '')}" placeholder="Ej.: Actualización de datos diciembre 2026"></label>
+        <label>Mensaje para el colaborador (opcional) <textarea name="mensaje" maxlength="500" placeholder="Ej.: Necesitamos tus datos al día para la dotación de uniformes.">${esc(e ? e.mensaje : '')}</textarea></label>
+        <fieldset class="checks"><legend>¿Qué datos debe revisar?</legend>${PF().SECCIONES.map((s) => `<label class="check"><input type="checkbox" name="sec" value="${s.id}"${!e || e.secciones.includes(s.id) ? ' checked' : ''}> ${esc(s.nombre)}</label>`).join('')}</fieldset>
+        <div class="fila">
+          <label class="grow">¿A quién? <select name="alcance">${[['todos', 'Todo el personal'], ['PCA', 'Solo Prosein'], ['AIV', 'Solo Austral']].map(([v, t]) => `<option value="${v}"${v === al ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+          ${e ? '' : `<label class="grow">Fecha límite <input type="date" name="hasta" min="${hoy}" value="${fechaIsoLocal(14)}"></label>`}
+        </div>
+        <div class="error-msg" id="err-camp" hidden></div>
+        <div class="fila">${e ? '<button class="btn" type="submit" data-modo="editar">Guardar cambios</button><button class="btn btn-sec" type="button" id="cancelar-edit">Cancelar</button>'
+          : '<button class="btn" type="submit" data-modo="abrir">Abrir ya y avisar</button><button class="btn btn-sec" type="submit" data-modo="planificar">Guardar para lanzar después</button>'}</div>
+      </form></section></div>
+    <div class="col"><section class="tarjeta"><h2>En curso y anteriores</h2>${otras.length ? `<div class="lista">${otras.map((c) => `
+      <div class="item"><div class="item-cab"><div><b>${esc(c.titulo)}</b><p class="suave">${alcanceTexto(c.alcance)} · hasta el ${esc(V().corta(c.hasta))} · ${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</p></div>
+        ${c.estado === 'CERRADA' ? '<span class="chip chip-neutro">Cerrada</span>' : c.vencida ? '<span class="chip chip-error">Vencida</span>' : '<span class="chip chip-ok">Abierta</span>'}</div>
+        <div class="barra-avance" title="${c.completos} de ${c.personas}"><span style="width:${pctCamp(c)}%"></span></div>
+        <p class="suave"><b>${c.completos}</b> de ${c.personas} completaron (${pctCamp(c)} %)</p>
+        <div class="fila"><button class="btn btn-sec btn-chico" data-ver-camp="${esc(c.id)}">Ver detalle</button></div></div>`).join('')}</div>` : '<p class="vacio">Todavía no has lanzado campañas.</p>'}</section></div></div>`;
+  const porId = (id) => r.data.find((c) => c.id === id);
+  const f = sub.querySelector('#fcamp'), err = sub.querySelector('#err-camp');
+  sub.querySelectorAll('[data-ver-camp]').forEach((b) => b.addEventListener('click', () => { campanaAbierta = b.dataset.verCamp; panelDatosPersonal(panel); }));
+  sub.querySelector('#cargar-plan')?.addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
+    const x = await llamar('cargarPlanCampanas', {});
+    if (!x.ok) return toast(x.message);
+    toast(`${x.data.creadas} campañas planificadas.`); panelDatosPersonal(panel);
+  }));
+  sub.querySelectorAll('[data-editar-camp]').forEach((b) => b.addEventListener('click', () => { editandoCamp = porId(b.dataset.editarCamp); pintarCampanas(panel, sub).then(() => sub.querySelector('#caja-fcamp').scrollIntoView({ behavior: 'smooth' })); }));
+  sub.querySelector('#cancelar-edit')?.addEventListener('click', () => { editandoCamp = null; pintarCampanas(panel, sub); });
+  sub.querySelectorAll('[data-eliminar-camp]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    if (!confirm(`¿Eliminar la campaña planificada «${porId(b.dataset.eliminarCamp).titulo}»?`)) return;
+    const x = await llamar('eliminarCampanaDatos', { id: b.dataset.eliminarCamp });
+    if (!x.ok) return toast(x.message);
+    if (editandoCamp && editandoCamp.id === b.dataset.eliminarCamp) editandoCamp = null;
+    toast('Campaña eliminada.'); panelDatosPersonal(panel);
+  })));
+  sub.querySelectorAll('[data-lanzar]').forEach((b) => b.addEventListener('click', () => {
+    const c = porId(b.dataset.lanzar);
+    dlg.innerHTML = `<form id="flanzar" novalidate><h2>Lanzar campaña</h2><p><b>${esc(c.titulo)}</b></p>
+      <p class="suave">Se avisará a ${esc(alcanceTexto(c.alcance).toLowerCase())} y la verán en su inicio hasta que la completen.</p>
+      <label>Fecha límite <input type="date" name="hasta" min="${hoy}" value="${fechaIsoLocal(14)}"></label>
+      <div class="error-msg" id="err-l" hidden></div>
+      <div class="fila"><button class="btn" type="submit">Lanzar y avisar</button><button class="btn btn-sec" type="button" id="no">Cancelar</button></div></form>`;
+    dlg.querySelector('#no').addEventListener('click', () => dlg.close());
+    const fl = dlg.querySelector('#flanzar');
+    fl.addEventListener('submit', (ev) => { ev.preventDefault(); conBoton(fl.querySelector('button[type=submit]'), async () => {
+      const x = await llamar('lanzarCampanaDatos', { id: c.id, hasta: fl.hasta.value });
+      if (!x.ok) return errorEn(dlg.querySelector('#err-l'), x.message);
+      dlg.close(); toast(`Campaña lanzada: se avisó a ${x.data.personas} persona${x.data.personas === 1 ? '' : 's'}.`);
+      campanaAbierta = c.id; panelDatosPersonal(panel);
+    }); });
+    dlg.showModal();
+  }));
+  f.addEventListener('submit', (ev) => { ev.preventDefault(); const modo = (ev.submitter || {}).dataset?.modo || 'abrir'; conBoton(ev.submitter || f.querySelector('button[type=submit]'), async () => {
+    errorEn(err, '');
+    const a = f.alcance.value, secciones = [...f.querySelectorAll('[name=sec]:checked')].map((x) => x.value);
+    const datos = { titulo: f.titulo.value, mensaje: f.mensaje.value, secciones, alcance: a === 'todos' ? { tipo: 'todos' } : { tipo: 'empresas', empresas: [a] } };
+    if (modo === 'editar') {
+      const x = await llamar('editarCampanaDatos', { id: editandoCamp.id, ...datos });
+      if (!x.ok) return errorEn(err, x.message);
+      editandoCamp = null; toast('Campaña actualizada.'); return panelDatosPersonal(panel);
+    }
+    if (modo === 'planificar') {
+      const x = await llamar('crearCampanaDatos', { ...datos, planificada: true });
+      if (!x.ok) return errorEn(err, x.message);
+      toast('Campaña guardada en «Planificadas».'); return panelDatosPersonal(panel);
+    }
+    datos.hasta = f.hasta.value;
+    if (!confirm(`¿Abrir la campaña «${datos.titulo}» y avisar a ${a === 'todos' ? 'todo el personal' : a === 'AIV' ? 'Austral' : 'Prosein'}?`)) return;
+    const x = await llamar('crearCampanaDatos', datos);
+    if (!x.ok) return errorEn(err, x.message);
+    toast(`Campaña abierta: se avisó a ${x.data.personas} persona${x.data.personas === 1 ? '' : 's'}.`);
+    campanaAbierta = x.data.id; panelDatosPersonal(panel);
+  }); });
+}
+
+async function pintarCampana(panel, sub, id) {
+  const r = await llamar('panelCampanaDatos', { id });
+  if (!r.ok) { sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const { campana: c, filas } = r.data, pend = filas.filter((x) => !x.completo);
+  let filtro = 'pendientes';
+  const pintar = () => {
+    const lista = filtro === 'pendientes' ? pend : filtro === 'completos' ? filas.filter((x) => x.completo) : filas;
+    sub.innerHTML = `<div><button class="btn btn-sec btn-chico" type="button" id="volver-camp">← Todas las campañas</button></div>
+      <section class="tarjeta"><div class="item-cab"><div><h2>${esc(c.titulo)}</h2>
+        <p class="suave">${alcanceTexto(c.alcance)} · hasta el ${esc(V().corta(c.hasta))} · ${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</p>${c.mensaje ? `<p>${esc(c.mensaje)}</p>` : ''}</div>
+        ${c.estado === 'CERRADA' ? '<span class="chip chip-neutro">Cerrada</span>' : '<span class="chip chip-ok">Abierta</span>'}</div>
+        <p><b>${filas.length - pend.length}</b> de ${filas.length} completaron · <b>${pend.length}</b> pendientes</p>
+        <div class="fila">
+          ${c.estado === 'ABIERTA' && pend.length ? `<button class="btn" id="recordar-camp">Recordar a los ${pend.length} pendientes</button>` : ''}
+          <button class="btn btn-sec" id="xls-camp">Descargar Excel</button>
+          ${c.estado === 'ABIERTA' ? '<button class="btn btn-sec" id="cerrar-camp">Cerrar campaña</button>' : ''}
+        </div></section>
+      <section class="tarjeta"><div class="fila">${[['pendientes', `Pendientes (${pend.length})`], ['completos', `Completaron (${filas.length - pend.length})`], ['todos', 'Todos']].map(([k, t]) =>
+        `<button class="btn btn-chico ${k === filtro ? '' : 'btn-sec'}" data-f="${k}">${t}</button>`).join('')}</div>
+        <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Colaborador</th><th>Empresa</th><th>Localidad</th><th>Estado</th><th>Actualizó</th></tr></thead><tbody>
+        ${lista.map((x) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.clave.slice(1))}</span></td><td>${esc(x.empresa)}</td><td>${esc(x.localidad)}</td>
+          <td>${x.completo ? '<span class="chip chip-ok">Completo</span>' : `<span class="chip chip-espera">Falta: ${x.faltan.map(NOMBRE_SECCION).map(esc).join(', ') || 'confirmar'}</span>`}</td>
+          <td>${x.actualizado ? fechaHoraMin(x.actualizado) : '—'}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie en esta lista.</td></tr>'}
+        </tbody></table></div></section>`;
+    sub.querySelector('#volver-camp').addEventListener('click', () => { campanaAbierta = ''; panelDatosPersonal(panel); });
+    sub.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { filtro = b.dataset.f; pintar(); }));
+    sub.querySelector('#recordar-camp')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+      const x = await llamar('recordarCampanaDatos', { id });
+      toast(x.ok ? `Recordatorio enviado a ${x.data.avisados} persona${x.data.avisados === 1 ? '' : 's'}.` : x.message);
+    }));
+    sub.querySelector('#cerrar-camp')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+      if (!confirm('¿Cerrar la campaña? Los colaboradores dejarán de verla como pendiente (sus datos guardados se mantienen).')) return;
+      const x = await llamar('cerrarCampanaDatos', { id });
+      if (!x.ok) return toast(x.message);
+      toast('Campaña cerrada.'); pintarCampana(panel, sub, id);
+    }));
+    sub.querySelector('#xls-camp').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+      const XLSX = await cargarXlsx(), libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(filas.map((x) => ({ 'Cédula': Number(x.clave.slice(1)), Nombre: x.nombre, Empresa: x.empresa, Departamento: x.departamento,
+        Localidad: x.localidad, Estado: x.completo ? 'Completo' : 'Pendiente', Falta: x.faltan.map(NOMBRE_SECCION).join(', '), 'Actualizó': x.actualizado ? fechaHoraMin(x.actualizado) : '' }))), 'Avance');
+      XLSX.writeFile(libro, `Campana-${c.titulo.replace(/[^\w\sáéíóúñÁÉÍÓÚÑ-]/g, '').replace(/\s+/g, '-').slice(0, 40)}.xlsx`);
+    }));
+  };
+  pintar();
+}
+
+/** Una fila plana por persona (y otra hoja con la carga familiar) para el Excel de datos del personal. */
+function filasExcelPerfil(filas) {
+  const plano = [], familia = [];
+  filas.forEach((x) => {
+    const d = x.datos || {}, o = { 'Cédula': Number(x.clave.slice(1)), Nombre: x.nombre, Empresa: x.empresa, Departamento: x.departamento, Localidad: x.localidad, Cargo: x.cargo, 'Fecha de ingreso': x.fechaIngreso };
+    PF().SECCIONES.filter((s) => !s.lista).forEach((s) => s.campos.forEach((c) => { o[`${s.nombre} · ${c.nombre}`] = (d[s.id] || {})[c.id] || ''; }));
+    o['Carga familiar'] = d.familia && d.familia.length ? d.familia.length : d.sinFamilia ? 'No tiene' : '';
+    o['Última actualización'] = x.actualizado ? fechaHoraMin(x.actualizado) : '';
+    plano.push(o);
+    (d.familia || []).forEach((f) => familia.push({ 'Cédula del colaborador': Number(x.clave.slice(1)), Colaborador: x.nombre, Empresa: x.empresa, Familiar: f.nombre, Parentesco: f.parentesco, 'Fecha de nacimiento': f.fechaNacimiento, 'Cédula del familiar': f.cedula || '' }));
+  });
+  return { plano, familia };
+}
+
+function pintarConsultaDatos(sub, filas) {
+  const conDatos = filas.filter((x) => x.actualizado).length;
+  const pintar = () => {
+    const q = buscaDatos.trim().toLowerCase(), lista = q ? filas.filter((x) => x.nombre.toLowerCase().includes(q) || x.clave.includes(q.replace(/\D/g, '') || '§')) : filas;
+    sub.querySelector('#lista-datos').innerHTML = lista.slice(0, 60).map((x) => {
+      const d = x.datos || {};
+      const linea = (s) => (s.lista ? (d.familia || []).map((f) => `${esc(f.nombre)} (${esc(f.parentesco)}, ${esc(f.fechaNacimiento ? V().corta(f.fechaNacimiento) : '')})`).join('<br>') || (d.sinFamilia ? 'No tiene carga familiar' : '—')
+        : s.campos.map((c) => ((d[s.id] || {})[c.id] ? `<span class="suave">${esc(c.nombre)}:</span> ${esc(d[s.id][c.id])}` : '')).filter(Boolean).join('<br>') || '—');
+      return `<details class="item"><summary class="item-cab"><div><b>${esc(x.nombre)}</b><p class="suave">${esc(x.clave.slice(1))} · ${esc(x.empresa)} · ${esc(x.localidad)}</p></div>
+        ${x.actualizado ? (x.faltan.length ? '<span class="chip chip-espera">Incompleto</span>' : '<span class="chip chip-ok">Completo</span>') : '<span class="chip chip-neutro">Sin datos</span>'}</summary>
+        <dl class="datos-nomina">${PF().SECCIONES.map((s) => `<div><dt>${esc(s.nombre)}</dt><dd>${linea(s)}</dd></div>`).join('')}</dl>
+        ${x.actualizado ? `<p class="suave">Actualizó el ${fechaHoraMin(x.actualizado)}</p>` : ''}</details>`;
+    }).join('') + (lista.length > 60 ? `<p class="suave">Mostrando 60 de ${lista.length}. Escribe para buscar.</p>` : '') || '<p class="vacio">Sin resultados.</p>';
+  };
+  sub.innerHTML = `<section class="tarjeta"><div class="item-cab"><div><h2>Datos del personal</h2><p class="suave"><b>${conDatos}</b> de ${filas.length} colaboradores activos han cargado sus datos.</p></div>
+      <button class="btn btn-sec" id="xls-datos">Descargar Excel</button></div>
+    <label>Buscar <input id="busca-datos" value="${esc(buscaDatos)}" placeholder="Nombre o cédula" autocomplete="off"></label>
+    <div class="lista" id="lista-datos"></div></section>`;
+  sub.querySelector('#busca-datos').addEventListener('input', (e) => { buscaDatos = e.target.value; pintar(); });
+  sub.querySelector('#xls-datos').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    const XLSX = await cargarXlsx(), libro = XLSX.utils.book_new(), { plano, familia } = filasExcelPerfil(filas);
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(plano), 'Personal');
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(familia.length ? familia : [{ Familiar: 'Sin registros' }]), 'Carga familiar');
+    XLSX.writeFile(libro, `Datos-del-personal-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }));
+  pintar();
+}
+
+function pintarCambiosPerfil(sub, cambios) {
+  sub.innerHTML = `<section class="tarjeta"><div><h2>Cambios recientes</h2><p class="suave">Lo que cada colaborador cambió en su perfil (los últimos 300 cambios).</p></div>
+    <div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Fecha</th><th>Colaborador</th><th>Dato</th><th>Antes</th><th>Ahora</th></tr></thead><tbody>
+    ${cambios.map((c) => `<tr><td>${fechaHoraMin(c.cuando)}</td><td><b>${esc(c.nombre)}</b><br><span class="suave">${esc(c.clave.slice(1))}</span></td><td>${esc(c.campo)}</td>
+      <td class="suave">${esc(c.antes || '—')}</td><td>${esc(c.despues || '—')}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Todavía no hay cambios.</td></tr>'}
+    </tbody></table></div></section>`;
+}
+
+/* ---------- Cumpleaños y aniversarios ---------- */
+
+async function seccionCelebracion(cont) {
+  cont.innerHTML = `${volver()}${esqueleto(1)}`;
+  const r = await obtener('miCelebracion', conToken());
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } cont.innerHTML = `${volver()}<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const d = r.data, tarjetas = [...(d.cumpleanos ? [{ tipo: 'CUMPLEANOS', nombre: d.nombre }] : []), ...(d.aniversario ? [{ tipo: 'ANIVERSARIO', nombre: d.nombre, anios: d.aniversario }] : [])];
+  if (!tarjetas.length) { cont.innerHTML = `${volver()}<section class="tarjeta"><h2>Celebraciones</h2><p class="vacio">Hoy no tienes celebraciones. ¡Te esperamos en tu día!</p></section>`; cont.querySelector('[data-ir]').addEventListener('click', () => navegar('inicio')); return; }
+  cont.innerHTML = `${volver()}${tarjetas.map((t, i) => `<section class="tarjeta tarjeta-celebracion"><div class="lienzo" data-t="${i}" aria-label="Tarjeta de ${t.tipo === 'CUMPLEANOS' ? 'cumpleaños' : 'aniversario'}">${esqueleto(1)}</div>
+    <div class="fila"><button class="btn" type="button" data-bajar="${i}">Descargar imagen</button></div></section>`).join('')}`;
+  cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+  for (const [i, t] of tarjetas.entries()) {
+    const cv = await dibujarTarjeta(t), img = new Image();
+    img.src = cv.toDataURL('image/png'); img.alt = t.tipo === 'CUMPLEANOS' ? `¡Feliz cumpleaños, ${t.nombre}!` : `¡Feliz aniversario, ${t.nombre}! ${t.anios} años`;
+    const caja = cont.querySelector(`[data-t="${i}"]`); caja.innerHTML = ''; caja.appendChild(img);
+  }
+  cont.querySelectorAll('[data-bajar]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => descargarTarjeta(tarjetas[Number(b.dataset.bajar)]))));
+}
+
+let mesCelebraciones = '';
+async function pintarCelebraciones(sub) {
+  const r = await obtener('celebracionesDelMes', { mes: mesCelebraciones });
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const d = r.data, hoyDia = d.hoy.slice(0, 7) === d.mes ? Number(d.hoy.slice(8, 10)) : 0;
+  const nombreMes = new Date(d.mes + '-15T12:00:00Z').toLocaleDateString('es-VE', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const cumple = d.filas.filter((f) => f.tipo === 'CUMPLEANOS').length, aniv = d.filas.length - cumple;
+  sub.innerHTML = `<section class="tarjeta"><div class="item-cab"><div><h2>Cumpleaños y aniversarios</h2>
+      <p class="suave">Cada mañana, a las 7, el CAC envía los avisos del día. <b>Cumpleaños:</b> a la persona, su felicitación, y a todos, quién cumple. <b>Aniversario:</b> solo a la persona.</p></div>
+      <label>Mes <input type="month" id="mes-cel" value="${esc(d.mes)}"></label></div>
+    <p><b>${cumple}</b> cumpleaños y <b>${aniv}</b> aniversarios en ${esc(nombreMes)}.</p>
+    ${d.sinNacimiento ? `<p class="nota-cel">${d.sinNacimiento} colaborador${d.sinNacimiento === 1 ? '' : 'es'} activo${d.sinNacimiento === 1 ? '' : 's'} sin fecha de nacimiento. Se toma de la columna <b>«Cumpleaños»</b> del Detalle de empleado: vuelve a cargarlo en Empleados.</p>` : ''}
+    <div class="tabla-caja"><table class="tabla-omega tabla-cel"><thead><tr><th>Día</th><th>Celebración</th><th>Colaborador</th><th>Localidad</th><th></th></tr></thead><tbody>
+    ${d.filas.map((f, i) => `<tr${f.dia === hoyDia ? ' class="fila-hoy"' : ''}><td><b>${f.dia}</b>${f.dia === hoyDia ? ' <span class="chip chip-ok">Hoy</span>' : ''}</td>
+      <td>${f.tipo === 'CUMPLEANOS' ? '🎂 Cumpleaños' : `🎉 Aniversario · ${f.anios} año${f.anios === 1 ? '' : 's'}`}</td>
+      <td><b>${esc(f.nombre)}</b><br><span class="suave">${esc([f.cargo, f.empresa === 'AIV' ? 'Austral' : 'Prosein'].filter(Boolean).join(' · '))}</span></td><td>${esc(f.localidad)}</td>
+      <td><div class="acciones-cel"><button class="btn btn-sec btn-chico" data-tarjeta="${i}">Descargar tarjeta</button>${f.dia === hoyDia ? `<button class="btn btn-sec btn-chico" data-reenviar="${i}" title="Volver a enviar el aviso a esta persona">Reenviar</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie celebra en este mes.</td></tr>'}
+    </tbody></table></div></section>`;
+  sub.querySelector('#mes-cel').addEventListener('change', (e) => { mesCelebraciones = e.target.value; pintarCelebraciones(sub); });
+  sub.querySelectorAll('[data-reenviar]').forEach((b) => b.addEventListener('click', () => conBoton(b, async () => {
+    const f = d.filas[Number(b.dataset.reenviar)], que = f.tipo === 'CUMPLEANOS' ? 'la felicitación de cumpleaños' : `la felicitación de aniversario (${f.anios} año${f.anios === 1 ? '' : 's'})`;
+    if (!confirm(`¿Enviar de nuevo ${que} a ${f.nombre}? Le llega solo a esa persona, a la campanita y al celular.`)) return;
+    const x = await llamar('reenviarCelebracion', { clave: f.clave, tipo: f.tipo });
+    if (!x.ok) return toast(x.message);
+    toast(x.data.push === 'ENVIADO' ? `Aviso enviado a ${x.data.nombre}.` : `Aviso enviado a la campanita de ${x.data.nombre}${x.data.push === 'SIN_DESTINATARIOS' ? ' (no tiene los avisos al celular activados)' : ''}.`);
+  })));
+  sub.querySelectorAll('[data-tarjeta]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => { const f = d.filas[Number(b.dataset.tarjeta)]; return descargarTarjeta({ tipo: f.tipo, nombre: f.nombre, anios: f.anios }); })));
 }

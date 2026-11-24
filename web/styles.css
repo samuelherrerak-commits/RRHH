@@ -38,6 +38,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 label { display: grid; gap: var(--s1); font-weight: 500; font-size: 14px; }
 input, select, textarea { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--linea); border-radius: var(--radio-sm); background: #fff; font-size: 16px; }
 textarea { min-height: 88px; resize: vertical; }
+/* Safari (iPhone): el campo de fecha vacío se encoge y tiene un ancho mínimo propio que lo monta sobre el de al lado */
+input[type="date"], input[type="month"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; height: 48px; line-height: 26px; color: var(--tinta); }
+input[type="date"]::-webkit-date-and-time-value, input[type="month"]::-webkit-date-and-time-value { text-align: left; min-height: 26px; }
+label { min-width: 0; }
 input:focus, select:focus, textarea:focus { border-color: var(--marca); outline: 0; box-shadow: 0 0 0 3px rgb(20 22 24 / .12); }
 
 .btn { min-height: 48px; padding: 0 var(--s5); border: 0; border-radius: var(--radio-sm); background: var(--marca); color: #fff; font-weight: 600; cursor: pointer; transition: transform 160ms var(--ease), background 160ms; }
@@ -262,8 +266,8 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 .avisos-cab { display: flex; justify-content: space-between; align-items: center; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--linea-suave); color: var(--carbon); }
 .avisos-x { border: 0; background: none; font-size: 24px; line-height: 1; cursor: pointer; color: var(--tinta-2); width: 36px; height: 36px; border-radius: 999px; }
 .avisos-lista { overflow-y: auto; }
-.aviso { width: 100%; display: grid; grid-template-columns: 36px 1fr; gap: var(--s3); text-align: left; padding: var(--s3) var(--s4); border: 0; border-bottom: 1px solid var(--linea-suave); background: #fff; cursor: pointer; font: inherit; color: var(--tinta); }
-.aviso:hover { background: var(--fondo); }
+.avisos-lista .aviso { width: 100%; display: grid; grid-template-columns: 36px 1fr; gap: var(--s3); text-align: left; padding: var(--s3) var(--s4); border: 0; border-bottom: 1px solid var(--linea-suave); background: #fff; cursor: pointer; font: inherit; color: var(--tinta); }
+.avisos-lista .aviso:hover { background: var(--fondo); }
 .aviso-nuevo { background: var(--austral-velo); }
 .aviso-icono { width: 36px; height: 36px; border-radius: 10px; background: var(--marca-velo); color: var(--marca); display: grid; place-items: center; }
 .aviso-icono .icono { width: 19px; height: 19px; }
@@ -322,7 +326,7 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 details summary { cursor: pointer; color: var(--tinta-2); font-size: 14px; }
 /* ---- Planificación del colaborador ---- */
 .bloques { display: grid; gap: var(--s3); }
-.bloque { display: grid; grid-template-columns: 28px minmax(0, 1fr) 120px; gap: var(--s2) var(--s3); align-items: end; border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s3); }
+.bloque { display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(0, 104px); gap: var(--s2) var(--s3); align-items: end; border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s3); }
 .bloque-n { width: 28px; height: 28px; border-radius: 50%; background: var(--marca); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; align-self: center; }
 .bloque-fin { grid-column: 2 / -1; font-size: 13px; }
 .bloque .btn-link { grid-column: 2 / -1; justify-self: start; }
@@ -344,3 +348,97 @@ input.pin { letter-spacing: .6em; font-size: 22px; text-align: center; max-width
 .cifras-lote div { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--linea-suave); padding-bottom: 6px; }
 .cifras-lote b { font-size: 17px; color: var(--carbon); font-variant-numeric: tabular-nums; order: 2; }
 .cifras-lote span { font-size: 13px; color: var(--tinta-2); }
+/* Nóminas especiales */
+.buscador-nom { position: relative; }
+.resultados-nom { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin-top: 4px; background: #fff; border: 1px solid var(--linea); border-radius: var(--radio-sm); box-shadow: var(--sombra); max-height: 340px; overflow: auto; padding: 4px; font-weight: 400; }
+.opcion-nom { display: grid; gap: 2px; width: 100%; text-align: left; background: none; border: 0; padding: 10px 12px; border-radius: 8px; cursor: pointer; }
+.opcion-nom:hover:not(:disabled), .opcion-nom:focus-visible { background: var(--fondo); }
+.opcion-nom:disabled { opacity: .5; cursor: default; }
+.opcion-nom span { font-size: 13px; color: var(--tinta-2); }
+.tabla-nom td:first-child { min-width: 0; width: 1%; white-space: nowrap; }
+.carga-nom { display: flex; gap: var(--s3); }
+.revision-nom { border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s4); display: grid; gap: var(--s3); background: var(--fondo); }
+.sel-nom { min-height: 38px; padding: 4px 8px; font-size: 13px; max-width: 360px; }
+.tabla-omega input[type=checkbox] { width: 20px; height: 20px; min-height: 0; padding: 0; }
+/* Quincena */
+.pasos-q { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s2); }
+.pasos-q button { width: 100%; display: flex; align-items: center; gap: 8px; border: 1px solid var(--linea); background: #fff; border-radius: var(--radio-sm); padding: 10px 12px; font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; color: var(--tinta); }
+.pasos-q button[aria-current="step"] { border-color: var(--carbon); box-shadow: inset 0 0 0 1px var(--carbon); }
+.pasos-q .num-paso { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--marca-velo); font-size: 13px; }
+.pasos-q .hecho .num-paso { background: var(--ok); color: #fff; }
+.listo-q { justify-content: space-between; }
+@media (max-width: 900px) { .pasos-q { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Mi perfil y Datos del personal ---------- */
+.campos-perfil { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s3) var(--s4); }
+.campos-perfil .ancho { grid-column: 1 / -1; }
+.campos-perfil textarea { min-height: 64px; }
+.req { color: var(--rojo); }
+.familiar { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--linea-suave); border-radius: var(--radio-sm); background: var(--fondo); }
+.familiar > .btn { justify-self: start; }
+#familiares { display: grid; gap: var(--s3); }
+.check { display: inline-flex; grid-auto-flow: column; align-items: center; gap: var(--s2); font-weight: 500; }
+.check input { width: 20px; height: 20px; min-height: 20px; }
+.checks { border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin: 0; }
+.checks legend { font-weight: 500; font-size: 14px; padding: 0 var(--s1); }
+.datos-nomina { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s3) var(--s4); margin: 0; }
+.datos-nomina dt { font-size: 12px; color: var(--tinta-3); }
+.datos-nomina dd { margin: 0; font-weight: 500; color: var(--carbon); overflow-wrap: anywhere; }
+.aviso-campana { border-left: 4px solid var(--espera); background: var(--espera-velo); }
+.aviso-inicio { display: grid; grid-template-columns: 28px 1fr 20px; align-items: center; gap: var(--s3); width: 100%; text-align: left; font: inherit; color: var(--tinta);
+  border: 0; border-left: 4px solid var(--espera); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); cursor: pointer; }
+.aviso-inicio .icono { color: var(--espera); width: 26px; height: 26px; }
+.aviso-inicio span { display: grid; } .aviso-inicio b { color: var(--carbon); }
+.barra-guardar { position: sticky; bottom: 0; background: var(--fondo); padding: var(--s3) 0; z-index: 2; }
+#fperfil { display: grid; gap: var(--s4); }
+.barra-avance { height: 8px; border-radius: 999px; background: var(--linea-suave); overflow: hidden; }
+.barra-avance span { display: block; height: 100%; background: var(--ok); border-radius: inherit; }
+details.item > summary { list-style: none; cursor: pointer; }
+details.item > summary::-webkit-details-marker { display: none; }
+details.item[open] { gap: var(--s3); }
+.tabla-omega td .chip { white-space: normal; }
+/* Actualización de datos: una pregunta por pantalla */
+.asistente { gap: var(--s4); min-height: 360px; align-content: start; }
+.avance-asis { display: grid; gap: var(--s1); }
+.kicker-perfil { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--tinta-3); }
+.pregunta { font-size: 24px; line-height: 1.25; }
+.respuesta input, .respuesta select, .respuesta textarea { font-size: 18px; min-height: 52px; }
+.respuesta textarea { min-height: 96px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.opciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2); }
+.opcion { min-height: 52px; padding: var(--s2) var(--s4); border: 1.5px solid var(--linea); border-radius: var(--radio-sm); background: #fff; font: inherit; font-weight: 500; color: var(--carbon); cursor: pointer; text-align: left; }
+.opcion:hover { border-color: var(--tinta-3); }
+.opcion[aria-pressed="true"] { border-color: var(--carbon); background: var(--marca-velo); box-shadow: inset 0 0 0 1px var(--carbon); }
+.campos-familiar { display: grid; gap: var(--s3); }
+.nav-asis { justify-content: flex-end; margin-top: auto; }
+.nav-asis .btn { min-width: 120px; }
+.revisa { display: grid; border: 1px solid var(--linea-suave); border-radius: var(--radio-sm); }
+.revisa-fila { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--linea-suave); }
+.revisa-fila:last-child { border-bottom: 0; }
+.revisa-fila > div { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.revisa-fila .suave { font-size: 12px; }
+.enlace { background: none; border: 0; padding: var(--s1); color: var(--austral); font: inherit; font-weight: 600; cursor: pointer; flex: none; }
+.lista-simple { margin: 0; padding-left: var(--s5); display: grid; gap: var(--s1); }
+/* Cumpleaños y aniversarios */
+.aviso-celebracion { display: grid; grid-template-columns: 36px 1fr 20px; align-items: center; gap: var(--s3); width: 100%; text-align: left; font: inherit; color: var(--tinta);
+  border: 0; border-radius: var(--radio-sm); padding: var(--s3) var(--s4); cursor: pointer; background: linear-gradient(90deg, var(--rojo-velo), #fff); border-left: 4px solid var(--rojo); }
+.aviso-celebracion .emoji { font-size: 30px; line-height: 1; }
+.aviso-celebracion span { display: grid; } .aviso-celebracion b { color: var(--carbon); }
+.aviso-celebracion .icono { color: var(--rojo); }
+.tarjeta-celebracion .lienzo img { display: block; width: 100%; max-width: 540px; margin: 0 auto; border-radius: var(--radio-sm); box-shadow: var(--sombra); }
+.fila-hoy td { background: var(--ok-velo); }
+.nota-cel { background: var(--espera-velo); color: var(--espera); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); font-size: 14px; }
+.tabla-omega td .btn { white-space: nowrap; }
+.tabla-cel { min-width: 0; width: 100%; } .tabla-cel th:first-child, .tabla-cel td:first-child { width: 90px; min-width: 0; white-space: nowrap; } .tabla-cel td:last-child { text-align: right; padding-right: 16px; }
+.acciones-cel { display: flex; gap: var(--s2); justify-content: flex-end; flex-wrap: nowrap; }
+.tabla-cel td:nth-child(4) { white-space: normal; min-width: 120px; }
+/* Constancia: a quién va dirigida */
+.destino { border: 0; padding: 0; margin: 0; display: grid; gap: var(--s2); }
+.destino legend { font-weight: 500; font-size: 14px; margin-bottom: var(--s2); }
+.opcion-radio { display: grid; grid-template-columns: 22px 1fr; gap: var(--s3); align-items: start; padding: var(--s3) var(--s4); border: 1.5px solid var(--linea); border-radius: var(--radio-sm); cursor: pointer; font-weight: 400; }
+.opcion-radio:has(input:checked) { border-color: var(--carbon); background: var(--marca-velo); }
+.opcion-radio input { width: 20px; height: 20px; min-height: 20px; margin-top: 2px; }
+.opcion-radio span { display: grid; gap: 2px; } .opcion-radio b { color: var(--carbon); } .opcion-radio small { color: var(--tinta-2); font-size: 13px; }
+
+.bloque label { min-width: 0; } .bloque input { min-width: 0; }
+@media (max-width: 420px) { .bloque { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 88px); } }

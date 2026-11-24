@@ -21,6 +21,8 @@
   var Recibos = isNode ? require('./recibos.js') : dependencia(raiz, 'Recibos');
   var Planificacion = isNode ? require('./planificacion.js') : dependencia(raiz, 'Planificacion');
   var Omega = isNode ? require('./omega.js') : dependencia(raiz, 'Omega');
+  var Comisiones = isNode ? require('./comisiones.js') : dependencia(raiz, 'Comisiones');
+  var Perfil = isNode ? require('./perfil.js') : dependencia(raiz, 'Perfil');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
@@ -292,23 +294,24 @@
    * APROBADAS de antes) y las pasa a EN_ARCHIVO. RRHH no aprueba: el banco es quien acepta o rechaza.
    * Mismo diseño que NOMINA APORTES con TIPO T = 5.
    */
-  function generarArchivoAnticipos(repo, ctx, token, empresa) {
+  function generarArchivoAnticipos(repo, ctx, token, empresa, repetir) {
     var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
     if (!s) return err('SESION', 'No autorizado.');
     var cfg = repo.empresaConfig(empresa);
     if (!cfg) return err('VALIDACION', 'Empresa desconocida.');
-    var pendientes = repo.anticiposPorEstado('PENDIENTE').concat(repo.anticiposPorEstado('APROBADA')).filter(function (a) {
+    // repetir: vuelve a generar el archivo de las que ya están «Enviada al banco», sin cambiar nada
+    var pendientes = (repetir ? repo.anticiposPorEstado('EN_ARCHIVO') : repo.anticiposPorEstado('PENDIENTE').concat(repo.anticiposPorEstado('APROBADA'))).filter(function (a) {
       var e = repo.empleadoPorClave(a.clave);
       return e && Empleados.empresaFideicomiso(e) === empresa;
     });
-    if (!pendientes.length) return err('VACIO', 'No hay solicitudes de anticipo recibidas para ' + empresa + '.');
+    if (!pendientes.length) return err('VACIO', repetir ? 'No hay anticipos de ' + empresa + ' enviados al banco.' : 'No hay solicitudes de anticipo recibidas para ' + empresa + '.');
     var items = pendientes.map(function (a) {
       var e = repo.empleadoPorClave(a.clave);
       return { cedulaLetra: e.cedulaLetra, cedulaNumero: e.cedulaNumero, nombre: e.nombre, monto: a.monto };
     });
     var filas = Exportes.filasNomina(items, { fideicomiso: cfg.fideicomiso, tipoT: cfg.tipoTAnticipo, forma: cfg.forma });
-    pendientes.forEach(function (a) { cambiarEstado(repo, ctx, a, 'EN_ARCHIVO', s.clave, {}); });
-    repo.log('ARCHIVO_ANTICIPOS', s.clave, empresa + ' · ' + pendientes.length + ' anticipos');
+    if (!repetir) pendientes.forEach(function (a) { cambiarEstado(repo, ctx, a, 'EN_ARCHIVO', s.clave, {}); });
+    repo.log(repetir ? 'ARCHIVO_ANTICIPOS_COPIA' : 'ARCHIVO_ANTICIPOS', s.clave, empresa + ' · ' + pendientes.length + ' anticipos');
     return ok({ filas: filas, csv: Exportes.aCsv(filas, { decimales: { 5: 2 } }), cantidad: pendientes.length });
   }
 
@@ -523,7 +526,7 @@
     return {
       id: c.id, nombre: c.nombre, cedula: c.cedula, empresa: c.empresa, empresaNombre: Constancia.NOMBRES_EMPRESA[c.empresa] || c.empresa,
       cargo: c.cargo, organizacion: c.organizacion, fechaIngreso: c.fechaIngreso, salario: c.salario,
-      emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora),
+      emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora), destinatario: c.destinatario || '',
       firmante: p ? firmante(p) : undefined,
     };
   }
@@ -534,7 +537,11 @@
    * Solo una a la vez: mientras tenga una VIGENTE no se genera otra (se vuelve a descargar la misma).
    * Cuando vence, o si RRHH la anula, puede generar una nueva.
    */
-  function emitirConstancia(repo, ctx, token) {
+  /** Destinatario de la constancia: '' = «A quien pueda interesar»; si no, la institución (texto limpio, hasta 120). */
+  function limpiarDestinatario(t) { return String(t == null ? '' : t).replace(/[<>{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+  function mismoDestinatario(a, b) { var n = function (x) { return Empleados.normalizarNombre(limpiarDestinatario(x)); }; return n(a) === n(b); }
+
+  function emitirConstancia(repo, ctx, token, destinatario) {
     var s = leerToken(ctx, token, ['TRABAJADOR']);
     if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
     var emp = repo.empleadoPorClave(s.clave);
@@ -544,10 +551,13 @@
     var p = repo.parametros(), ahora = ctx.ahora();
     var max = Number(p.constanciasMaxPorMes) > 0 ? Number(p.constanciasMaxPorMes) : MAX_CONSTANCIAS_MES;
     var propias = repo.constanciasDe(s.clave);
-    var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE'; })[0];
+    var dest = limpiarDestinatario(destinatario);
+    if (destinatario != null && String(destinatario).trim() && dest.length < 3) return err('VALIDACION', 'Escribe el nombre de la institución a la que va dirigida.');
+    // Una vigente por destinatario: con el mismo destinatario se vuelve a descargar la que ya tiene.
+    var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE' && mismoDestinatario(c.destinatario, dest); })[0];
     if (vigente) {
       var hasta = Constancia.fechaCaracas(vigente.vence);
-      return err('YA_VIGENTE', 'Ya tienes una constancia vigente hasta el ' + Constancia.fechaCorta(hasta) +
+      return err('YA_VIGENTE', 'Ya tienes una constancia vigente ' + (dest ? 'dirigida a ' + vigente.destinatario : '«A quien pueda interesar»') + ' hasta el ' + Constancia.fechaCorta(hasta) +
         '. Puedes descargarla de nuevo; podrás generar una nueva a partir del ' + Constancia.fechaCorta(Constancia.sumarDias(hasta, 1)) + '.');
     }
     var recientes = propias.filter(function (c) { return c.emision > ahora - 30 * 86400000; });
@@ -556,7 +566,7 @@
       id: repo.nuevoIdConstancia(), clave: s.clave, nombre: emp.nombre, cedula: emp.cedulaLetra + '-' + emp.cedulaNumero,
       empresa: Empleados.empresaFideicomiso(emp), cargo: emp.puesto, organizacion: emp.organizacion,
       fechaIngreso: Constancia.fechaCorta(emp.fechaIngreso), salario: Calculo.redondear2(emp.salarioMensual),
-      emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave,
+      emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave, destinatario: dest,
     };
     repo.guardarConstancia(c);
     repo.log('CONSTANCIA_EMITIDA', s.clave, c.id);
@@ -863,8 +873,10 @@
     var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
       .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
     var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
+    var activos = r.empleados.filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina; });
+    var conNacimiento = activos.filter(function (e) { return e.fechaNacimiento; }).length;
     repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
-    return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula });
+    return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula, conNacimiento: conNacimiento, activos: activos.length });
   }
 
   /** opciones: { buscar, departamento, sinJefe } */
@@ -1131,7 +1143,8 @@
     var claves = Object.keys(avisadas);
     try { if (claves.length && repo.enviarPush) repo.enviarPush(claves.map(function (c) { return idPush(ctx, c); }), 'Tu constancia de trabajo venció', 'Ya puedes generar una nueva en el CAC.', 'constancia'); }
     catch (e) { /* sin celular */ }
-    return ok({ avisadas: claves.length });
+    var cel = avisosCelebraciones(repo, ctx);
+    return ok({ avisadas: claves.length, cumpleanos: cel.cumpleanos, aniversarios: cel.aniversarios });
   }
 
   /* ---------- Vacaciones: panel de días pendientes (RRHH) ---------- */
@@ -1477,6 +1490,86 @@
     return ok({ id: x.r.id, visto: x.r.visto, conforme: x.r.conforme });
   }
 
+  /* ---------- Quincena: proceso completo de nómina (detalle, vacaciones, comisiones, cestaticket, complemento) ---------- */
+
+  var PASOS_QUINCENA = ['detalle', 'vacaciones', 'comisiones', 'cestaticket', 'complemento'];
+
+  function quincenaListar(repo, ctx, token) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    return ok(repo.omegaQuincenas().map(function (q) {
+      var pasos = q.pasos || {};
+      return { id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, creada: q.creada, hechos: PASOS_QUINCENA.filter(function (p) { return pasos[p] && pasos[p].hecho; }).length };
+    }).sort(function (a, b) { return a.id < b.id ? 1 : -1; }));
+  }
+
+  function quincenaVer(repo, ctx, token, id) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    var q = quincenaOmega(repo, id);
+    if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+    var v = vistaQuincena(repo, q, configOmega(repo)), pasos = q.pasos || {};
+    var com = pasos.comisiones && pasos.comisiones.nomina ? repo.nominaEspecialPorId(pasos.comisiones.nomina) : null;
+    return ok({ id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, pasos: pasos, orden: PASOS_QUINCENA, lotes: v.lotes, sin1Q: v.sin1Q,
+      comisiones: com ? vistaNominaEsp(com) : null });
+  }
+
+  function quincenaAbrir(repo, ctx, token, mes, quincena, tasa) {
+    var r = omegaAbrirQuincena(repo, ctx, token, mes, quincena, tasa);
+    if (!r.ok) return r;
+    return quincenaVer(repo, ctx, token, r.data.id);
+  }
+
+  /** Guarda el estado de un paso (hecho y un resumen corto que se muestra al volver). */
+  function quincenaPaso(repo, ctx, token, id, paso, datos) {
+    var s = sesionRRHH(ctx, token);
+    if (!s) return err('SESION', 'No autorizado.');
+    if (PASOS_QUINCENA.indexOf(paso) === -1) return err('VALIDACION', 'Paso desconocido.');
+    var q = quincenaOmega(repo, id);
+    if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+    q.pasos = q.pasos || {};
+    var previo = q.pasos[paso] || {}, d = datos || {};
+    var limpio = JSON.parse(JSON.stringify(d.resumen || {}));
+    if (JSON.stringify(limpio).length > 20000) return err('VALIDACION', 'El resumen es demasiado grande.');
+    q.pasos[paso] = Object.assign({}, previo, limpio, { hecho: d.hecho != null ? !!d.hecho : !!previo.hecho, cuando: ctx.ahora(), por: s.clave });
+    q.actualizada = ctx.ahora();
+    repo.guardarOmegaQuincena(q);
+    return quincenaVer(repo, ctx, token, id);
+  }
+
+  /** Lo que cambiaría al cargar el detalle: ingresos, egresos y actualizados (sin guardar nada). */
+  function previaDetalle(repo, ctx, token, filas) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    if (!Array.isArray(filas) || !filas.length) return err('VALIDACION', 'El archivo no trae empleados.');
+    var validas = filas.filter(function (f) { var c = Empleados.parsearCedula(f.cedula); return c.numero && c.numero.length >= 5; });
+    var antes = {}; repo.todosEmpleados().forEach(function (e) { antes[Empleados.claveCedula(e)] = e; });
+    var r = Empleados.fusionarDetalle(repo.todosEmpleados(), validas), fecha = function (f) { return f ? ('0' + f.d).slice(-2) + '/' + ('0' + f.m).slice(-2) + '/' + f.y : ''; };
+    var ingresos = [], reingresos = [], egresos = [];
+    r.empleados.forEach(function (e) {
+      var k = Empleados.claveCedula(e), a = antes[k], x = { clave: k, nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', empresa: Empleados.empresaFideicomiso(e), ingreso: fecha(e.fechaIngreso) };
+      if (!a) ingresos.push(x);
+      else if (a.estado === 'Inactivo' && e.estado !== 'Inactivo') reingresos.push(x);
+      else if (a.estado !== 'Inactivo' && e.estado === 'Inactivo') egresos.push(x);
+    });
+    return ok({ filas: validas.length, sinCedula: filas.length - validas.length, ingresos: ingresos, reingresos: reingresos, egresos: egresos, actualizados: r.resumen.actualizados });
+  }
+
+  /** Vacaciones con pago (aprobadas por el jefe o registradas) que se pagan en esta quincena. */
+  function vacacionesQuincena(repo, ctx, token, id) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    var lista = [];
+    ['APROBADA_JEFE', 'REGISTRADA'].forEach(function (est) {
+      repo.vacSolicitudesPorEstado(est).forEach(function (x) {
+        var pagos = (x.imputacion || []).filter(function (i) { return i.pagaPeriodo; });
+        if (!pagos.length || Omega.quincenaDePagoVacaciones(x.inicio) !== id) return;
+        var e = repo.empleadoPorClave(x.clave) || {};
+        lista.push({ id: x.id, clave: x.clave, cedula: e.cedulaNumero || x.clave.slice(1), nombre: e.nombre || x.clave, empresa: e.nombre ? Empleados.empresaFideicomiso(e) : '',
+          inicio: x.inicio, culminacion: x.culminacion, reintegro: x.reintegro, dias: x.dias, estado: x.estado, nomina: x.nomina || '',
+          periodos: pagos.map(function (i) { return { periodo: i.periodo, dias: i.diasDelPeriodo }; }) });
+      });
+    });
+    lista.sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; });
+    return ok(lista);
+  }
+
   /* ---------- Omega Capital: cestaticket y Omega Transferencia por quincena, en 4 lotes ---------- */
 
   function configOmega(repo) {
@@ -1511,7 +1604,7 @@
     if (!q1) return { existe: false, pagado: r, validados: {} };
     Omega.LOTES.forEach(function (l) {
       if (!q1.lotes[l.id] || q1.lotes[l.id].estado !== 'VALIDADO') return;
-      r[l.id] = {}; repo.omegaPagos(q1.id, l.id).forEach(function (x) { r[l.id][x.clave] = x.montoBs; });
+      r[l.id] = {}; repo.omegaPagos(q1.id, l.id).forEach(function (x) { r[l.id][x.clave] = Omega.r2(x.montoBs - ((x.detalle && x.detalle.adicionalBs) || 0)); });   // lo adicional de la 1Q no se descuenta
     });
     var val = {}; Omega.LOTES.forEach(function (l) { val[l.id] = !!(q1.lotes[l.id] && q1.lotes[l.id].estado === 'VALIDADO'); });
     return { existe: true, pagado: r, validados: val };
@@ -1528,11 +1621,21 @@
       cache.calc = Omega.lineasQuincena(personasOmega(repo), benef, q.mes, q.quincena, q.tasa, p1.pagado, cfg.parametros);
     }
     var aj = q.ajustes[loteId] || {};
-    return (cache.calc[loteId] || []).map(function (l) {
-      var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs });
+    var vistos = {};
+    var lineas = (cache.calc[loteId] || []).map(function (l) {
+      vistos[l.clave] = true;
+      var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs, adicional: Number(a.adicional) || 0, notaAdicional: a.nota || '' });
       if (a.monto != null && a.monto !== '') { x.montoBs = Omega.r2(a.monto); x.ajustado = true; }
+      if (x.adicional) x.montoBs = Omega.r2(x.montoBs + x.adicional);
       return x;
     });
+    // personas agregadas a mano en este lote (solo un monto adicional de esta quincena)
+    Object.keys(aj).forEach(function (k) {
+      var a = aj[k]; if (vistos[k] || !a.agregada) return;
+      lineas.push({ clave: k, cedula: a.cedula || k.slice(1), nombre: a.nombre || k, usd: 0, montoBs: Omega.r2(a.adicional), calculado: 0, adicional: Number(a.adicional) || 0,
+        notaAdicional: a.nota || '', agregada: true, excluida: !!a.excluir, anticipoBs: 0, dias: 0, detalle: {} });
+    });
+    return lineas;
   }
 
   function resumenLote(lineas, cfg) {
@@ -1686,6 +1789,17 @@
     if (q.lotes[loteId] && q.lotes[loteId].estado === 'VALIDADO') return err('VALIDADO', 'El lote ya está validado: reábrelo para cambiarlo.');
     var aj = q.ajustes[loteId] = q.ajustes[loteId] || {}, a = aj[clave] = aj[clave] || {};
     if (cambio && cambio.excluir != null) { if (cambio.excluir) a.excluir = true; else delete a.excluir; }
+    if (cambio && 'adicional' in cambio) {
+      var ad = cambio.adicional == null || cambio.adicional === '' ? 0 : Number(String(cambio.adicional).replace(/\./g, '').replace(',', '.'));
+      if (!isFinite(ad)) return err('VALIDACION', 'Monto adicional no válido.');
+      if (ad) { a.adicional = Omega.r2(ad); a.nota = String(cambio.nota || a.nota || '').slice(0, 120); } else { delete a.adicional; delete a.nota; }
+      if (cambio.agregar) {
+        var e = repo.empleadoPorClave(clave);
+        if (!e) return err('NO_ENCONTRADO', 'No encontramos a esa persona.');
+        a.agregada = true; a.nombre = e.nombre; a.cedula = e.cedulaNumero;
+      }
+      if (a.agregada && !a.adicional) delete aj[clave];
+    }
     if (cambio && 'monto' in cambio) {
       var m = cambio.monto == null || cambio.monto === '' ? null : Number(String(cambio.monto).replace(/\./g, '').replace(',', '.'));
       if (m == null) delete a.monto; else if (isFinite(m) && m >= 0) a.monto = Omega.r2(m); else return err('VALIDACION', 'Monto no válido.');
@@ -1715,7 +1829,7 @@
     repo.quitarOmegaPagos(id, loteId);
     repo.agregarOmegaPagos(lineas.map(function (x) {
       return { quincena: id, lote: loteId, clave: x.clave, cedula: x.cedula, nombre: x.nombre, usd: x.usd, montoBs: x.montoBs, anticipoBs: x.anticipoBs || 0,
-        dias: x.dias, detalle: x.detalle, validado: ahora };
+        dias: x.dias, detalle: Object.assign({}, x.detalle, x.adicional ? { adicionalBs: x.adicional, notaAdicional: x.notaAdicional } : {}), validado: ahora };
     }));
     var total = Omega.r2(lineas.reduce(function (t, x) { return t + x.montoBs; }, 0));
     q.lotes[loteId] = { estado: 'VALIDADO', cuando: ahora, por: s.clave, personas: lineas.length, total: total };
@@ -1790,7 +1904,493 @@
     return ok(b);
   }
 
+  /* ---------- Nóminas especiales: el jefe solicita un pago especial y Gestión Humana lo registra en la nómina ---------- */
+
+  var MONEDAS_NOMINA = ['Bs.', '$'];
+  function vistaNominaEsp(n) {
+    return { id: n.id, concepto: n.concepto, moneda: n.moneda, fechaPago: n.fechaPago, observacion: n.observacion, items: n.items, total: n.total, personas: n.personas,
+      verificacion: n.verificacion || null, estado: n.estado, solicitadaPor: n.solicitadaPor, solicitadaPorNombre: n.solicitadaPorNombre, solicitada: n.solicitada,
+      atendidaPor: n.atendidaPor, atendidaPorNombre: n.atendidaPorNombre, atendida: n.atendida, referencia: n.referencia, motivo: n.motivo };
+  }
+  function nombreUsuario(repo, clave) {
+    var d = digitos(clave), e = repo.empleadoPorClave('V' + d) || repo.empleadoPorClave('E' + d);
+    if (e) return e.nombre;
+    var u = repo.todosUsuarios().filter(function (x) { return digitos(x.cedula) === d; })[0];
+    return u ? u.nombre : d;
+  }
+
+  /** Solicitud de una nómina de pago especial. datos: { concepto, moneda, fechaPago, observacion, items: [{ clave, monto }] } */
+  function solicitarNominaEspecial(repo, ctx, token, datos) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    datos = datos || {};
+    var concepto = String(datos.concepto || '').trim().slice(0, 120);
+    if (!concepto) return err('VALIDACION', 'Escribe el concepto del pago (por ejemplo, «Bono por cierre de inventario»).');
+    var moneda = MONEDAS_NOMINA.indexOf(datos.moneda) !== -1 ? datos.moneda : 'Bs.';
+    var fechaPago = /^\d{4}-\d{2}-\d{2}$/.test(String(datos.fechaPago || '')) ? datos.fechaPago : '';
+    var vistos = {}, items = [], errores = [];
+    var alias = {};
+    (datos.items || []).forEach(function (it) {
+      var e = it.clave ? repo.empleadoPorClave(it.clave) : null, monto = Math.round((Number(it.monto) || 0) * 100) / 100;
+      if (!e && !it.clave && it.cedula) {   // persona que no está en el CAC (la escribe Gestión Humana)
+        var ced = Empleados.numeroDeCedulaTexto(it.cedula), nom = String(it.nombre || '').trim().toUpperCase();
+        if (!ced || !nom) { errores.push('Falta la cédula o el nombre de una persona escrita a mano.'); return; }
+        if (vistos['V' + ced]) { errores.push(nom + ' está repetido.'); return; }
+        vistos['V' + ced] = true;
+        if (!(monto > 0)) { errores.push('Falta el monto de ' + nom + '.'); return; }
+        items.push({ clave: 'V' + ced, cedula: ced, cedulaLetra: 'V', nombre: nom, empresa: '', organizacion: '', monto: monto, manual: true });
+        return;
+      }
+      if (!e) { errores.push('No encontramos a ' + (it.clave || 'una persona') + '.'); return; }
+      (it.nombresReporte || []).forEach(function (n) { var k = Comisiones.clave(n); if (k && k !== Comisiones.clave(e.nombre)) alias[k] = Empleados.claveCedula(e); });
+      var clave = Empleados.claveCedula(e);
+      if (vistos[clave]) { errores.push(e.nombre + ' está repetido.'); return; }
+      vistos[clave] = true;
+      if (!(monto > 0)) { errores.push('Falta el monto de ' + e.nombre + '.'); return; }
+      if (e.estado === 'Inactivo') { errores.push(e.nombre + ' ya no está activo.'); return; }
+      items.push({ clave: clave, cedula: e.cedulaNumero, cedulaLetra: e.cedulaLetra, nombre: e.nombre, empresa: Empleados.empresaFideicomiso(e), organizacion: e.organizacion || '', monto: monto });
+    });
+    if (errores.length) return err('VALIDACION', errores[0]);
+    if (!items.length) return err('VALIDACION', 'Agrega al menos una persona con su monto.');
+    var n = { id: repo.nuevoIdNominaEsp(), concepto: concepto, moneda: moneda, fechaPago: fechaPago, observacion: String(datos.observacion || '').trim().slice(0, 500),
+      items: items, personas: items.length, total: Math.round(items.reduce(function (t, x) { return t + x.monto; }, 0) * 100) / 100,
+      estado: 'SOLICITADA', solicitadaPor: s.clave, solicitadaPorNombre: nombreUsuario(repo, s.clave), solicitada: ctx.ahora() };
+    repo.guardarNominaEspecial(n);
+    if (Object.keys(alias).length && repo.guardarAliasComisiones) repo.guardarAliasComisiones(alias);
+    repo.log('NOMINA_ESP_SOLICITUD', s.clave, n.id + ' · ' + n.personas + ' · ' + n.total);
+    var destinos = repo.todosUsuarios().map(function (u) { return digitos(u.cedula); }).filter(function (d) { return d && d !== digitos(s.clave); }).map(function (d) { return 'V' + d; });
+    notificar(repo, ctx, destinos, { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial por registrar', texto: n.solicitadaPorNombre + ' solicitó «' + concepto + '» para ' + n.personas + ' persona' + (n.personas === 1 ? '' : 's') + '.', ruta: 'nominas' });
+    return ok(vistaNominaEsp(n));
+  }
+
+  function listarNominasEspeciales(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var lista = repo.nominasEspeciales().sort(function (a, b) { return b.solicitada - a.solicitada; }).map(vistaNominaEsp);
+    return ok({ yo: digitos(s.clave), solicitudes: lista });
+  }
+
+  function atenderNominaEspecial(repo, ctx, token, id, estado, extra) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var n = repo.nominaEspecialPorId(id);
+    if (!n) return err('NO_ENCONTRADO', 'No existe esa solicitud.');
+    if (n.estado !== 'SOLICITADA') return err('TRANSICION', 'Esa solicitud ya fue atendida.');
+    if (estado === 'CANCELADA' && digitos(n.solicitadaPor) !== digitos(s.clave)) return err('PERMISO', 'Solo quien la solicitó puede cancelarla.');
+    n.estado = estado; n.atendidaPor = s.clave; n.atendidaPorNombre = nombreUsuario(repo, s.clave); n.atendida = ctx.ahora();
+    Object.assign(n, extra || {});
+    repo.guardarNominaEspecial(n);
+    repo.log('NOMINA_ESP_' + estado, s.clave, n.id);
+    if (estado !== 'CANCELADA' && digitos(n.solicitadaPor) !== digitos(s.clave)) {
+      notificar(repo, ctx, ['V' + digitos(n.solicitadaPor)], estado === 'REGISTRADA'
+        ? { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial registrada', texto: '«' + n.concepto + '» quedó registrada en la nómina' + (n.referencia ? ' (' + n.referencia + ')' : '') + '.', ruta: 'nominas' }
+        : { tipo: 'NOMINA_ESPECIAL', titulo: 'Nómina especial rechazada', texto: '«' + n.concepto + '»: ' + n.motivo, ruta: 'nominas' });
+    }
+    return ok(vistaNominaEsp(n));
+  }
+  /** Empleados (activos e inactivos) y los nombres ya aprendidos, para cruzar el Excel de comisiones en el navegador. */
+  function datosCruceNomina(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    return ok({
+      empleados: (function () {
+        var sin = repo.omegaSinTarjeta ? repo.omegaSinTarjeta() : {};
+        return repo.todosEmpleados().map(function (e) {
+          var k = Empleados.claveCedula(e), f = e.fechaIngreso;
+          return { clave: k, nombre: e.nombre, organizacion: e.organizacion || '', puesto: e.puesto || '', estado: e.estado, empresa: Empleados.empresaFideicomiso(e),
+            fueraNomina: !!e.fueraNomina, sinTarjeta: !!sin[k], jefe: e.jefe || '', fechaIngreso: f ? f.y + '-' + ('0' + f.m).slice(-2) + '-' + ('0' + f.d).slice(-2) : '' };
+        });
+      })(),
+      alias: repo.aliasComisiones ? repo.aliasComisiones() : {},
+    });
+  }
+
+  /** Recuerda que un nombre (como viene en un reporte o Excel) es esta persona. */
+  function guardarAliasNombre(repo, ctx, token, nombre, claveEmp) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var e = repo.empleadoPorClave(claveEmp), k = Comisiones.clave(nombre);
+    if (!e || !k) return err('VALIDACION', 'Datos incompletos.');
+    var m = {}; m[k] = Empleados.claveCedula(e);
+    repo.guardarAliasComisiones(m);
+    return ok({ alias: k, clave: m[k] });
+  }
+
+  /** Guarda el resultado de comparar la solicitud con el Resumen de Pago (resumen: { ok, mayor, menor, no, archivo, detalle }). */
+  function guardarVerificacionNomina(repo, ctx, token, id, resumen) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var n = repo.nominaEspecialPorId(id);
+    if (!n) return err('NO_ENCONTRADO', 'No existe esa solicitud.');
+    var r = resumen || {}, cuenta = function (k) { return Math.max(0, Math.round(Number(r[k]) || 0)); };
+    n.verificacion = { cuando: ctx.ahora(), por: s.clave, archivo: String(r.archivo || '').slice(0, 120), ok: cuenta('ok'), mayor: cuenta('mayor'), menor: cuenta('menor'), no: cuenta('no'),
+      detalle: (r.detalle || []).slice(0, 300).map(function (d) { return { clave: String(d.clave || ''), estado: String(d.estado || ''), otras: Math.round((Number(d.otras) || 0) * 100) / 100 }; }) };
+    repo.guardarNominaEspecial(n);
+    return ok(vistaNominaEsp(n));
+  }
+
+  function registrarNominaEspecial(repo, ctx, token, id, referencia) {
+    return atenderNominaEspecial(repo, ctx, token, id, 'REGISTRADA', { referencia: String(referencia || '').trim().slice(0, 80) });
+  }
+  function rechazarNominaEspecial(repo, ctx, token, id, motivo) {
+    if (!String(motivo || '').trim()) return err('VALIDACION', 'Escribe el motivo.');
+    return atenderNominaEspecial(repo, ctx, token, id, 'RECHAZADA', { motivo: String(motivo).trim().slice(0, 300) });
+  }
+  function cancelarNominaEspecial(repo, ctx, token, id) { return atenderNominaEspecial(repo, ctx, token, id, 'CANCELADA', {}); }
+
+  /* ---------- Perfil del trabajador y campañas de actualización de datos ---------- */
+
+  function fechaIso(f) { return f ? f.y + '-' + ('0' + f.m).slice(-2) + '-' + ('0' + f.d).slice(-2) : ''; }
+  function perfilVacio(clave) { return { clave: clave, datos: {}, confirmadas: {}, actualizado: 0, por: '' }; }
+  function activosConCedula(repo) { return repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && e.cedulaNumero; }); }
+  function personaCampana(e) { return { clave: Empleados.claveCedula(e), empresa: Empleados.empresaFideicomiso(e) }; }
+
+  function vistaCampana(c, hoy) {
+    return { id: c.id, titulo: c.titulo, mensaje: c.mensaje || '', secciones: c.secciones || [], alcance: c.alcance || { tipo: 'todos' }, hasta: c.hasta,
+      estado: c.estado, creada: c.creada, por: c.por || '', orden: c.orden || 0, lanzada: c.lanzada || 0, vigente: c.estado === 'ABIERTA' && hoy <= c.hasta, vencida: c.estado === 'ABIERTA' && hoy > c.hasta };
+  }
+  /** Secciones que esta persona puede actualizar ahora: las de las campañas abiertas que le tocan. */
+  function seccionesAbiertas(repo, emp) {
+    var p = personaCampana(emp), m = {};
+    repo.campanasDatos().forEach(function (c) { if (c.estado === 'ABIERTA' && Perfil.enAlcance(c, p)) (c.secciones || []).forEach(function (x) { m[x] = true; }); });
+    return Object.keys(m);
+  }
+
+  /** Campañas abiertas que le tocan a esta persona y aún no completa. */
+  function pendientesDe(repo, emp, perfil, hoy) {
+    var p = personaCampana(emp);
+    return repo.campanasDatos().filter(function (c) { return c.estado === 'ABIERTA' && Perfil.enAlcance(c, p) && !Perfil.completo(c, perfil); })
+      .sort(function (a, b) { return a.hasta < b.hasta ? -1 : 1; }).map(function (c) { return Object.assign(vistaCampana(c, hoy), { faltan: Perfil.faltantes(perfil.datos, c.secciones) }); });
+  }
+
+  /** Lo que ve el colaborador en «Mi perfil»: sus datos de nómina (solo lectura), lo que él mantiene y las campañas pendientes. */
+  function miPerfil(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+    var perfil = repo.perfil(s.clave) || perfilVacio(s.clave), hoy = hoyCaracas(ctx);
+    return ok({
+      nomina: { nombre: emp.nombre, cedula: s.clave, cargo: emp.puesto || '', departamento: emp.departamento || '', localidad: emp.organizacion || '',
+        empresa: Empleados.empresaFideicomiso(emp), fechaIngreso: fechaIso(emp.fechaIngreso) },
+      datos: perfil.datos, actualizado: perfil.actualizado || 0, faltan: Perfil.faltantes(perfil.datos), campanas: pendientesDe(repo, emp, perfil, hoy),
+    });
+  }
+
+  /**
+   * El colaborador guarda sus datos (se guardan directo, sin aprobación). Solo cambian las secciones enviadas.
+   * Queda el registro de qué cambió, y cada campaña abierta que le toca queda confirmada si sus secciones están completas.
+   */
+  function guardarMiPerfil(repo, ctx, token, entrada) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+    // Solo se actualiza lo que pide una campaña abierta: fuera de campaña el perfil no se edita.
+    var abiertas = seccionesAbiertas(repo, emp);
+    var pedidas = Perfil.SECCIONES.map(function (x) { return x.id; }).filter(function (id) { return entrada && (entrada[id] !== undefined || (id === 'familia' && entrada.sinFamilia !== undefined)); });
+    var cerradas = pedidas.filter(function (id) { return abiertas.indexOf(id) === -1; });
+    if (!pedidas.length) return err('VALIDACION', 'No hay datos para guardar.');
+    if (cerradas.length) return err('CERRADA', 'La actualización de «' + cerradas.map(function (id) { return Perfil.seccion(id).nombre; }).join('», «') + '» no está abierta. Gestión Humana te avisará cuando abra.');
+    var n = Perfil.normalizar(entrada || {});
+    if (n.errores.length) return err('VALIDACION', n.errores.slice(0, 6).join(' '));
+    var perfil = repo.perfil(s.clave) || perfilVacio(s.clave), ahora = ctx.ahora(), hoy = hoyCaracas(ctx);
+    var cambios = Perfil.diferencias(perfil.datos, n.datos);
+    var datos = Object.assign({}, perfil.datos, n.datos);
+    if (n.datos.familia && n.datos.familia.length) datos.sinFamilia = false;
+    var confirmadas = Object.assign({}, perfil.confirmadas), nuevas = [], p = personaCampana(emp);
+    repo.campanasDatos().forEach(function (c) {
+      if (c.estado !== 'ABIERTA' || confirmadas[c.id] || !Perfil.enAlcance(c, p)) return;
+      if (!Perfil.faltantes(datos, c.secciones).length) { confirmadas[c.id] = ahora; nuevas.push(c.id); }
+    });
+    perfil = { clave: s.clave, datos: datos, confirmadas: confirmadas, actualizado: ahora, por: s.clave };
+    repo.guardarPerfil(perfil);
+    if (cambios.length) repo.agregarCambiosPerfil(cambios.map(function (c) {
+      return { cuando: ahora, clave: s.clave, nombre: emp.nombre, seccion: c.seccion, campo: c.nombre, antes: String(c.antes).slice(0, 500), despues: String(c.despues).slice(0, 500) };
+    }));
+    repo.log('PERFIL_ACTUALIZADO', s.clave, cambios.length + ' cambios' + (nuevas.length ? ' · confirma ' + nuevas.join(',') : ''));
+    return ok({ datos: datos, actualizado: ahora, cambios: cambios.length, confirmadas: nuevas, faltan: Perfil.faltantes(datos), campanas: pendientesDe(repo, emp, perfil, hoy) });
+  }
+
+  /** Valida título, secciones, alcance y fecha límite de una campaña. Devuelve { error } o { c }. hasta es obligatoria si se abre ya. */
+  function datosCampana(repo, d, hoy, conFecha) {
+    d = d || {};
+    var titulo = String(d.titulo || '').trim().slice(0, 100);
+    var secciones = (d.secciones || []).filter(function (x) { return Perfil.seccion(x); });
+    var a = d.alcance || { tipo: 'todos' }, alcance = { tipo: ['todos', 'empresas', 'personas'].indexOf(a.tipo) !== -1 ? a.tipo : 'todos' };
+    if (alcance.tipo === 'empresas') alcance.empresas = (a.empresas || []).filter(function (x) { return x === 'PCA' || x === 'AIV'; });
+    if (alcance.tipo === 'personas') alcance.claves = (a.claves || []).filter(function (k) { return repo.empleadoPorClave(k); });
+    var hasta = String(d.hasta || '');
+    if (!titulo) return { error: 'Escribe un título para la campaña.' };
+    if (!secciones.length) return { error: 'Elige al menos una sección para actualizar.' };
+    if ((conFecha || hasta) && (!/^\d{4}-\d{2}-\d{2}$/.test(hasta) || hasta < hoy)) return { error: 'La fecha límite debe ser hoy o una fecha futura.' };
+    if ((alcance.tipo === 'empresas' && !alcance.empresas.length) || (alcance.tipo === 'personas' && !alcance.claves.length)) return { error: 'Elige a quién va dirigida.' };
+    return { c: { titulo: titulo, mensaje: String(d.mensaje || '').trim().slice(0, 500), secciones: secciones, alcance: alcance, hasta: hasta } };
+  }
+
+  /** Abre la campaña: avisa a cada persona a la que le toca. */
+  function lanzar(repo, ctx, s, c) {
+    c.estado = 'ABIERTA'; c.lanzada = ctx.ahora();
+    repo.guardarCampanaDatos(c);
+    var destinos = activosConCedula(repo).filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); }).map(function (e) { return Empleados.claveCedula(e); });
+    notificar(repo, ctx, c.alcance.tipo === 'todos' ? '*' : destinos, { tipo: 'PERFIL_CAMPANA', ruta: 'perfil', titulo: 'Actualiza tus datos: ' + c.titulo,
+      texto: (c.mensaje ? c.mensaje + ' ' : '') + 'Tienes hasta el ' + fechaCorta(c.hasta) + '.' });
+    repo.log('PERFIL_CAMPANA', s.clave, c.id + ' · ' + c.titulo + ' · ' + destinos.length);
+    return ok(Object.assign(vistaCampana(c, hoyCaracas(ctx)), { personas: destinos.length }));
+  }
+  function campanaPorId(repo, id) { return repo.campanasDatos().filter(function (x) { return x.id === id && x.estado !== 'ELIMINADA'; })[0]; }
+  function siguienteOrden(repo) { return repo.campanasDatos().reduce(function (m, c) { return Math.max(m, c.orden || 0); }, 0) + 1; }
+
+  /**
+   * RRHH crea una campaña: qué secciones, a quién, hasta cuándo y el mensaje.
+   * Con d.planificada queda guardada sin avisar (se lanza después); si no, se abre y avisa a cada persona.
+   */
+  function crearCampanaDatos(repo, ctx, token, d) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var planificada = !!(d && d.planificada), v = datosCampana(repo, d, hoyCaracas(ctx), !planificada);
+    if (v.error) return err('VALIDACION', v.error);
+    var c = Object.assign(v.c, { id: repo.nuevoIdCampana(), estado: 'PLANIFICADA', creada: ctx.ahora(), por: s.clave, orden: siguienteOrden(repo) });
+    if (!planificada) return lanzar(repo, ctx, s, c);
+    repo.guardarCampanaDatos(c);
+    repo.log('PERFIL_CAMPANA_PLANIFICADA', s.clave, c.id + ' · ' + c.titulo);
+    return ok(vistaCampana(c, hoyCaracas(ctx)));
+  }
+
+  /** Cambia una campaña planificada (todavía no lanzada). */
+  function editarCampanaDatos(repo, ctx, token, id, d) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var c = campanaPorId(repo, id);
+    if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+    if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Esa campaña ya fue lanzada: no se puede cambiar.');
+    var v = datosCampana(repo, d, hoyCaracas(ctx), false);
+    if (v.error) return err('VALIDACION', v.error);
+    Object.assign(c, v.c);
+    repo.guardarCampanaDatos(c);
+    return ok(vistaCampana(c, hoyCaracas(ctx)));
+  }
+
+  /** Lanza una campaña planificada con su fecha límite: desde ese momento la ven los colaboradores y les llega el aviso. */
+  function lanzarCampanaDatos(repo, ctx, token, id, hasta) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var c = campanaPorId(repo, id);
+    if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+    if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Esa campaña ya fue lanzada.');
+    var v = datosCampana(repo, Object.assign({}, c, { hasta: hasta }), hoyCaracas(ctx), true);
+    if (v.error) return err('VALIDACION', v.error);
+    c.hasta = v.c.hasta;
+    return lanzar(repo, ctx, s, c);
+  }
+
+  function eliminarCampanaDatos(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var c = campanaPorId(repo, id);
+    if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+    if (c.estado !== 'PLANIFICADA') return err('TRANSICION', 'Solo se pueden eliminar campañas que no se han lanzado.');
+    c.estado = 'ELIMINADA'; repo.guardarCampanaDatos(c);
+    repo.log('PERFIL_CAMPANA_ELIMINADA', s.clave, c.id);
+    return ok({ id: id });
+  }
+
+  /** Carga el plan sugerido (4 campañas, una por sección) como campañas planificadas, para todo el personal. */
+  function cargarPlanCampanas(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var ya = {}; repo.campanasDatos().forEach(function (c) { if (c.estado !== 'ELIMINADA') ya[c.titulo] = true; });
+    var creadas = Perfil.PLAN_CAMPANAS.filter(function (p) { return !ya[p.titulo]; }).map(function (p) {
+      var c = { id: repo.nuevoIdCampana(), titulo: p.titulo, mensaje: p.mensaje, secciones: p.secciones.slice(), alcance: { tipo: 'todos' }, hasta: '',
+        estado: 'PLANIFICADA', creada: ctx.ahora(), por: s.clave, orden: siguienteOrden(repo) };
+      repo.guardarCampanaDatos(c);
+      return c.id;
+    });
+    repo.log('PERFIL_PLAN_CAMPANAS', s.clave, creadas.join(','));
+    return ok({ creadas: creadas.length });
+  }
+
+  /** Avance de cada campaña: cuántas personas le tocan y cuántas la completaron. */
+  function listarCampanasDatos(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var hoy = hoyCaracas(ctx), perfiles = {}, gente = activosConCedula(repo);
+    repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+    return ok(repo.campanasDatos().filter(function (c) { return c.estado !== 'ELIMINADA'; }).sort(function (a, b) {
+      var pa = a.estado === 'PLANIFICADA', pb = b.estado === 'PLANIFICADA';
+      return pa !== pb ? (pa ? -1 : 1) : pa ? (a.orden || 0) - (b.orden || 0) : (b.lanzada || b.creada) - (a.lanzada || a.creada);
+    }).map(function (c) {
+      var en = gente.filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); });
+      var listos = en.filter(function (e) { return Perfil.completo(c, perfiles[Empleados.claveCedula(e)]); }).length;
+      return Object.assign(vistaCampana(c, hoy), { personas: en.length, completos: listos });
+    }));
+  }
+
+  /** Detalle de una campaña: cada persona, si la completó y qué le falta. */
+  function panelCampanaDatos(repo, ctx, token, id) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var c = campanaPorId(repo, id);
+    if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+    var perfiles = {}; repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+    var filas = activosConCedula(repo).filter(function (e) { return Perfil.enAlcance(c, personaCampana(e)); }).map(function (e) {
+      var k = Empleados.claveCedula(e), p = perfiles[k];
+      return Object.assign({ clave: k, nombre: e.nombre, completo: Perfil.completo(c, p), confirmada: p && p.confirmadas && p.confirmadas[c.id] || 0,
+        faltan: Perfil.faltantes(p && p.datos, c.secciones), actualizado: p ? p.actualizado : 0 }, ubicacion(e));
+    }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+    return ok({ campana: vistaCampana(c, hoyCaracas(ctx)), filas: filas });
+  }
+
+  function recordarCampanaDatos(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var r = panelCampanaDatos(repo, ctx, token, id);
+    if (!r.ok) return r;
+    if (r.data.campana.estado !== 'ABIERTA') return err('TRANSICION', 'La campaña está cerrada.');
+    var faltan = r.data.filas.filter(function (f) { return !f.completo; }).map(function (f) { return f.clave; });
+    if (faltan.length) notificar(repo, ctx, faltan, { tipo: 'PERFIL_RECORDATORIO', ruta: 'perfil', titulo: 'Falta que actualices tus datos',
+      texto: r.data.campana.titulo + ': tienes hasta el ' + fechaCorta(r.data.campana.hasta) + '.' });
+    repo.log('PERFIL_RECORDATORIO', s.clave, id + ' · ' + faltan.length);
+    return ok({ avisados: faltan.length });
+  }
+
+  function cerrarCampanaDatos(repo, ctx, token, id) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var c = repo.campanasDatos().filter(function (x) { return x.id === id; })[0];
+    if (!c) return err('NO_ENCONTRADO', 'No existe esa campaña.');
+    if (c.estado !== 'ABIERTA') return err('TRANSICION', 'La campaña ya está cerrada.');
+    c.estado = 'CERRADA'; c.cerrada = ctx.ahora();
+    repo.guardarCampanaDatos(c);
+    repo.log('PERFIL_CAMPANA_CERRADA', s.clave, id);
+    return ok(vistaCampana(c, hoyCaracas(ctx)));
+  }
+
+  /** Datos de todo el personal activo (para consultar y exportar a Excel) y los cambios más recientes. */
+  function datosPersonal(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var perfiles = {}; repo.perfiles().forEach(function (p) { perfiles[p.clave] = p; });
+    var filas = activosConCedula(repo).map(function (e) {
+      var k = Empleados.claveCedula(e), p = perfiles[k];
+      return Object.assign({ clave: k, nombre: e.nombre, cargo: e.puesto || '', fechaIngreso: fechaIso(e.fechaIngreso), datos: p ? p.datos : {},
+        actualizado: p ? p.actualizado : 0, faltan: Perfil.faltantes(p && p.datos) }, ubicacion(e));
+    }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+    var cambios = repo.cambiosPerfil().sort(function (a, b) { return b.cuando - a.cuando; }).slice(0, 300);
+    return ok({ filas: filas, cambios: cambios });
+  }
+
+  /* ---------- Cumpleaños y aniversarios ---------- */
+
+  function esBisiesto(y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; }
+  /** ¿La fecha f ({y,m,d}) «cae» hoy (texto aaaa-mm-dd)? El 29 de febrero se celebra el 28 en años no bisiestos. */
+  function caeHoy(f, hoy) {
+    if (!f) return false;
+    var y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7)), d = Number(hoy.slice(8, 10));
+    var fd = f.m === 2 && f.d === 29 && !esBisiesto(y) ? 28 : f.d;
+    return f.m === m && fd === d;
+  }
+  function primerNombreDe(nombre) { var p = String(nombre || '').trim().split(/\s+/)[0] || ''; return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(); }
+  function nombreCorto(nombre) {
+    var p = String(nombre || '').trim().split(/\s+/), cap = function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); };
+    // «NOMBRE1 NOMBRE2 APELLIDO1 APELLIDO2» → «Nombre1 Apellido1»
+    return (p.length >= 4 ? [p[0], p[2]] : p.length === 3 ? [p[0], p[1]] : p).map(cap).join(' ');
+  }
+  function nombreBonito(nombre) { return String(nombre || '').trim().split(/\s+/).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join(' '); }
+
+  /** Quiénes celebran hoy: { cumpleanos: [emp], aniversarios: [{ emp, anios }] }. Solo activos. */
+  function celebracionesDelDia(repo, hoy) {
+    var y = Number(hoy.slice(0, 4)), out = { cumpleanos: [], aniversarios: [] };
+    activosConCedula(repo).forEach(function (e) {
+      if (caeHoy(e.fechaNacimiento, hoy)) out.cumpleanos.push(e);
+      if (e.fechaIngreso && caeHoy(e.fechaIngreso, hoy) && y - e.fechaIngreso.y >= 1) out.aniversarios.push({ emp: e, anios: y - e.fechaIngreso.y });
+    });
+    return out;
+  }
+
+  /**
+   * Avisos de cumpleaños y aniversarios del día (los envía la tarea diaria de la mañana; no se repiten si corre dos veces).
+   * Cumpleaños: a la persona, su felicitación; y a todos, quién cumple hoy. Aniversario: solo a la persona.
+   */
+  function avisosCelebraciones(repo, ctx) {
+    if (!repo.agregarNotificaciones) return { cumpleanos: 0, aniversarios: 0 };
+    var hoy = hoyCaracas(ctx), c = celebracionesDelDia(repo, hoy), ya = {};
+    var inicioDia = ctx.ahora() - 20 * 3600 * 1000;
+    (repo.notificacionesRecientes ? repo.notificacionesRecientes() : []).forEach(function (n) {
+      if (n.creada >= inicioDia && /^(CUMPLEANOS|ANIVERSARIO)/.test(n.tipo)) ya[n.tipo + ':' + n.clave] = true;
+    });
+    var cumple = c.cumpleanos.filter(function (e) { return !ya['CUMPLEANOS:' + Empleados.claveCedula(e)]; });
+    cumple.forEach(function (e) { notificar(repo, ctx, [Empleados.claveCedula(e)], avisoCumple(e)); });
+    if (cumple.length && !ya['CUMPLEANOS_TODOS:*']) {
+      var nombres = cumple.map(function (e) { return nombreCorto(e.nombre); });
+      var lista = nombres.length === 1 ? nombres[0] : nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1];
+      notificar(repo, ctx, '*', { tipo: 'CUMPLEANOS_TODOS', ruta: '', titulo: nombres.length === 1 ? '🎉 Hoy está de cumpleaños ' + lista : '🎉 Hoy están de cumpleaños ' + lista,
+        texto: '¡Acompáñanos a felicitar' + (nombres.length === 1 ? 'le' : 'los') + ' en su día!' });
+    }
+    var aniv = c.aniversarios.filter(function (a) { return !ya['ANIVERSARIO:' + Empleados.claveCedula(a.emp)]; });
+    aniv.forEach(function (a) { notificar(repo, ctx, [Empleados.claveCedula(a.emp)], avisoAniversario(a.emp, a.anios)); });
+    if (cumple.length || aniv.length) repo.log('CELEBRACIONES', 'SISTEMA', hoy + ' · ' + cumple.length + ' cumpleaños · ' + aniv.length + ' aniversarios');
+    return { cumpleanos: cumple.length, aniversarios: aniv.length };
+  }
+
+  function avisoCumple(e) {
+    return { tipo: 'CUMPLEANOS', ruta: 'celebracion', titulo: '🎂 ¡Feliz cumpleaños, ' + primerNombreDe(e.nombre) + '!', texto: 'Hoy todo el Grupo Prosein celebra contigo. ¡Que tengas un gran día!' };
+  }
+  function avisoAniversario(e, anios) {
+    return { tipo: 'ANIVERSARIO', ruta: 'celebracion', titulo: '🎉 ¡Feliz aniversario, ' + primerNombreDe(e.nombre) + '!',
+      texto: 'Hoy cumples ' + (anios === 1 ? 'tu primer año' : anios + ' años') + ' en el Grupo Prosein. ¡Gracias por tu compromiso!' };
+  }
+
+  /**
+   * RRHH vuelve a enviar la felicitación de hoy a una persona (campanita y celular). Solo a esa persona:
+   * el aviso de cumpleaños «a todos» no se repite.
+   */
+  function reenviarCelebracion(repo, ctx, token, clave, tipo) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var e = repo.empleadoPorClave(clave), hoy = hoyCaracas(ctx);
+    if (!e || e.estado === 'Inactivo') return err('NO_ENCONTRADO', 'No encontramos a esa persona activa.');
+    var k = Empleados.claveCedula(e), anios = e.fechaIngreso ? Number(hoy.slice(0, 4)) - e.fechaIngreso.y : 0, r;
+    if (tipo === 'CUMPLEANOS') {
+      if (!caeHoy(e.fechaNacimiento, hoy)) return err('VALIDACION', 'Hoy no es el cumpleaños de ' + nombreBonito(e.nombre) + '.');
+      r = notificar(repo, ctx, [k], avisoCumple(e));
+    } else if (tipo === 'ANIVERSARIO') {
+      if (!e.fechaIngreso || !caeHoy(e.fechaIngreso, hoy) || anios < 1) return err('VALIDACION', 'Hoy no es el aniversario de ' + nombreBonito(e.nombre) + '.');
+      r = notificar(repo, ctx, [k], avisoAniversario(e, anios));
+    } else return err('VALIDACION', 'Tipo de celebración no válido.');
+    repo.log('CELEBRACION_REENVIADA', s.clave, tipo + ' · ' + k);
+    return ok({ nombre: nombreBonito(e.nombre), push: (r && r.estado) || 'SIN_CONFIGURAR' });
+  }
+
+  /** El colaborador: ¿celebra algo hoy? Para mostrarle su tarjeta en el CAC. */
+  function miCelebracion(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var e = repo.empleadoPorClave(s.clave), hoy = hoyCaracas(ctx);
+    if (!e || e.estado === 'Inactivo') return ok({ cumpleanos: false, aniversario: 0 });
+    var y = Number(hoy.slice(0, 4)), anios = e.fechaIngreso && caeHoy(e.fechaIngreso, hoy) ? y - e.fechaIngreso.y : 0;
+    return ok({ nombre: nombreBonito(e.nombre), cumpleanos: caeHoy(e.fechaNacimiento, hoy), aniversario: anios >= 1 ? anios : 0 });
+  }
+
+  /** RRHH: cumpleaños y aniversarios de un mes (aaaa-mm), para ver quién celebra y descargar las tarjetas. */
+  function celebracionesDelMes(repo, ctx, token, mes) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var hoy = hoyCaracas(ctx);
+    mes = /^\d{4}-\d{2}$/.test(String(mes || '')) ? mes : hoy.slice(0, 7);
+    var y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7)), filas = [], sinNacimiento = 0;
+    var diaDe = function (f) { return f.m === 2 && f.d === 29 && !esBisiesto(y) ? 28 : f.d; };
+    activosConCedula(repo).forEach(function (e) {
+      var base = Object.assign({ clave: Empleados.claveCedula(e), nombre: nombreBonito(e.nombre), cargo: e.puesto || '' }, ubicacion(e));
+      if (!e.fechaNacimiento) sinNacimiento++;
+      else if (e.fechaNacimiento.m === m) filas.push(Object.assign({ tipo: 'CUMPLEANOS', dia: diaDe(e.fechaNacimiento) }, base));
+      if (e.fechaIngreso && e.fechaIngreso.m === m && y - e.fechaIngreso.y >= 1) filas.push(Object.assign({ tipo: 'ANIVERSARIO', dia: diaDe(e.fechaIngreso), anios: y - e.fechaIngreso.y }, base));
+    });
+    filas.sort(function (a, b) { return a.dia - b.dia || (a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : a.tipo < b.tipo ? 1 : -1); });
+    return ok({ mes: mes, hoy: hoy, filas: filas, sinNacimiento: sinNacimiento });
+  }
+
   var api = {
+    avisosCelebraciones: function (repo, ctx) { return ok(avisosCelebraciones(repo, ctx)); }, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes, reenviarCelebracion: reenviarCelebracion,
+    miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
+    panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
+    solicitarNominaEspecial: solicitarNominaEspecial, listarNominasEspeciales: listarNominasEspeciales, registrarNominaEspecial: registrarNominaEspecial,
+    rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
+    quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,
     omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
     omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
     omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,

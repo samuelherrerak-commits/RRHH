@@ -179,6 +179,7 @@
       puesto: espacios(fila.puesto),
       estado: estadoEnEspanol(fila.estado),
       fechaIngreso: f,
+      fechaNacimiento: fila.fechaNacimiento ? Calculo.aFecha(fila.fechaNacimiento) : null,
       empresaDetalle: empresaDesdeDetalle(fila.organizacion),
       salarioMensual: numeroDeMonto(fila.salarioMensual),
       genero: espacios(fila.genero),                        // 'Femenino' / 'Masculino' (para el saludo)   // Salario M. del detalle; lo usa la constancia de trabajo
@@ -188,7 +189,7 @@
     };
   }
 
-  var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
+  var CAMPOS_DETALLE = ['genero', 'salarioMensual', 'nombre', 'organizacion', 'departamento', 'puesto', 'estado', 'fechaIngreso', 'fechaNacimiento', 'empresaDetalle', 'cedulaLetra', 'cedulaNumero', 'revisarCedula', 'motivoRevision'];
 
   /**
    * Recarga del detalle: actualiza los existentes, agrega los nuevos y
@@ -213,6 +214,7 @@
           if (actual.editados && actual.editados.indexOf(c) !== -1) return;
           if (c === 'salarioMensual' && nuevo.salarioMensual == null) return;   // el archivo no trae sueldo: se conserva el anterior
           if (c === 'genero' && !nuevo.genero) return;
+          if (c === 'fechaNacimiento' && !nuevo.fechaNacimiento) return;   // archivo sin la columna «Cumpleaños»: se conserva
           actual[c] = nuevo[c];
         });
         if (actual.estado === 'Inactivo') actual.estado = nuevo.estado;
@@ -341,6 +343,7 @@
     genero: ['GENERO', 'SEXO'],
     salarioMensual: ['SALARIO M', 'SALARIO MENSUAL', 'SUELDO MENSUAL', 'SALARIO'],
     fechaInicio: ['FECHA INICIO', 'FECHA DE INICIO', 'FECHA INGRESO', 'FECHA DE INGRESO', 'INGRESO'],
+    fechaNacimiento: ['CUMPLEANOS', 'FECHA NACIMIENTO', 'FECHA DE NACIMIENTO', 'NACIMIENTO', 'FECHA NAC'],
   };
 
   /** Convierte un serial de Excel (p. ej. 45356) o texto en "dd/mm/aaaa". */
@@ -368,17 +371,25 @@
       var hit = COLUMNAS_DETALLE[campo].filter(function (n) { return indice[n]; })[0];
       if (hit) col[campo] = indice[hit]; else faltantes.push(campo);
     });
-    var omitidas = 0, filas = [];
+    var omitidas = 0, filas = [], arrastre = {};
     filasCrudas.forEach(function (f) {
       var cedula = col.cedula ? String(f[col.cedula] == null ? '' : f[col.cedula]).trim() : '';
       var nombre = col.nombre ? String(f[col.nombre] == null ? '' : f[col.nombre]).trim() : '';
       if (!cedula && !nombre) { omitidas++; return; }
+      // Reportes agrupados: filas de conteo («Asesor Comercial №», «Conteo», números sueltos) sin cédula → se ignoran
+      if (!cedula && (/^[\d.,\s]*$/.test(nombre) || /№|^conteo$/i.test(nombre))) { omitidas++; return; }
       var o = { cedula: cedula, nombre: nombre };
-      ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) { o[k] = col[k] ? f[col[k]] : ''; });
+      ['organizacion', 'departamento', 'puesto', 'estado'].forEach(function (k) {
+        var v = col[k] ? f[col[k]] : '';
+        if ((k === 'organizacion' || k === 'departamento') && (v == null || String(v).trim() === '') && arrastre[k]) v = arrastre[k];   // celda combinada: hereda la de arriba
+        if (k === 'organizacion' || k === 'departamento') { if (v && !/№/.test(String(v))) arrastre[k] = v; }
+        o[k] = v;
+      });
       o.salarioMensual = col.salarioMensual ? f[col.salarioMensual] : '';
       o.genero = col.genero ? f[col.genero] : '';
       o.jefeNombre = col.jefeNombre ? espacios(f[col.jefeNombre]) : '';
       o.fechaInicio = col.fechaInicio ? fechaDeExcel(f[col.fechaInicio]) : '';
+      o.fechaNacimiento = col.fechaNacimiento ? fechaDeExcel(f[col.fechaNacimiento]) : '';
       filas.push(o);
     });
     return { filas: filas, faltantes: faltantes, omitidas: omitidas };

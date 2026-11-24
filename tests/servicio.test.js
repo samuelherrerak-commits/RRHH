@@ -301,7 +301,7 @@ test('constancia: solo una vigente a la vez; al vencer (o si RRHH la anula) se p
   assert.equal(c1.ok, true);
   const otra = S.emitirConstancia(repo, ctx, t);
   assert.equal(otra.code, 'YA_VIGENTE');
-  assert.match(otra.message, /vigente hasta el 28\/11\/2026.*a partir del 29\/11\/2026/);
+  assert.match(otra.message, /vigente «A quien pueda interesar» hasta el 28\/11\/2026.*a partir del 29\/11\/2026/);
   assert.equal(S.misConstancias(repo, ctx, t).data.length, 1);          // no se creó otra
 
   ctx.reloj.t += 30 * 86400000;                                           // día 30: sigue vigente
@@ -747,4 +747,35 @@ test('cancelaciones: retirados con aportes, registro, archivo y procesadas', () 
   assert.match(a.csv, /V;11111111;Esther Lilia Rodríguez Hernández;05\/03\/2025;15\/10\/2026;2883\.64/);
   assert.equal(S.archivoCancelaciones(repo, ctx, rrhh, 'PCA').code, 'VACIO');
   assert.equal(S.marcarCancelaciones(repo, ctx, rrhh, [c.id], 'PROCESADA').data.cambiados, 1);
+});
+
+test('el archivo de anticipos enviados al banco se puede descargar de nuevo sin cambiar su estado', () => {
+  const { repo, ctx } = escenario();
+  const t = entrar(repo, ctx), a = admin(repo, ctx);
+  const hoy = new Date(ctx.ahora() - 4 * 3600e3).toISOString().slice(0, 10), en = (n) => new Date(Date.parse(hoy) + n * 864e5).toISOString().slice(0, 10);
+  S.guardarApertura(repo, ctx, a, { clave: '2026-T4', inicio: en(-1), fin: en(5) });
+  const sol = S.solicitarAnticipo(repo, ctx, t, { monto: 1000, motivo: 'Salud', acepta: true });
+  assert.equal(sol.ok, true, JSON.stringify(sol));
+  assert.equal(S.generarArchivoAnticipos(repo, ctx, a, 'PCA', true).code, 'VACIO');
+  const r1 = S.generarArchivoAnticipos(repo, ctx, a, 'PCA');
+  assert.equal(r1.data.cantidad, 1);
+  assert.equal(S.generarArchivoAnticipos(repo, ctx, a, 'PCA').code, 'VACIO');
+  const r2 = S.generarArchivoAnticipos(repo, ctx, a, 'PCA', true);
+  assert.equal(r2.data.csv, r1.data.csv);
+  assert.equal(S.bandejaAnticipos(repo, ctx, a, 'EN_ARCHIVO').data.length, 1);
+});
+
+test('constancia dirigida a una institución: una vigente por destinatario', () => {
+  const { repo, ctx } = conSueldo();
+  const t = S.iniciarSesion(repo, ctx, '30580323').data.token;
+  assert.equal(S.emitirConstancia(repo, ctx, t).data.destinatario, '');                       // «A quien pueda interesar»
+  assert.match(S.emitirConstancia(repo, ctx, t, 'B').message, /nombre de la institución/);   // muy corto
+  const b = S.emitirConstancia(repo, ctx, t, '  Banco  Nacional de Crédito ');
+  assert.equal(b.ok, true, JSON.stringify(b));
+  assert.equal(b.data.destinatario, 'Banco Nacional de Crédito');
+  const otra = S.emitirConstancia(repo, ctx, t, 'BANCO NACIONAL DE CREDITO');                // mismo destinatario
+  assert.equal(otra.code, 'YA_VIGENTE'); assert.match(otra.message, /dirigida a Banco Nacional de Crédito/);
+  assert.equal(S.emitirConstancia(repo, ctx, t, 'Embajada de España').ok, true);              // otro destinatario: sí
+  assert.deepEqual(S.misConstancias(repo, ctx, t).data.map((c) => c.destinatario).sort(), ['', 'Banco Nacional de Crédito', 'Embajada de España']);
+  assert.equal(S.verificarConstancia(repo, ctx, b.data.id).data.destinatario, 'Banco Nacional de Crédito');
 });

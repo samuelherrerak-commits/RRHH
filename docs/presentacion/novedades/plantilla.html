@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Novedades del CAC · Gestión Humana</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --marca: #141618; --tinta: #303133; --tinta-2: #5C5F63; --tinta-3: #707377;
+    --linea: #E4E4E4; --linea-suave: #EFEFEF; --fondo: #F7F7F7; --rojo: #E1251B;
+    --austral: #0B5CD5; --austral-velo: #EAF1FD;
+    --ok: #17663A; --ok-velo: #E5F4EA; --espera: #865100; --espera-velo: #FFF3DC; --error: #A3122A; --error-velo: #FDECEE;
+    --ease: cubic-bezier(.2, .9, .25, 1);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: #0c0d0e; overflow: hidden; }
+  body { font-family: 'Poppins', system-ui, sans-serif; color: var(--tinta); -webkit-font-smoothing: antialiased; }
+
+  /* escenario: 1280×720 escalado a la ventana */
+  #escenario { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center; }
+  .lamina { position: absolute; inset: 0; overflow: hidden; background: var(--fondo); display: grid; grid-template-rows: auto 1fr; padding: 48px 72px 72px; gap: 26px;
+    opacity: 0; visibility: hidden; transform: translateX(40px); transition: opacity .55s var(--ease), transform .55s var(--ease), visibility 0s .55s; }
+  .lamina.activa { opacity: 1; visibility: visible; transform: none; transition: opacity .55s var(--ease), transform .55s var(--ease); }
+  .lamina.pasada { transform: translateX(-40px); }
+  .oscura { background: var(--marca); color: #fff; }
+
+  /* pasos (fragmentos) */
+  .f { opacity: 0; transition: opacity .6s var(--ease), transform .6s var(--ease), filter .6s var(--ease); }
+  .f.arriba { transform: translateY(26px); }
+  .f.a-izq { transform: translateX(-40px); }
+  .f.a-der { transform: translateX(60px); }
+  .f.zoom { transform: scale(.85); }
+  .f.desde-abajo { transform: translateY(120px) rotate(-3deg); }
+  .f.borroso { filter: blur(12px); transform: scale(1.06); }
+  .f.visto { opacity: 1; transform: none; filter: none; }
+  .f.marcar.visto { animation: latido 1.2s var(--ease) .3s 1; }
+  @keyframes latido { 0%, 100% { box-shadow: 0 0 0 0 rgb(225 37 27 / 0); } 40% { box-shadow: 0 0 0 10px rgb(225 37 27 / .18); } }
+
+  /* cabecera */
+  .cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .cab h2 { font-size: 40px; font-weight: 700; color: var(--marca); letter-spacing: -.01em; line-height: 1.15; }
+  .cab .sub { font-size: 18px; color: var(--tinta-2); margin-top: 8px; max-width: 900px; }
+  .num { font-size: 13px; font-weight: 600; letter-spacing: .14em; color: var(--tinta-3); text-transform: uppercase; white-space: nowrap; display: flex; align-items: center; gap: 10px; }
+  .logo { width: 34px; height: 34px; border-radius: 8px; background: var(--marca); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 11px; }
+  .oscura .logo { background: #fff; color: var(--marca); }
+  .pie { position: absolute; left: 72px; right: 72px; bottom: 26px; display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--tinta-3); }
+  .oscura .pie { color: rgb(255 255 255 / .45); }
+  .bloque-tag { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--tinta-3); margin-bottom: 10px; }
+  .bloque-tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--rojo); }
+
+  /* piezas */
+  .tarjeta { background: #fff; border: 1px solid var(--linea); border-radius: 18px; padding: 26px; box-shadow: 0 1px 2px rgb(20 22 24 / .05), 0 2px 10px rgb(20 22 24 / .05); }
+  .tarjeta h3 { font-size: 22px; font-weight: 600; color: var(--marca); margin-bottom: 8px; }
+  .tarjeta p { font-size: 16px; line-height: 1.5; color: var(--tinta-2); }
+  .icono { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; margin-bottom: 18px; }
+  .icono svg { width: 28px; height: 28px; }
+  .i-azul { background: var(--austral-velo); color: var(--austral); } .i-verde { background: var(--ok-velo); color: var(--ok); }
+  .i-oro { background: var(--espera-velo); color: var(--espera); } .i-rojo { background: #FDECEC; color: var(--rojo); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-content: center; }
+  .con-telefono { display: grid; grid-template-columns: 1fr 330px; gap: 56px; align-items: start; }
+  .con-telefono > .telefono { margin-bottom: -260px; align-self: start; }
+  .pie { z-index: 0; } .telefono { z-index: 1; }
+  .pasos { display: grid; gap: 12px; align-content: start; }
+  .paso { display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: center; background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 12px 20px; }
+  .paso b.n { width: 44px; height: 44px; border-radius: 50%; background: var(--marca); color: #fff; display: grid; place-items: center; font-size: 18px; font-weight: 600; }
+  .paso h4 { font-size: 17px; font-weight: 600; color: var(--marca); }
+  .paso p { font-size: 15px; color: var(--tinta-2); line-height: 1.45; margin-top: 2px; }
+  .btn { display: inline-block; background: var(--marca); color: #fff; border-radius: 8px; padding: 1px 10px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  .reglas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .regla { border-radius: 14px; padding: 12px 18px; font-size: 15px; line-height: 1.45; }
+  .regla b { display: block; font-size: 17px; font-weight: 700; margin-bottom: 2px; }
+  .r-azul { background: var(--austral-velo); color: #0A4AA8; } .r-oro { background: var(--espera-velo); color: var(--espera); } .r-verde { background: var(--ok-velo); color: var(--ok); }
+  .chip { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .c-espera { background: var(--espera-velo); color: var(--espera); } .c-azul { background: var(--austral-velo); color: var(--austral); } .c-ok { background: var(--ok-velo); color: var(--ok); } .c-error { background: var(--error-velo); color: var(--error); }
+
+  /* teléfono */
+  .telefono { width: 300px; height: 600px; border-radius: 44px; background: #0c0d0e; padding: 12px; box-shadow: 0 30px 60px rgb(20 22 24 / .28), inset 0 0 0 2px #2a2d31; position: relative; justify-self: center; }
+  .telefono::before { content: ''; position: absolute; top: 20px; left: 50%; width: 86px; height: 22px; margin-left: -43px; background: #0c0d0e; border-radius: 999px; z-index: 2; }
+  .telefono .pantalla { width: 100%; height: 100%; border-radius: 33px; overflow: hidden; background: var(--fondo); }
+  .telefono img { width: 100%; display: block; }
+  .telefono .pantalla.recorte img { transform: translateY(0); }
+  .con-ventana { display: grid; grid-template-columns: 1fr 640px; gap: 36px; align-items: start; }
+  .con-ventana .paso { padding: 10px 18px; } .con-ventana .paso p { font-size: 14px; }
+  .ventana { background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 24px 56px rgb(20 22 24 / .2), 0 0 0 1px rgb(20 22 24 / .08); }
+  .ventana img { width: 100%; display: block; }
+  .barra-v { height: 34px; background: #ECECEC; display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: 1px solid #DDD; }
+  .barra-v i { width: 11px; height: 11px; border-radius: 50%; background: #D0D0D0; }
+  .barra-v i:nth-child(1) { background: #FF5F57; } .barra-v i:nth-child(2) { background: #FEBC2E; } .barra-v i:nth-child(3) { background: #28C840; }
+  .barra-v span { margin-left: 14px; flex: 1; max-width: 340px; height: 22px; border-radius: 6px; background: #fff; font-size: 12px; color: var(--tinta-2); display: flex; align-items: center; padding: 0 10px; }
+  .captura { border-radius: 16px; border: 1px solid var(--linea); box-shadow: 0 20px 50px rgb(20 22 24 / .18); overflow: hidden; background: #fff; }
+  .captura img { width: 100%; display: block; }
+
+  /* portada */
+  .portada { grid-template-columns: 1.15fr 1fr; grid-template-rows: 1fr; padding: 0; gap: 0; }
+  .portada .izq { background: var(--marca); color: #fff; padding: 72px; display: grid; align-content: center; gap: 36px; }
+  .acrostico p { font-size: 70px; font-weight: 300; line-height: 1.04; color: rgb(255 255 255 / .55); }
+  .acrostico b { font-weight: 700; color: #fff; display: inline-block; min-width: .78em; }
+  .acrostico .de { font-size: .5em; opacity: .8; margin-left: .25em; }
+  .portada .izq small { font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: rgb(255 255 255 / .55); }
+  .portada .der { padding: 64px; display: grid; align-content: center; gap: 22px; }
+  .portada h1 { font-size: 48px; font-weight: 700; color: var(--marca); line-height: 1.1; letter-spacing: -.01em; }
+  .portada .der p { font-size: 19px; color: var(--tinta-2); line-height: 1.5; }
+  .etiqueta { font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--tinta-3); }
+  .lista-temas { display: grid; gap: 12px; }
+  .tema { display: flex; align-items: center; gap: 14px; font-size: 19px; font-weight: 600; color: var(--marca); }
+  .tema .icono { width: 44px; height: 44px; margin: 0; border-radius: 12px; } .tema .icono svg { width: 22px; height: 22px; }
+
+  /* seguimiento */
+  .seguimiento { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-content: start; }
+  .flujo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .flecha { color: var(--tinta-3); font-size: 22px; }
+  .barras { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; align-items: end; height: 190px; margin-top: 18px; padding-top: 10px; }
+  .barra { display: grid; gap: 6px; justify-items: center; font-size: 12px; color: var(--tinta-3); height: 100%; align-content: end; }
+  .barra .par { display: flex; gap: 4px; align-items: end; height: 150px; }
+  .barra .par span { width: 16px; border-radius: 5px 5px 0 0; transform-origin: bottom; transform: scaleY(0); transition: transform .9s var(--ease); }
+  .visto .barra .par span { transform: scaleY(1); }
+  .barra .p { background: #D9D2CB; } .barra .r { background: var(--ok); }
+  .leyenda { display: flex; gap: 18px; font-size: 13px; color: var(--tinta-2); margin-top: 10px; }
+  .leyenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  /* campañas */
+  .linea-tiempo { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; align-content: center; padding-top: 30px; }
+  .linea-tiempo::before { content: ''; position: absolute; top: 58px; left: 8%; right: 8%; height: 4px; background: var(--linea); border-radius: 4px; }
+  .hito { position: relative; display: grid; justify-items: center; gap: 16px; text-align: center; }
+  .hito .bola { width: 60px; height: 60px; border-radius: 50%; background: var(--marca); color: #fff; display: grid; place-items: center; font-size: 24px; font-weight: 700; box-shadow: 0 0 0 8px var(--fondo); }
+  .hito.primero .bola { background: var(--rojo); }
+  .hito .tarjeta { padding: 20px; width: 100%; }
+  .hito h3 { font-size: 19px; } .hito p { font-size: 14px; }
+
+  /* oscuras */
+  .centro { display: grid; place-items: center; text-align: center; grid-template-rows: 1fr; }
+  .frase-gigante { font-size: 92px; font-weight: 700; letter-spacing: -.02em; line-height: 1.05; }
+  .frase-gigante span { color: rgb(255 255 255 / .45); font-weight: 300; }
+  .revelacion { grid-template-rows: 1fr; padding: 56px 72px 72px; }
+  .revelacion .cuerpo { display: grid; grid-template-columns: 1fr 300px 270px; gap: 48px; align-items: center; }
+  .revelacion h2 { font-size: 54px; font-weight: 700; line-height: 1.08; letter-spacing: -.015em; }
+  .revelacion h2 em { font-style: normal; color: var(--rojo); }
+  .revelacion p { margin-top: 18px; font-size: 19px; color: rgb(255 255 255 / .7); line-height: 1.5; }
+  .ventajas { display: grid; gap: 10px; margin-top: 26px; }
+  .ventaja { display: flex; gap: 12px; align-items: center; font-size: 17px; color: #fff; }
+  .ventaja i { width: 26px; height: 26px; border-radius: 50%; background: rgb(255 255 255 / .12); display: grid; place-items: center; font-style: normal; font-size: 13px; }
+  .qr { display: grid; gap: 14px; justify-items: center; }
+  .qr .marco { background: #fff; border-radius: 22px; padding: 16px; box-shadow: 0 0 0 0 rgb(255 255 255 / .35); }
+  .qr.visto .marco { animation: pulso 2.4s ease-out 1s 2; }
+  @keyframes pulso { 0% { box-shadow: 0 0 0 0 rgb(255 255 255 / .35); } 100% { box-shadow: 0 0 0 28px rgb(255 255 255 / 0); } }
+  .qr svg { width: 220px; height: 220px; display: block; }
+  .qr b { font-size: 22px; font-weight: 600; letter-spacing: .01em; }
+  .qr small { font-size: 14px; color: rgb(255 255 255 / .6); }
+  .oscura .telefono { box-shadow: 0 30px 60px rgb(0 0 0 / .5), inset 0 0 0 2px #3a3d42; }
+
+  /* instalar */
+  .instalar { display: grid; grid-template-columns: 1fr 1fr 200px; gap: 26px; align-content: start; }
+  .so h3 { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 700; color: var(--marca); margin-bottom: 14px; }
+  .so h3 svg { width: 26px; height: 26px; }
+  .qr-chico { display: grid; gap: 10px; justify-items: center; align-self: start; text-align: center; }
+  .qr-chico .marco { background: #fff; border: 1px solid var(--linea); border-radius: 16px; padding: 10px; }
+  .qr-chico svg { width: 150px; height: 150px; display: block; }
+  .qr-chico small { font-size: 13px; color: var(--tinta-2); }
+
+  /* notificaciones */
+  .avisos-lista { display: grid; gap: 8px; }
+  .aviso-item { display: flex; gap: 14px; align-items: center; background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 7px 16px; font-size: 15.5px; color: var(--marca); font-weight: 500; }
+  .aviso-item .icono { width: 40px; height: 40px; margin: 0; border-radius: 11px; } .aviso-item .icono svg { width: 20px; height: 20px; }
+  .aviso-item span small { display: block; font-size: 13px; color: var(--tinta-2); font-weight: 400; }
+
+  /* celebraciones */
+  .celebra { display: grid; grid-template-columns: 1fr 340px; gap: 56px; align-items: start; }
+  .celebra .tarjeta { display: grid; grid-template-columns: 56px 1fr; gap: 0 18px; padding: 20px 24px; }
+  .celebra .tarjeta .icono { grid-row: span 2; margin: 0; }
+  .celebra .tarjeta h3 { margin-bottom: 2px; }
+  .tarjeta-cumple { width: 340px; margin-top: -6px; border-radius: 18px; overflow: hidden; box-shadow: 0 30px 60px rgb(20 22 24 / .25); }
+  .tarjeta-cumple img { width: 100%; display: block; }
+
+  /* preguntas */
+  .preguntas { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; align-content: start; }
+  .pregunta { background: #fff; border: 1px solid var(--linea); border-radius: 16px; padding: 18px 22px; }
+  .pregunta b { display: block; font-size: 17px; font-weight: 600; color: var(--marca); margin-bottom: 4px; }
+  .pregunta p { font-size: 14.5px; line-height: 1.45; color: var(--tinta-2); }
+
+  /* cierre */
+  .cierre { grid-template-rows: 1fr; }
+  .cierre .cuerpo { display: grid; grid-template-columns: 1fr 270px; gap: 64px; align-items: center; }
+  .cierre h2 { font-size: 54px; font-weight: 700; line-height: 1.08; letter-spacing: -.01em; }
+  .tres { display: grid; gap: 12px; margin-top: 30px; }
+  .tres div { display: flex; gap: 16px; align-items: center; font-size: 20px; background: rgb(255 255 255 / .07); border: 1px solid rgb(255 255 255 / .12); border-radius: 14px; padding: 14px 20px; }
+  .tres b { width: 36px; height: 36px; border-radius: 50%; background: #fff; color: var(--marca); display: grid; place-items: center; flex: none; }
+
+  /* controles y avance */
+  #barra { position: fixed; left: 0; bottom: 0; height: 4px; background: var(--rojo); transition: width .4s var(--ease); z-index: 10; }
+  #ayuda { position: fixed; right: 16px; bottom: 12px; font: 12px Poppins, sans-serif; color: rgb(255 255 255 / .35); z-index: 10; transition: opacity .6s; }
+  body.quieto #ayuda { opacity: 0; }
+
+  /* impresión / PDF: todas las láminas y todos los pasos */
+  @media print {
+    @page { size: 1280px 720px; margin: 0; }
+    html, body { overflow: visible; height: auto; background: #fff; }
+    #escenario { position: static; transform: none !important; width: auto; height: auto; }
+    .lamina { position: relative; opacity: 1; visibility: visible; transform: none; width: 1280px; height: 720px; page-break-after: always; transition: none; }
+    .f { opacity: 1 !important; transform: none !important; filter: none !important; }
+    .barra .par span { transform: none; }
+    #barra, #ayuda { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="escenario">
+
+<!-- 1 · PORTADA -->
+<section class="lamina portada">
+  <div class="izq">
+    <div class="acrostico f a-izq"><p><b>C</b>entro<span class="de">de</span></p><p><b>A</b>tención<span class="de">al</span></p><p><b>C</b>olaborador</p></div>
+    <small class="f arriba">Prosein · Austral · Mil Cerámicas — Gestión Humana</small>
+  </div>
+  <div class="der">
+    <span class="etiqueta f arriba">Novedades · Gestión Humana</span>
+    <h1 class="f arriba">Nuevas funciones del CAC</h1>
+    <p class="f arriba">Lo que ya puedes hacer desde el Centro de Atención al Colaborador.</p>
+    <div class="lista-temas">
+      <div class="tema f a-izq"><span class="icono i-oro">{{ico:recibos}}</span>Recibos de pago</div>
+      <div class="tema f a-izq"><span class="icono i-azul">{{ico:vacaciones}}</span>Planificación de vacaciones 2027</div>
+      <div class="tema f a-izq"><span class="icono i-verde">{{ico:perfil}}</span>Actualización de datos</div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 · QUÉ HAY DE NUEVO -->
+<section class="lamina">
+  <div class="cab"><div><h2>¿Qué hay de nuevo?</h2><p class="sub">Tres funciones nuevas para tener todo lo tuyo en un solo lugar.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="grid3">
+    <div class="tarjeta f arriba"><div class="icono i-oro">{{ico:recibos}}</div><h3>Recibos de pago</h3><p>Tu recibo de nómina en el CAC, cada quincena, y confirmas que lo recibiste.</p></div>
+    <div class="tarjeta f arriba"><div class="icono i-azul">{{ico:vacaciones}}</div><h3>Planificación 2027</h3><p>Planificas tus vacaciones del año y tu jefe las aprueba desde el CAC.</p></div>
+    <div class="tarjeta f arriba"><div class="icono i-verde">{{ico:perfil}}</div><h3>Actualización de datos</h3><p>Mantén al día tus datos de contacto, familia y tallas, con campañas cortas.</p></div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 3 · RECIBOS -->
+<section class="lamina">
+  <div class="cab"><div><span class="bloque-tag"><i></i>Nuevas funciones</span><h2>Recibos de pago</h2><p class="sub">Tu recibo de nómina, siempre a mano y sin papel.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="con-ventana">
+    <div>
+      <div class="pasos">
+        <div class="paso f a-izq"><b class="n">1</b><div><h4>Te llega el aviso</h4><p>«Tienes un recibo de pago nuevo» cuando Gestión Humana lo publica.</p></div></div>
+        <div class="paso f a-izq"><b class="n">2</b><div><h4>Entra a «Recibos de pago»</h4><p>Desde la tarjeta del inicio. Ahí está tu historial.</p></div></div>
+        <div class="paso f a-izq"><b class="n">3</b><div><h4>Haz clic en <span class="btn">Ver recibo</span></h4><p>Se abre tu recibo en PDF. Revísalo con calma.</p></div></div>
+        <div class="paso f a-izq marcar"><b class="n">4</b><div><h4>Confirma con <span class="btn">Recibí conforme</span></h4><p>Así queda registrado que lo recibiste.</p></div></div>
+      </div>
+    </div>
+    <div style="display:grid;gap:16px"><div class="ventana f a-der"><div class="barra-v"><i></i><i></i><i></i><span>cads.onrender.com</span></div><img src="{{img:pc-recibos}}" alt="Recibos de pago en el CAC"></div>
+      <div class="reglas" style="margin-top:0">
+        <div class="regla r-verde f arriba"><b>Tu historial</b>Tus recibos anteriores quedan disponibles.</div>
+        <div class="regla r-azul f arriba"><b>Queda registrado</b>Gestión Humana ve la fecha y hora de tu confirmación.</div>
+      </div>
+</div>
+  </div>
+  <div class="pie"><span>¿Algo no cuadra en tu recibo? Escríbele a Gestión Humana antes de confirmar.</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 4 · PLANIFICACIÓN -->
+<section class="lamina">
+  <div class="cab"><div><span class="bloque-tag"><i></i>Nuevas funciones</span><h2>Planificación de vacaciones 2027</h2><p class="sub">Tú planificas tus días del año y tu jefe directo los aprueba.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="con-ventana">
+    <div class="pasos">
+      <div class="paso f a-izq"><b class="n">1</b><div><h4>Gestión Humana abre la carga</h4><p>Te llega el aviso con las fechas para enviar tu planificación.</p></div></div>
+      <div class="paso f a-izq marcar"><b class="n">2</b><div><h4>El CAC te dice cuántos días planificar</h4><p>Tus días pendientes más los del período que cumples en 2027.</p></div></div>
+      <div class="paso f a-izq"><b class="n">3</b><div><h4>Elige tus bloques de vacaciones</h4><p>Fecha de inicio y días hábiles. Ves tu último día y cuándo vuelves.</p></div></div>
+      <div class="paso f a-izq"><b class="n">4</b><div><h4>Haz clic en <span class="btn">Enviar a mi jefe</span></h4><p>Tu jefe la <b>aprueba</b> o te <b>pide corregir</b> con el motivo. Te llega el aviso.</p></div></div>
+      <div class="flujo f arriba" style="margin-top:6px"><span class="chip c-espera">Con el jefe</span><span class="flecha">→</span><span class="chip c-ok">Aprobada</span><span class="flecha" style="margin-left:14px">o</span><span class="chip c-error">Por corregir</span></div>
+    </div>
+    <div class="ventana f a-der"><div class="barra-v"><i></i><i></i><i></i><span>cads.onrender.com</span></div><img src="{{img:pc-plan}}" alt="Planificación de vacaciones en el CAC"></div>
+  </div>
+  <div class="pie"><span>Sin jefe directo asignado no puedes enviarla: avísale a Gestión Humana.</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 5 · DEL PLAN AL DISFRUTE -->
+<section class="lamina">
+  <div class="cab"><div><span class="bloque-tag"><i></i>Nuevas funciones</span><h2>Del plan al disfrute</h2><p class="sub">La planificación no se queda en papel: haremos seguimiento durante todo el año.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="seguimiento">
+    <div style="display:grid;gap:16px;align-content:start">
+      <div class="tarjeta f a-izq"><h3>Cada solicitud se compara con tu plan</h3><p>Cuando pidas tus vacaciones, el CAC indica si están dentro de lo que planificaste.</p>
+        <div class="flujo" style="margin-top:14px"><span class="chip c-azul">Solicitud</span><span class="flecha">→</span><span class="chip c-ok">Dentro del plan</span><span class="chip c-espera">Fuera del plan</span></div></div>
+      <div class="regla r-oro f a-izq"><b>Para los jefes</b>Aprueban la planificación de su equipo en «Mi equipo», y luego cada solicitud de vacaciones.</div>
+      <div class="regla r-azul f a-izq"><b>Planifica en serio</b>Elige fechas reales: lo planificado es lo que esperamos que disfrutes.</div>
+    </div>
+    <div class="tarjeta f a-der" id="grafico"><h3>Gestión Humana sigue el cumplimiento</h3><p>Planificado contra disfrutado, mes a mes.</p>
+      <div class="barras">
+        <div class="barra"><div class="par"><span class="p" style="height:60%"></span><span class="r" style="height:55%;transition-delay:.1s"></span></div>Ene</div>
+        <div class="barra"><div class="par"><span class="p" style="height:30%"></span><span class="r" style="height:30%;transition-delay:.2s"></span></div>Mar</div>
+        <div class="barra"><div class="par"><span class="p" style="height:45%"></span><span class="r" style="height:38%;transition-delay:.3s"></span></div>May</div>
+        <div class="barra"><div class="par"><span class="p" style="height:90%"></span><span class="r" style="height:82%;transition-delay:.4s"></span></div>Ago</div>
+        <div class="barra"><div class="par"><span class="p" style="height:40%"></span><span class="r" style="height:20%;transition-delay:.5s"></span></div>Oct</div>
+        <div class="barra"><div class="par"><span class="p" style="height:75%"></span><span class="r" style="height:70%;transition-delay:.6s"></span></div>Dic</div>
+      </div>
+      <div class="leyenda"><span><i style="background:#D9D2CB"></i>Planificado</span><span><i style="background:var(--ok)"></i>Disfrutado</span><span style="margin-left:auto">Ejemplo ilustrativo</span></div>
+    </div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 6 · ACTUALIZACIÓN DE DATOS -->
+<section class="lamina">
+  <div class="cab"><div><span class="bloque-tag"><i></i>Nuevas funciones</span><h2>Actualización de datos</h2><p class="sub">«Mi perfil»: tus datos centralizados en un solo lugar.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="con-ventana">
+    <div class="pasos">
+      <div class="paso f a-izq"><b class="n">{{ico:perfil}}</b><div><h4>Tus datos de nómina, para consultar</h4><p>Nombre, cargo, empresa y fecha de ingreso. Si algo está mal, avísale a Gestión Humana.</p></div></div>
+      <div class="paso f a-izq marcar"><b class="n">?</b><div><h4>Una pregunta a la vez</h4><p>Responde con calma: te toma 2 o 3 minutos. Ves tu avance en cada paso.</p></div></div>
+      <div class="paso f a-izq"><b class="n">✓</b><div><h4>Revisas y guardas</h4><p>Antes de guardar ves todas tus respuestas y puedes cambiar cualquiera.</p></div></div>
+      <div class="paso f a-izq"><b class="n">↻</b><div><h4>Lo actualizas cuando cambie</h4><p>¿Te mudaste o cambiaste de número? Entra a «Mi perfil» y actualízalo.</p></div></div>
+    </div>
+    <div class="ventana f a-der"><div class="barra-v"><i></i><i></i><i></i><span>cads.onrender.com</span></div><img src="{{img:pc-perfil}}" alt="Actualización de datos, una pregunta a la vez"></div>
+  </div>
+  <div class="pie"><span>Tus datos solo los ve Gestión Humana.</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 7 · CAMPAÑAS -->
+<section class="lamina">
+  <div class="cab"><div><span class="bloque-tag"><i></i>Nuevas funciones</span><h2>Las 4 campañas de actualización</h2><p class="sub">Las abriremos una por una. Cada una es corta y te avisamos cuando empiece.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div style="display:grid;gap:30px;align-content:center">
+    <div class="linea-tiempo">
+      <div class="hito primero f arriba"><span class="bola">1</span><div class="tarjeta"><h3>Tu contacto</h3><p>Celular, correo y dirección.</p></div></div>
+      <div class="hito f arriba"><span class="bola">2</span><div class="tarjeta"><h3>Emergencia</h3><p>A quién llamamos si te pasa algo.</p></div></div>
+      <div class="hito f arriba"><span class="bola">3</span><div class="tarjeta"><h3>Carga familiar</h3><p>Quiénes dependen de ti.</p></div></div>
+      <div class="hito f arriba"><span class="bola">4</span><div class="tarjeta"><h3>Tallas y datos</h3><p>Uniformes, estudios y estado civil.</p></div></div>
+    </div>
+    <div class="reglas" style="grid-template-columns:1fr 1fr">
+      <div class="regla r-oro f arriba"><b>Te avisaremos</b>Cuando abra cada campaña la verás en tu inicio hasta que la completes.</div>
+      <div class="regla r-verde f arriba"><b>Con fecha límite</b>Cada campaña tiene su plazo. Gestión Humana ve quién ya la completó.</div>
+    </div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 8 · TRANSICIÓN -->
+<section class="lamina oscura centro">
+  <p class="frase-gigante"><span class="f borroso" style="display:block">Y una</span><span class="f borroso" style="display:block;color:#fff;font-weight:700">cosa más…</span></p>
+</section>
+
+<!-- 9 · REVELACIÓN -->
+<section class="lamina oscura revelacion">
+  <div class="cuerpo">
+    <div>
+      <span class="bloque-tag f arriba" style="color:rgb(255 255 255 / .55)"><i></i>Ahora en tu teléfono</span>
+      <h2 class="f arriba">El CAC ahora está diseñado <em>completamente para tu teléfono</em></h2>
+      <p class="f arriba">El mismo enlace, tu misma cédula y tu mismo PIN. Todo lo del CAC, en tu celular.</p>
+      <div class="ventajas">
+        <div class="ventaja f a-izq"><i>✓</i>Siempre a mano</div>
+        <div class="ventaja f a-izq"><i>✓</i>Se abre como una aplicación</div>
+        <div class="ventaja f a-izq"><i>✓</i>Te llegan los avisos al teléfono</div>
+      </div>
+    </div>
+    <div class="telefono f desde-abajo"><div class="pantalla"><img src="{{img:inicio}}" alt="El CAC en el teléfono"></div></div>
+    <div class="qr f zoom"><div class="marco">{{qr}}</div><b>cads.onrender.com</b><small>Escanéalo ahora con tu celular</small></div>
+  </div>
+  <div class="pie"><span>Prosein · Austral · Mil Cerámicas</span><span>{{n}}</span></div>
+</section>
+
+<!-- 10 · AÑÁDELO COMO APLICACIÓN -->
+<section class="lamina">
+  <div class="cab"><div><span class="bloque-tag"><i></i>En tu teléfono</span><h2>Añádelo como aplicación</h2><p class="sub">Con el CAC abierto en tu celular, déjalo en tu pantalla de inicio como cualquier app.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="instalar">
+    <div class="so f a-izq"><h3>{{ico:apple}} iPhone · Safari</h3>
+      <div class="pasos">
+        <div class="paso"><b class="n">1</b><div><h4>Abre el enlace en Safari</h4><p>cads.onrender.com (con Chrome no aparece la opción).</p></div></div>
+        <div class="paso"><b class="n">2</b><div><h4>Toca Compartir <span class="btn">⬆︎</span></h4><p>El cuadrado con la flecha, en la barra de abajo.</p></div></div>
+        <div class="paso"><b class="n">3</b><div><h4>«Agregar a inicio» → Agregar</h4><p>Baja en la lista hasta encontrarlo.</p></div></div>
+      </div></div>
+    <div class="so f a-izq"><h3>{{ico:android}} Android · Chrome</h3>
+      <div class="pasos">
+        <div class="paso"><b class="n">1</b><div><h4>Abre el enlace en Chrome</h4><p>cads.onrender.com</p></div></div>
+        <div class="paso"><b class="n">2</b><div><h4>Toca el menú <span class="btn">⋮</span></h4><p>Los tres puntos, arriba a la derecha.</p></div></div>
+        <div class="paso"><b class="n">3</b><div><h4>«Instalar app» → Instalar</h4><p>En algunos teléfonos dice «Agregar a pantalla principal».</p></div></div>
+      </div></div>
+    <div class="qr-chico f zoom"><div class="marco">{{qr}}</div><small>¿Llegaste tarde?<br>Escanéalo aquí</small></div>
+  </div>
+  <div class="regla r-verde f arriba" style="position:absolute;left:72px;right:72px;bottom:62px"><b>Al entrar, el CAC te lo sugiere</b>Si ves el mensaje «Instalar CAC», toca <b style="display:inline;font-size:inherit">Instalar</b> y listo: queda el ícono del CAC en tu teléfono.</div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 11 · NOTIFICACIONES -->
+<section class="lamina">
+  <div class="cab"><div><span class="bloque-tag"><i></i>En tu teléfono</span><h2>Notificaciones</h2><p class="sub">El CAC te avisa al teléfono cuando pasa algo con tus solicitudes.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="con-telefono">
+    <div style="display:grid;gap:16px;align-content:start">
+      <div class="flujo f arriba"><span class="chip c-azul">1 · Toca «Activar avisos»</span><span class="flecha">→</span><span class="chip c-azul">2 · Toca «Permitir»</span><span class="flecha">→</span><span class="chip c-ok">¡Listo!</span></div>
+      <div class="avisos-lista">
+        <div class="aviso-item f a-izq"><span class="icono i-azul">{{ico:vacaciones}}</span><span>Tus vacaciones, aprobadas o registradas<small>y tu planificación, cuando tu jefe la revise</small></span></div>
+        <div class="aviso-item f a-izq"><span class="icono i-oro">{{ico:recibos}}</span><span>Tienes un recibo de pago nuevo<small>cada vez que Gestión Humana lo publique</small></span></div>
+        <div class="aviso-item f a-izq"><span class="icono i-verde">{{ico:perfil}}</span><span>Campañas de actualización de datos<small>cuando abra una y si te falta completarla</small></span></div>
+        <div class="aviso-item f a-izq"><span class="icono i-rojo">{{ico:fideicomiso}}</span><span>Anticipos del fideicomiso<small>apertura de solicitudes y pago</small></span></div>
+        <div class="aviso-item f a-izq"><span class="icono i-gris" style="background:var(--linea-suave);color:var(--marca)">{{ico:equipo}}</span><span>Para los jefes<small>solicitudes y planificaciones de su equipo por aprobar</small></span></div>
+      </div>
+      <div class="reglas" style="margin-top:2px">
+        <div class="regla r-verde f arriba"><b>También en la campanita 🔔</b>Si no los ves en el teléfono, quedan en el CAC.</div>
+        <div class="regla r-oro f arriba"><b>En iPhone</b>Primero añádelo a tu pantalla de inicio (iOS 16.4 o superior).</div>
+      </div>
+    </div>
+    <div class="telefono f a-der"><div class="pantalla"><img src="{{img:avisos}}" alt="Notificaciones del CAC"></div></div>
+  </div>
+</section>
+
+<!-- 12 · CUMPLEAÑOS Y ANIVERSARIOS -->
+<section class="lamina">
+  <div class="cab"><div><span class="bloque-tag"><i></i>En tu teléfono</span><h2>Cumpleaños y aniversarios</h2><p class="sub">Celebramos contigo tus fechas importantes.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="celebra">
+    <div style="display:grid;gap:16px;align-content:start;padding-top:20px">
+      <div class="tarjeta f a-izq"><div class="icono i-rojo" style="font-size:28px">🎂</div><h3>Tu cumpleaños</h3><p>Ese día te llega tu felicitación y ves tu tarjeta al entrar al CAC. Y todo el Grupo Prosein se entera para felicitarte.</p></div>
+      <div class="tarjeta f a-izq"><div class="icono i-oro" style="font-size:28px">🎉</div><h3>Tu aniversario</h3><p>Cada año en el grupo te llega un aviso personal con los años que cumples con nosotros.</p></div>
+      <div class="regla r-verde f arriba"><b>Descarga tu tarjeta</b>Guárdala o compártela desde el CAC.</div>
+    </div>
+    <div class="tarjeta-cumple f zoom"><img src="{{img:cumple}}" alt="Tarjeta de cumpleaños del Grupo Prosein"></div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 13 · PREGUNTAS -->
+<section class="lamina">
+  <div class="cab"><div><h2>Preguntas</h2><p class="sub">En caso de duda, contacta a Gestión Humana.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
+  <div class="preguntas">
+    <div class="pregunta f arriba"><b>¿No me llegan los avisos?</b><p>Toca «Activar avisos» y luego «Permitir». En iPhone, primero añádelo a tu pantalla de inicio.</p></div>
+    <div class="pregunta f arriba"><b>¿Cambié de teléfono?</b><p>Entra al CAC en el nuevo, añádelo a tu inicio y vuelve a activar los avisos.</p></div>
+    <div class="pregunta f arriba"><b>¿No veo mi recibo?</b><p>Gestión Humana los publica cada quincena. Si ya pasó la fecha, avísanos.</p></div>
+    <div class="pregunta f arriba"><b>¿No puedo enviar mi planificación?</b><p>Necesitas un jefe directo asignado: Gestión Humana lo registra.</p></div>
+    <div class="pregunta f arriba"><b>¿Un dato de nómina está mal?</b><p>Tu cargo, empresa o fecha de ingreso vienen de nómina: avísale a Gestión Humana.</p></div>
+    <div class="pregunta f arriba"><b>¿Quién ve mis datos?</b><p>Solo Gestión Humana. Tus datos personales no los ven tus compañeros.</p></div>
+  </div>
+  <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
+</section>
+
+<!-- 14 · CIERRE -->
+<section class="lamina oscura cierre">
+  <div class="cuerpo">
+    <div>
+      <span class="bloque-tag f arriba" style="color:rgb(255 255 255 / .55)"><i></i>Hoy mismo</span>
+      <h2 class="f arriba">Todo lo tuyo de Gestión Humana, en tu teléfono.</h2>
+      <div class="tres">
+        <div class="f a-izq"><b>1</b>Añade el CAC a tu teléfono</div>
+        <div class="f a-izq"><b>2</b>Activa tus avisos</div>
+        <div class="f a-izq"><b>3</b>Revisa tu recibo y completa tu perfil</div>
+      </div>
+    </div>
+    <div class="qr f zoom"><div class="marco">{{qr}}</div><b>cads.onrender.com</b><small>Escanéalo para abrir el CAC</small></div>
+  </div>
+  <div class="pie"><span>Prosein · Austral · Mil Cerámicas</span><span>Gestión Humana</span></div>
+</section>
+
+</div>
+<div id="barra"></div>
+<div id="ayuda">→ / clic: avanzar · ← retroceder · F: pantalla completa</div>
+<script>
+  const laminas = [...document.querySelectorAll('.lamina')], esc = document.getElementById('escenario'), barra = document.getElementById('barra');
+  let i = 0;
+  const pasos = (l) => [...l.querySelectorAll('.f')];
+  function ajustar() { const k = Math.min(innerWidth / 1280, innerHeight / 720); esc.style.transform = `translate(-50%, -50%) scale(${k})`; }
+  function avance() {
+    const total = laminas.reduce((t, l) => t + 1 + pasos(l).length, 0);
+    let hecho = 0; laminas.forEach((l, k) => { if (k < i) hecho += 1 + pasos(l).length; else if (k === i) hecho += 1 + l.querySelectorAll('.f.visto').length; });
+    barra.style.width = (hecho / total * 100) + '%';
+  }
+  function ir(n, conPasos = false) {
+    i = Math.max(0, Math.min(laminas.length - 1, n));
+    laminas.forEach((l, k) => { l.classList.toggle('activa', k === i); l.classList.toggle('pasada', k < i);
+      if (k !== i) pasos(l).forEach((p) => p.classList.toggle('visto', k < i)); });
+    pasos(laminas[i]).forEach((p) => p.classList.toggle('visto', conPasos));
+    history.replaceState(null, '', '#' + (i + 1)); avance();
+  }
+  function siguiente() { const p = pasos(laminas[i]).find((x) => !x.classList.contains('visto')); if (p) { p.classList.add('visto'); avance(); } else if (i < laminas.length - 1) ir(i + 1); }
+  function anterior() { const v = pasos(laminas[i]).filter((x) => x.classList.contains('visto')); if (v.length) { v[v.length - 1].classList.remove('visto'); avance(); } else if (i > 0) ir(i - 1, true); }
+  // número de lámina en las cabeceras
+  laminas.forEach((l, k) => l.innerHTML = l.innerHTML.replaceAll('{{n}}', String(k + 1).padStart(2, '0')));
+  addEventListener('keydown', (e) => {
+    if (['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'Enter'].includes(e.key)) { e.preventDefault(); siguiente(); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); anterior(); }
+    else if (e.key === 'Home') ir(0); else if (e.key === 'End') ir(laminas.length - 1, true);
+    else if (e.key.toLowerCase() === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+  });
+  addEventListener('click', (e) => { (e.clientX < innerWidth / 4 ? anterior : siguiente)(); });
+  let x0 = null; addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener('touchend', (e) => { if (x0 == null) return; const d = e.changedTouches[0].clientX - x0; if (Math.abs(d) > 40) (d < 0 ? siguiente : anterior)(); x0 = null; });
+  let reloj; addEventListener('mousemove', () => { document.body.classList.remove('quieto'); clearTimeout(reloj); reloj = setTimeout(() => document.body.classList.add('quieto'), 2500); });
+  addEventListener('resize', ajustar); ajustar();
+  ir((parseInt(location.hash.slice(1), 10) || 1) - 1);
+  setTimeout(() => document.body.classList.add('quieto'), 4000);
+</script>
+</body>
+</html>
