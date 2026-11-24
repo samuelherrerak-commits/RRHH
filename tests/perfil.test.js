@@ -49,6 +49,9 @@ function escenario() {
 test('el colaborador ve y guarda su perfil directo; queda el registro de lo que cambió', () => {
   const { repo, ctx, rrhh, entrar } = escenario();
   const ana = entrar('12345678');
+  // sin campaña abierta no se puede editar
+  assert.equal(S.guardarMiPerfil(repo, ctx, ana, { contacto: COMPLETO.contacto }).code, 'CERRADA');
+  S.crearCampanaDatos(repo, ctx, rrhh, { titulo: 'Todo', secciones: ['contacto', 'emergencia', 'familia', 'personales'], hasta: '2026-12-20' });
   const v = S.miPerfil(repo, ctx, ana).data;
   assert.equal(v.nomina.nombre, 'Ana Prosein'); assert.equal(v.nomina.cargo, 'Asesor Comercial'); assert.equal(v.nomina.fechaIngreso, '2020-01-01');
   assert.deepEqual(v.faltan, ['contacto', 'emergencia', 'familia', 'personales']);
@@ -83,6 +86,8 @@ test('campaña de actualización: avisa a quienes les toca, se completa al guard
   const ana = entrar('12345678'), beto = entrar('23456789');
   assert.equal(S.miPerfil(repo, ctx, ana).data.campanas[0].titulo, 'Actualización de diciembre');
   assert.equal(S.miPerfil(repo, ctx, beto).data.campanas.length, 0);   // Austral no está en el alcance
+  // una sección que no está en la campaña no se puede guardar
+  assert.match(S.guardarMiPerfil(repo, ctx, ana, { personales: COMPLETO.personales }).message, /no está abierta/);
   // guarda solo contacto: sigue pendiente (falta la carga familiar)
   assert.deepEqual(S.guardarMiPerfil(repo, ctx, ana, { contacto: COMPLETO.contacto }).data.confirmadas, []);
   assert.equal(S.listarCampanasDatos(repo, ctx, rrhh).data[0].completos, 0);

@@ -2680,7 +2680,7 @@ var Servicio = (function () {
         return {
           id: c.id, nombre: c.nombre, cedula: c.cedula, empresa: c.empresa, empresaNombre: Constancia.NOMBRES_EMPRESA[c.empresa] || c.empresa,
           cargo: c.cargo, organizacion: c.organizacion, fechaIngreso: c.fechaIngreso, salario: c.salario,
-          emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora),
+          emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora), destinatario: c.destinatario || '',
           firmante: p ? firmante(p) : undefined,
         };
       }
@@ -2691,7 +2691,11 @@ var Servicio = (function () {
        * Solo una a la vez: mientras tenga una VIGENTE no se genera otra (se vuelve a descargar la misma).
        * Cuando vence, o si RRHH la anula, puede generar una nueva.
        */
-      function emitirConstancia(repo, ctx, token) {
+      /** Destinatario de la constancia: '' = «A quien pueda interesar»; si no, la institución (texto limpio, hasta 120). */
+      function limpiarDestinatario(t) { return String(t == null ? '' : t).replace(/[<>{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+      function mismoDestinatario(a, b) { var n = function (x) { return Empleados.normalizarNombre(limpiarDestinatario(x)); }; return n(a) === n(b); }
+    
+      function emitirConstancia(repo, ctx, token, destinatario) {
         var s = leerToken(ctx, token, ['TRABAJADOR']);
         if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
         var emp = repo.empleadoPorClave(s.clave);
@@ -2701,10 +2705,13 @@ var Servicio = (function () {
         var p = repo.parametros(), ahora = ctx.ahora();
         var max = Number(p.constanciasMaxPorMes) > 0 ? Number(p.constanciasMaxPorMes) : MAX_CONSTANCIAS_MES;
         var propias = repo.constanciasDe(s.clave);
-        var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE'; })[0];
+        var dest = limpiarDestinatario(destinatario);
+        if (destinatario != null && String(destinatario).trim() && dest.length < 3) return err('VALIDACION', 'Escribe el nombre de la institución a la que va dirigida.');
+        // Una vigente por destinatario: con el mismo destinatario se vuelve a descargar la que ya tiene.
+        var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE' && mismoDestinatario(c.destinatario, dest); })[0];
         if (vigente) {
           var hasta = Constancia.fechaCaracas(vigente.vence);
-          return err('YA_VIGENTE', 'Ya tienes una constancia vigente hasta el ' + Constancia.fechaCorta(hasta) +
+          return err('YA_VIGENTE', 'Ya tienes una constancia vigente ' + (dest ? 'dirigida a ' + vigente.destinatario : '«A quien pueda interesar»') + ' hasta el ' + Constancia.fechaCorta(hasta) +
             '. Puedes descargarla de nuevo; podrás generar una nueva a partir del ' + Constancia.fechaCorta(Constancia.sumarDias(hasta, 1)) + '.');
         }
         var recientes = propias.filter(function (c) { return c.emision > ahora - 30 * 86400000; });
@@ -2713,7 +2720,7 @@ var Servicio = (function () {
           id: repo.nuevoIdConstancia(), clave: s.clave, nombre: emp.nombre, cedula: emp.cedulaLetra + '-' + emp.cedulaNumero,
           empresa: Empleados.empresaFideicomiso(emp), cargo: emp.puesto, organizacion: emp.organizacion,
           fechaIngreso: Constancia.fechaCorta(emp.fechaIngreso), salario: Calculo.redondear2(emp.salarioMensual),
-          emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave,
+          emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave, destinatario: dest,
         };
         repo.guardarConstancia(c);
         repo.log('CONSTANCIA_EMITIDA', s.clave, c.id);
@@ -4194,6 +4201,13 @@ var Servicio = (function () {
         return { id: c.id, titulo: c.titulo, mensaje: c.mensaje || '', secciones: c.secciones || [], alcance: c.alcance || { tipo: 'todos' }, hasta: c.hasta,
           estado: c.estado, creada: c.creada, por: c.por || '', orden: c.orden || 0, lanzada: c.lanzada || 0, vigente: c.estado === 'ABIERTA' && hoy <= c.hasta, vencida: c.estado === 'ABIERTA' && hoy > c.hasta };
       }
+      /** Secciones que esta persona puede actualizar ahora: las de las campañas abiertas que le tocan. */
+      function seccionesAbiertas(repo, emp) {
+        var p = personaCampana(emp), m = {};
+        repo.campanasDatos().forEach(function (c) { if (c.estado === 'ABIERTA' && Perfil.enAlcance(c, p)) (c.secciones || []).forEach(function (x) { m[x] = true; }); });
+        return Object.keys(m);
+      }
+    
       /** Campañas abiertas que le tocan a esta persona y aún no completa. */
       function pendientesDe(repo, emp, perfil, hoy) {
         var p = personaCampana(emp);
@@ -4224,6 +4238,12 @@ var Servicio = (function () {
         if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
         var emp = repo.empleadoPorClave(s.clave);
         if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+        // Solo se actualiza lo que pide una campaña abierta: fuera de campaña el perfil no se edita.
+        var abiertas = seccionesAbiertas(repo, emp);
+        var pedidas = Perfil.SECCIONES.map(function (x) { return x.id; }).filter(function (id) { return entrada && (entrada[id] !== undefined || (id === 'familia' && entrada.sinFamilia !== undefined)); });
+        var cerradas = pedidas.filter(function (id) { return abiertas.indexOf(id) === -1; });
+        if (!pedidas.length) return err('VALIDACION', 'No hay datos para guardar.');
+        if (cerradas.length) return err('CERRADA', 'La actualización de «' + cerradas.map(function (id) { return Perfil.seccion(id).nombre; }).join('», «') + '» no está abierta. Gestión Humana te avisará cuando abra.');
         var n = Perfil.normalizar(entrada || {});
         if (n.errores.length) return err('VALIDACION', n.errores.slice(0, 6).join(' '));
         var perfil = repo.perfil(s.clave) || perfilVacio(s.clave), ahora = ctx.ahora(), hoy = hoyCaracas(ctx);
@@ -4571,7 +4591,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-18.4';
+var VERSION = '2026-11-24.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -4598,7 +4618,7 @@ var HOJAS = {
   CANCELACIONES: ['id', 'clave', 'nombre', 'empresa', 'fechaIngreso', 'fechaEgreso', 'monto', 'estado', 'creada', 'por', 'actualizada'],
   CIERRES: ['anio', 'trimestre', 'empresa', 'estado', 'por', 'actualizado'],
   ANTICIPOS: ['id', 'clave', 'monto', 'motivo', 'detalle', 'estado', 'creada', 'actualizada', 'decididaPor', 'motivoRechazo', 'ventana', 'acepto'],
-  CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor'],
+  CONSTANCIAS: ['id', 'clave', 'nombre', 'cedula', 'empresa', 'cargo', 'organizacion', 'fechaIngreso', 'salario', 'emision', 'vence', 'estado', 'emitidaPor', 'destinatario'],
   APERTURAS_ANTICIPO: ['id', 'clave', 'inicio', 'fin', 'por', 'actualizada'],
   FERIADOS: ['fecha', 'motivo'],
   VAC_PERIODOS: ['clave', 'periodo', 'correspondientes', 'disfrutadosPrevios'],
@@ -4663,7 +4683,7 @@ var RUTAS_TRABAJADOR = {
   cancelarVacaciones: function (repo, ctx, d) { return Servicio.cancelarVacaciones(repo, ctx, d.token, d.id); },
   equipoVacaciones: function (repo, ctx, d) { return Servicio.equipoVacaciones(repo, ctx, d.token); },
   decidirVacacionesJefe: function (repo, ctx, d) { return Servicio.decidirVacacionesJefe(repo, ctx, d.token, d.id, !!d.aprobar, d.motivo); },
-  emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token); },
+  emitirConstancia: function (repo, ctx, d) { return Servicio.emitirConstancia(repo, ctx, d.token, d.destinatario); },
   misConstancias: function (repo, ctx, d) { return Servicio.misConstancias(repo, ctx, d.token); },
   verificarConstancia: function (repo, ctx, d) { return Servicio.verificarConstancia(repo, ctx, d.id); },   // pública (QR)
   login: function (repo, ctx, d) { return Servicio.iniciarSesion(repo, ctx, d.cedula, d.pin); },
@@ -5040,7 +5060,7 @@ function constancias_() {
     return {
       _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), nombre: texto_(f.nombre), cedula: texto_(f.cedula), empresa: texto_(f.empresa),
       cargo: texto_(f.cargo), organizacion: texto_(f.organizacion), fechaIngreso: fechaIngresoConstancia_(f), salario: Number(f.salario),
-      emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor),
+      emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor), destinatario: texto_(f.destinatario),
     };
   }));
 }

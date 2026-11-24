@@ -38,6 +38,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 label { display: grid; gap: var(--s1); font-weight: 500; font-size: 14px; }
 input, select, textarea { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--linea); border-radius: var(--radio-sm); background: #fff; font-size: 16px; }
 textarea { min-height: 88px; resize: vertical; }
+/* Safari (iPhone): el campo de fecha vacío se encoge y tiene un ancho mínimo propio que lo monta sobre el de al lado */
+input[type="date"], input[type="month"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; height: 48px; line-height: 26px; color: var(--tinta); }
+input[type="date"]::-webkit-date-and-time-value, input[type="month"]::-webkit-date-and-time-value { text-align: left; min-height: 26px; }
+label { min-width: 0; }
 input:focus, select:focus, textarea:focus { border-color: var(--marca); outline: 0; box-shadow: 0 0 0 3px rgb(20 22 24 / .12); }
 
 .btn { min-height: 48px; padding: 0 var(--s5); border: 0; border-radius: var(--radio-sm); background: var(--marca); color: #fff; font-weight: 600; cursor: pointer; transition: transform 160ms var(--ease), background 160ms; }
@@ -322,7 +326,7 @@ body.en-entrada .contenedor { max-width: none; padding: 0; margin: 0; }
 details summary { cursor: pointer; color: var(--tinta-2); font-size: 14px; }
 /* ---- Planificación del colaborador ---- */
 .bloques { display: grid; gap: var(--s3); }
-.bloque { display: grid; grid-template-columns: 28px minmax(0, 1fr) 120px; gap: var(--s2) var(--s3); align-items: end; border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s3); }
+.bloque { display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(0, 104px); gap: var(--s2) var(--s3); align-items: end; border: 1px solid var(--linea); border-radius: var(--radio-sm); padding: var(--s3); }
 .bloque-n { width: 28px; height: 28px; border-radius: 50%; background: var(--marca); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; align-self: center; }
 .bloque-fin { grid-column: 2 / -1; font-size: 13px; }
 .bloque .btn-link { grid-column: 2 / -1; justify-self: start; }
@@ -428,3 +432,13 @@ details.item[open] { gap: var(--s3); }
 .tabla-cel { min-width: 0; width: 100%; } .tabla-cel th:first-child, .tabla-cel td:first-child { width: 90px; min-width: 0; white-space: nowrap; } .tabla-cel td:last-child { text-align: right; padding-right: 16px; }
 .acciones-cel { display: flex; gap: var(--s2); justify-content: flex-end; flex-wrap: nowrap; }
 .tabla-cel td:nth-child(4) { white-space: normal; min-width: 120px; }
+/* Constancia: a quién va dirigida */
+.destino { border: 0; padding: 0; margin: 0; display: grid; gap: var(--s2); }
+.destino legend { font-weight: 500; font-size: 14px; margin-bottom: var(--s2); }
+.opcion-radio { display: grid; grid-template-columns: 22px 1fr; gap: var(--s3); align-items: start; padding: var(--s3) var(--s4); border: 1.5px solid var(--linea); border-radius: var(--radio-sm); cursor: pointer; font-weight: 400; }
+.opcion-radio:has(input:checked) { border-color: var(--carbon); background: var(--marca-velo); }
+.opcion-radio input { width: 20px; height: 20px; min-height: 20px; margin-top: 2px; }
+.opcion-radio span { display: grid; gap: 2px; } .opcion-radio b { color: var(--carbon); } .opcion-radio small { color: var(--tinta-2); font-size: 13px; }
+
+.bloque label { min-width: 0; } .bloque input { min-width: 0; }
+@media (max-width: 420px) { .bloque { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 88px); } }

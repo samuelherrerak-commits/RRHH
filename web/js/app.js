@@ -254,7 +254,7 @@ function seccionInicio(cont) {
       ${tarjeta('vacaciones', 'Vacaciones', 'Consulta tus días pendientes y solicita tus vacaciones; tu jefe directo las aprueba.', 'azul')}
       ${tarjeta('fideicomiso', 'Fideicomiso', 'Solicita un anticipo de tus prestaciones sociales.', 'carbon', FIDEICOMISO_ACTIVO ? '' : '<span class="chip chip-neutro">Próximamente</span>')}
       ${tarjeta('recibos', 'Recibos de pago', 'Consulta tus recibos y confirma «Recibí conforme».', 'oro')}
-      ${tarjeta('perfil', 'Mi perfil', 'Mantén al día tus datos de contacto, familia y tallas.', 'azul')}
+      ${tarjeta('perfil', 'Mi perfil', 'Tus datos principales y las actualizaciones de datos que pida Gestión Humana.', 'azul')}
     </nav>
     <div id="aviso-push"></div>`;
   // después de «Mi equipo» (en ese orden los precarga el inicio): así no se piden a la vez
@@ -272,7 +272,7 @@ function seccionInicio(cont) {
       cont.querySelector('.bienvenida').insertAdjacentHTML('afterend', `<button type="button" class="aviso-campana aviso-inicio" data-ir="perfil">${icono('perfil')}
         <span><b>${esc(c.titulo)}</b><span>Gestión Humana te pide actualizar tus datos antes del ${esc(V().corta(c.hasta))}.</span></span>${icono('ir')}</button>`);
       cont.querySelector('.aviso-inicio').addEventListener('click', () => navegar('perfil'));
-    } else if (!r.data.actualizado) t.insertAdjacentHTML('beforeend', '<span class="chip chip-neutro">Sin completar</span>');
+    }
   }).catch(() => {});
   // ¿Celebra algo hoy? Su tarjeta, arriba de todo
   obtener('miCelebracion', conToken()).then((r) => {
@@ -303,30 +303,54 @@ async function seccionConstancia(cont) {
   const rc = await obtener('misConstancias', conToken());
   if (!rc.ok && rc.code === 'SESION') { toast(rc.message); return arrancar(); }
   const constancias = rc.ok ? rc.data : [];
-  const vigente = constancias.find((c) => c.estado === 'VIGENTE');
+  const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+  const vigenteDe = (dest) => constancias.find((c) => c.estado === 'VIGENTE' && norm(c.destinatario) === norm(dest));
+  const para = (c) => (c.destinatario ? `Dirigida a ${esc(c.destinatario)}` : 'A quien pueda interesar');
   cont.innerHTML = `${volver()}<div class="dos-col"><div class="col">
     <section class="tarjeta">
       <h2>Constancia de trabajo</h2>
       <p class="suave">Se genera al instante en PDF, con el membrete de tu empresa, tu sueldo mensual y un código QR para verificarla. Tiene una vigencia de 30 días.</p>
-      ${vigente ? `<p class="aviso">Tienes una constancia vigente hasta el <b>${fechaCaracas(vigente.vence)}</b>. Puedes descargarla las veces que necesites; podrás generar una nueva cuando venza.</p>
-        <div><button class="btn" id="btn-vigente">Descargar mi constancia vigente</button></div>`
-        : '<div><button class="btn" id="btn-constancia">Generar constancia de trabajo</button></div>'}
-      <div class="error-msg" id="err-const" hidden></div>
+      <form id="fconst" class="form-vac" novalidate>
+        <fieldset class="destino"><legend>¿A quién va dirigida?</legend>
+          <label class="opcion-radio"><input type="radio" name="tipo" value="general" checked> <span><b>A quien pueda interesar</b><small>La constancia general, sirve para cualquier trámite.</small></span></label>
+          <label class="opcion-radio"><input type="radio" name="tipo" value="institucion"> <span><b>A una institución</b><small>Por ejemplo, un banco, una embajada o una universidad.</small></span></label>
+        </fieldset>
+        <label id="caja-inst" hidden>Nombre de la institución <input name="institucion" maxlength="120" placeholder="Ej.: Banco Nacional de Crédito" autocomplete="off"></label>
+        <p class="aviso" id="ya-vigente" hidden></p>
+        <div class="error-msg" id="err-const" hidden></div>
+        <div><button class="btn" type="submit" id="btn-constancia">Generar constancia de trabajo</button></div>
+      </form>
     </section>
     </div><div class="col">
-    ${constancias.length ? `<section class="tarjeta"><h2>Mis constancias</h2><div class="lista">${constancias.map((c) => `
-      <div class="item"><div class="item-cab"><div><b>Emitida el ${fechaCaracas(c.emision)}</b><p class="suave">Vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
+    ${constancias.length ? `<section class="tarjeta"><h2>Mis constancias</h2><div class="lista">${constancias.map((c, k) => `
+      <div class="item"><div class="item-cab"><div><b>${para(c)}</b><p class="suave">Emitida el ${fechaCaracas(c.emision)} · vence el ${fechaCaracas(c.vence)}</p></div>${chipConstancia(c.estado)}</div>
+        ${c.estado === 'VIGENTE' ? `<div><button class="btn btn-sec btn-chico" type="button" data-bajar-const="${k}">Descargar</button></div>` : ''}
       </div>`).join('')}</div></section>` : ''}</div></div>`;
 
-  const errConst = cont.querySelector('#err-const');
+  const f = cont.querySelector('#fconst'), errConst = cont.querySelector('#err-const'), cajaInst = cont.querySelector('#caja-inst'), ya = cont.querySelector('#ya-vigente'), btn = cont.querySelector('#btn-constancia');
   const bajarPdf = async (c) => { try { await descargarConstanciaPdf(c, URL_BASE); } catch (e) { errorEn(errConst, e.message || 'No se pudo generar el PDF.'); } };
-  cont.querySelector('#btn-vigente')?.addEventListener('click', (e) => conBoton(e.currentTarget, () => bajarPdf(vigente)));
-  cont.querySelector('#btn-constancia')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+  const destino = () => (f.tipo.value === 'institucion' ? f.institucion.value.trim() : '');
+  const revisar = () => {
     errorEn(errConst, '');
-    const x = await llamar('emitirConstancia', conToken());
+    cajaInst.hidden = f.tipo.value !== 'institucion';
+    const v = f.tipo.value === 'institucion' && !destino() ? null : vigenteDe(destino());
+    ya.hidden = !v;
+    if (v) ya.innerHTML = `Ya tienes una constancia vigente ${v.destinatario ? `dirigida a <b>${esc(v.destinatario)}</b>` : '«A quien pueda interesar»'} hasta el <b>${fechaCaracas(v.vence)}</b>. Puedes descargarla las veces que necesites.`;
+    btn.textContent = v ? 'Descargar mi constancia vigente' : 'Generar constancia de trabajo';
+  };
+  f.querySelectorAll('[name=tipo]').forEach((r) => r.addEventListener('change', () => { revisar(); if (f.tipo.value === 'institucion') f.institucion.focus(); }));
+  f.institucion.addEventListener('input', revisar);
+  revisar();
+  cont.querySelectorAll('[data-bajar-const]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => bajarPdf(constancias[Number(b.dataset.bajarConst)]))));
+  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(btn, async () => {
+    errorEn(errConst, '');
+    if (f.tipo.value === 'institucion' && destino().length < 3) return errorEn(errConst, 'Escribe el nombre de la institución a la que va dirigida.');
+    const v = vigenteDe(destino());
+    if (v) return bajarPdf(v);
+    const x = await llamar('emitirConstancia', { destinatario: destino(), ...conToken() });
     if (!x.ok) return errorEn(errConst, x.message);
     await bajarPdf(x.data); toast('Constancia generada.'); vistaCuenta(cuenta.cont, cuenta.token, 'constancia');
-  }));
+  }); });
 }
 
 /* ---------- Vacaciones ---------- */
@@ -1311,6 +1335,7 @@ async function vistaVerificar(id) {
       <tr><th>Cédula</th><td>${esc(c.cedula)}</td></tr>
       <tr><th>Empresa</th><td>${esc(c.empresaNombre)}</td></tr>
       <tr><th>Cargo</th><td>${esc(c.cargo)}</td></tr>
+      <tr><th>Dirigida a</th><td>${esc(c.destinatario || 'A quien pueda interesar')}</td></tr>
       <tr><th>Fecha de ingreso</th><td>${esc(c.fechaIngreso)}</td></tr>
       <tr><th>Salario mensual</th><td>${bs(c.salario)}</td></tr>
       <tr><th>Fecha de emisión</th><td>${fechaCaracas(c.emision)}</td></tr>
@@ -3059,22 +3084,15 @@ const textoFamiliar = (f) => `${esc(f.nombre)} · ${esc(f.parentesco)}${f.fechaN
 /** Resumen: datos de nómina, lo que tiene cargado y el botón para actualizar (una pregunta a la vez). */
 function pintarPerfil(cont, d) {
   const datos = d.datos || {}, n = d.nomina;
-  const chipSec = (id) => (PF().seccionCompleta(datos, id) ? '<span class="chip chip-ok">Completo</span>' : '<span class="chip chip-espera">Por completar</span>');
   const preguntas = (secs) => secs.reduce((t, id) => t + (PF().seccion(id).lista ? 1 : PF().seccion(id).campos.length), 0);
-  const cuerpo = (s) => (s.lista
-    ? ((datos.familia || []).length ? `<ul class="lista-simple">${datos.familia.map((f) => `<li>${textoFamiliar(f)}</li>`).join('')}</ul>` : `<p class="suave">${datos.sinFamilia ? 'No tienes carga familiar registrada.' : 'Sin responder.'}</p>`)
-    : `<dl class="datos-nomina">${s.campos.map((c) => `<div><dt>${esc(c.nombre)}</dt><dd>${esc(valorTexto(c, (datos[s.id] || {})[c.id])) || '<span class="suave">—</span>'}</dd></div>`).join('')}</dl>`);
   cont.innerHTML = `${volver()}
     ${d.campanas.map((c, k) => `<section class="tarjeta aviso-campana">
       <h2>${esc(c.titulo)}</h2>${c.mensaje ? `<p>${esc(c.mensaje)}</p>` : ''}
       <p class="suave">Gestión Humana te pide revisar: <b>${c.secciones.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. Tienes hasta el <b>${esc(V().corta(c.hasta))}</b>.
         ${cuantasPreguntas(preguntas(c.secciones))}, una a la vez.</p>
       <div><button class="btn" type="button" data-empezar="${k}">Empezar</button></div></section>`).join('')}
-    ${!d.campanas.length && d.faltan.length ? `<section class="tarjeta aviso-campana"><h2>Completa tu perfil</h2>
-      <p class="suave">Te falta: <b>${d.faltan.map(NOMBRE_SECCION).map(esc).join(', ')}</b>. ${cuantasPreguntas(preguntas(d.faltan))}.</p>
-      <div><button class="btn" type="button" id="completar">Completar ahora</button></div></section>` : ''}
     <section class="tarjeta">
-      <div><h2>Mi perfil</h2><p class="suave">Mantén al día tus datos: así Gestión Humana puede contactarte y tomarte en cuenta en beneficios y dotaciones.${d.actualizado ? ` Última actualización: ${fechaHoraMin(d.actualizado)}` : ''}</p></div>
+      <div><h2>Mi perfil</h2><p class="suave">Tus datos principales en el Grupo Prosein.${d.actualizado ? ` Última actualización de tus datos: ${fechaHoraMin(d.actualizado)}.` : ''}</p></div>
       <dl class="datos-nomina">
         <div><dt>Nombre</dt><dd>${esc(n.nombre)}</dd></div><div><dt>Cédula</dt><dd>${esc(n.cedula.slice(1))}</dd></div>
         <div><dt>Cargo</dt><dd>${esc(n.cargo || '—')}</dd></div><div><dt>Empresa</dt><dd>${n.empresa === 'AIV' ? 'Austral' : 'Prosein'}</dd></div>
@@ -3083,8 +3101,7 @@ function pintarPerfil(cont, d) {
       </dl>
       <p class="suave">Estos datos vienen de la nómina. Si alguno está mal, avísale a Gestión Humana.</p>
     </section>
-    ${PF().SECCIONES.map((s) => `<section class="tarjeta" id="sec-${s.id}"><div class="item-cab"><h2>${esc(s.nombre)}</h2>${chipSec(s.id)}</div>
-      ${cuerpo(s)}<div><button class="btn btn-sec btn-chico" type="button" data-editar="${s.id}">${PF().seccionCompleta(datos, s.id) ? 'Actualizar' : 'Completar'}</button></div></section>`).join('')}`;
+    ${!d.campanas.length ? '<p class="suave" style="text-align:center">No hay actualizaciones de datos abiertas. Gestión Humana te avisará cuando abra una.</p>' : ''}`;
   cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
   const empezar = (secciones, campana) => {
     const fam = (datos.familia || []).map((f) => ({ ...f }));
@@ -3093,8 +3110,6 @@ function pintarPerfil(cont, d) {
     pintarAsistente(cont);
   };
   cont.querySelectorAll('[data-empezar]').forEach((b) => b.addEventListener('click', () => { const c = d.campanas[Number(b.dataset.empezar)]; empezar(c.secciones, c); }));
-  cont.querySelector('#completar')?.addEventListener('click', () => empezar(d.faltan, null));
-  cont.querySelectorAll('[data-editar]').forEach((b) => b.addEventListener('click', () => empezar([b.dataset.editar], null)));
 }
 
 /** Los pasos de la actualización: una pregunta por pantalla (cada familiar es un paso) y al final, revisar. */

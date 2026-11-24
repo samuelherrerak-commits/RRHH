@@ -31,7 +31,7 @@ const RUTAS = {
   loginAdmin: (d) => S.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave), bandejaAnticipos: (d) => S.bandejaAnticipos(repo, ctx, d.token, d.estado),
   decidirAnticipo: (d) => S.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo),
   archivoAnticipos: (d) => S.generarArchivoAnticipos(repo, ctx, d.token, d.empresa), pagarAnticipos: (d) => S.marcarAnticiposPagados(repo, ctx, d.token, d.ids || []),
-  emitirConstancia: (d) => S.emitirConstancia(repo, ctx, d.token), misConstancias: (d) => S.misConstancias(repo, ctx, d.token), verificarConstancia: (d) => S.verificarConstancia(repo, ctx, d.id),
+  emitirConstancia: (d) => S.emitirConstancia(repo, ctx, d.token, d.destinatario), misConstancias: (d) => S.misConstancias(repo, ctx, d.token), verificarConstancia: (d) => S.verificarConstancia(repo, ctx, d.id),
   listarConstancias: (d) => S.listarConstancias(repo, ctx, d.token), anularConstancia: (d) => S.anularConstancia(repo, ctx, d.token, d.id),
   cargarEmpleados: (d) => S.cargarEmpleados(repo, ctx, d.token, d.filas), listarEmpleados: (d) => S.listarEmpleados(repo, ctx, d.token, { buscar: d.buscar, departamento: d.departamento, sinJefe: !!d.sinJefe }),
   asignarJefe: (d) => S.asignarJefe(repo, ctx, d.token, d.claves, d.jefe), asignarJefeDepartamento: (d) => S.asignarJefeDepartamento(repo, ctx, d.token, d.departamento, d.jefe),

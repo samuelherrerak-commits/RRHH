@@ -526,7 +526,7 @@
     return {
       id: c.id, nombre: c.nombre, cedula: c.cedula, empresa: c.empresa, empresaNombre: Constancia.NOMBRES_EMPRESA[c.empresa] || c.empresa,
       cargo: c.cargo, organizacion: c.organizacion, fechaIngreso: c.fechaIngreso, salario: c.salario,
-      emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora),
+      emision: c.emision, vence: c.vence, estado: Constancia.estadoConstancia(c, ahora), destinatario: c.destinatario || '',
       firmante: p ? firmante(p) : undefined,
     };
   }
@@ -537,7 +537,11 @@
    * Solo una a la vez: mientras tenga una VIGENTE no se genera otra (se vuelve a descargar la misma).
    * Cuando vence, o si RRHH la anula, puede generar una nueva.
    */
-  function emitirConstancia(repo, ctx, token) {
+  /** Destinatario de la constancia: '' = «A quien pueda interesar»; si no, la institución (texto limpio, hasta 120). */
+  function limpiarDestinatario(t) { return String(t == null ? '' : t).replace(/[<>{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+  function mismoDestinatario(a, b) { var n = function (x) { return Empleados.normalizarNombre(limpiarDestinatario(x)); }; return n(a) === n(b); }
+
+  function emitirConstancia(repo, ctx, token, destinatario) {
     var s = leerToken(ctx, token, ['TRABAJADOR']);
     if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
     var emp = repo.empleadoPorClave(s.clave);
@@ -547,10 +551,13 @@
     var p = repo.parametros(), ahora = ctx.ahora();
     var max = Number(p.constanciasMaxPorMes) > 0 ? Number(p.constanciasMaxPorMes) : MAX_CONSTANCIAS_MES;
     var propias = repo.constanciasDe(s.clave);
-    var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE'; })[0];
+    var dest = limpiarDestinatario(destinatario);
+    if (destinatario != null && String(destinatario).trim() && dest.length < 3) return err('VALIDACION', 'Escribe el nombre de la institución a la que va dirigida.');
+    // Una vigente por destinatario: con el mismo destinatario se vuelve a descargar la que ya tiene.
+    var vigente = propias.filter(function (c) { return Constancia.estadoConstancia(c, ahora) === 'VIGENTE' && mismoDestinatario(c.destinatario, dest); })[0];
     if (vigente) {
       var hasta = Constancia.fechaCaracas(vigente.vence);
-      return err('YA_VIGENTE', 'Ya tienes una constancia vigente hasta el ' + Constancia.fechaCorta(hasta) +
+      return err('YA_VIGENTE', 'Ya tienes una constancia vigente ' + (dest ? 'dirigida a ' + vigente.destinatario : '«A quien pueda interesar»') + ' hasta el ' + Constancia.fechaCorta(hasta) +
         '. Puedes descargarla de nuevo; podrás generar una nueva a partir del ' + Constancia.fechaCorta(Constancia.sumarDias(hasta, 1)) + '.');
     }
     var recientes = propias.filter(function (c) { return c.emision > ahora - 30 * 86400000; });
@@ -559,7 +566,7 @@
       id: repo.nuevoIdConstancia(), clave: s.clave, nombre: emp.nombre, cedula: emp.cedulaLetra + '-' + emp.cedulaNumero,
       empresa: Empleados.empresaFideicomiso(emp), cargo: emp.puesto, organizacion: emp.organizacion,
       fechaIngreso: Constancia.fechaCorta(emp.fechaIngreso), salario: Calculo.redondear2(emp.salarioMensual),
-      emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave,
+      emision: ahora, vence: Constancia.vencimiento(ahora), estado: 'VIGENTE', emitidaPor: s.clave, destinatario: dest,
     };
     repo.guardarConstancia(c);
     repo.log('CONSTANCIA_EMITIDA', s.clave, c.id);
@@ -2040,6 +2047,13 @@
     return { id: c.id, titulo: c.titulo, mensaje: c.mensaje || '', secciones: c.secciones || [], alcance: c.alcance || { tipo: 'todos' }, hasta: c.hasta,
       estado: c.estado, creada: c.creada, por: c.por || '', orden: c.orden || 0, lanzada: c.lanzada || 0, vigente: c.estado === 'ABIERTA' && hoy <= c.hasta, vencida: c.estado === 'ABIERTA' && hoy > c.hasta };
   }
+  /** Secciones que esta persona puede actualizar ahora: las de las campañas abiertas que le tocan. */
+  function seccionesAbiertas(repo, emp) {
+    var p = personaCampana(emp), m = {};
+    repo.campanasDatos().forEach(function (c) { if (c.estado === 'ABIERTA' && Perfil.enAlcance(c, p)) (c.secciones || []).forEach(function (x) { m[x] = true; }); });
+    return Object.keys(m);
+  }
+
   /** Campañas abiertas que le tocan a esta persona y aún no completa. */
   function pendientesDe(repo, emp, perfil, hoy) {
     var p = personaCampana(emp);
@@ -2070,6 +2084,12 @@
     if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
     var emp = repo.empleadoPorClave(s.clave);
     if (!emp || emp.estado === 'Inactivo') return err('VALIDACION', 'No encontramos tus datos activos.');
+    // Solo se actualiza lo que pide una campaña abierta: fuera de campaña el perfil no se edita.
+    var abiertas = seccionesAbiertas(repo, emp);
+    var pedidas = Perfil.SECCIONES.map(function (x) { return x.id; }).filter(function (id) { return entrada && (entrada[id] !== undefined || (id === 'familia' && entrada.sinFamilia !== undefined)); });
+    var cerradas = pedidas.filter(function (id) { return abiertas.indexOf(id) === -1; });
+    if (!pedidas.length) return err('VALIDACION', 'No hay datos para guardar.');
+    if (cerradas.length) return err('CERRADA', 'La actualización de «' + cerradas.map(function (id) { return Perfil.seccion(id).nombre; }).join('», «') + '» no está abierta. Gestión Humana te avisará cuando abra.');
     var n = Perfil.normalizar(entrada || {});
     if (n.errores.length) return err('VALIDACION', n.errores.slice(0, 6).join(' '));
     var perfil = repo.perfil(s.clave) || perfilVacio(s.clave), ahora = ctx.ahora(), hoy = hoyCaracas(ctx);
