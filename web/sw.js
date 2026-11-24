@@ -1,6 +1,9 @@
 // Service worker de CAC: permite instalar el sitio como app. Siempre pide la versión nueva a la red
 // (así nunca se queda una versión vieja) y solo usa la copia guardada si no hay conexión.
 const CACHE = 'cac-v1';
+// Notificaciones al celular (OneSignal) en este mismo service worker: iPhone funciona mejor con uno solo en la raíz.
+// Si OneSignal no carga, el sitio sigue funcionando igual (solo sin avisos al celular).
+try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) { /* sin avisos al celular */ }
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
 self.addEventListener('fetch', (e) => {

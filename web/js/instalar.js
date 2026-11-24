@@ -11,8 +11,9 @@ const esSafari = () => /safari/i.test(navigator.userAgent) && !/crios|fxios|edgi
 function pospuesta() { try { return Number(localStorage.getItem(CLAVE) || 0) > Date.now(); } catch { return false; } }
 function posponer() { try { localStorage.setItem(CLAVE, String(Date.now() + DIAS * 86400000)); } catch { /* sin almacenamiento */ } }
 
-export function iniciarInstalacion() {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+/** registrarSw: quién registra sw.js. Con avisos al celular lo hace OneSignal (con su propia dirección del mismo archivo). */
+export function iniciarInstalacion(registrarSw = () => navigator.serviceWorker.register('sw.js')) {
+  if ('serviceWorker' in navigator) Promise.resolve().then(registrarSw).catch(() => {});
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); evento = e; if (alAparecer) alAparecer(); });
   window.addEventListener('appinstalled', () => { evento = null; quitar(); });
 }

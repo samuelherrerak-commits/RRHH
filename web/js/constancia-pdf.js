@@ -83,7 +83,14 @@ export async function construirConstanciaPdf(c, urlBase) {
 
   const X = 72, ANCHO = 468, tinta = [30, 32, 34];
   doc.setTextColor(...tinta);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(16); doc.text('A quien pueda interesar.', X, 228);
+  if (c.destinatario) {
+    // Dirigida a una institución: «Señores:», el nombre (en varias líneas si es largo) y «Presente.-»
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.text('Señores:', X, 206);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+    const lineas = doc.splitTextToSize(c.destinatario.toUpperCase(), ANCHO).slice(0, 2);
+    lineas.forEach((l, i) => doc.text(l, X, 224 + i * 16));
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.text('Presente.-', X, 228 + lineas.length * 16);
+  } else { doc.setFont('helvetica', 'normal'); doc.setFontSize(16); doc.text('A quien pueda interesar.', X, 228); }
   doc.setFontSize(10); doc.text('Por medio de la presente', X, 282);
 
   const ingreso = K.fechaLarga(parteFecha(c.fechaIngreso));
@@ -112,7 +119,8 @@ export async function construirConstanciaPdf(c, urlBase) {
   doc.text(`Código ${c.id}`, 492, 655, { align: 'center' });
 
   const limpio = c.nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
-  return { blob: doc.output('blob'), nombreArchivo: `Constancia_de_trabajo_${limpio}_${K.fechaCorta(emision).replace(/\//g, '-')}.pdf` };
+  const para = c.destinatario ? '_' + c.destinatario.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30) : '';
+  return { blob: doc.output('blob'), nombreArchivo: `Constancia_de_trabajo_${limpio}${para}_${K.fechaCorta(emision).replace(/\//g, '-')}.pdf` };
 }
 
 export async function descargarConstanciaPdf(c, urlBase) {

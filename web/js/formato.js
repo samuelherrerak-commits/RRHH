@@ -1,5 +1,7 @@
 const nf = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const bs = (n) => 'Bs. ' + nf.format(Number(n) || 0);
+/** ms → «03 nov 2026, 6:44 p. m.» (para sellos de visto y recibido). */
+export const fechaHoraMin = (ms) => (ms ? new Date(ms).toLocaleString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 export const fechaHora = (ms) => (ms ? new Date(ms).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
 
 /** "1.234,56" o "1234.56" → 1234.56 ; vacío o inválido → NaN */

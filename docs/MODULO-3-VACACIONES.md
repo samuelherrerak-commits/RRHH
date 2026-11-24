@@ -33,3 +33,18 @@ Sube el Excel; se lee la hoja CIERRE DE VACACIONES (por cada «DISFRUTADOS AA-AA
 
 ## Constancia de aprobación (PDF)
 Cuando el **jefe directo aprueba** quedan fijos el **número de constancia** (formato del Excel: serial de inicio + cédula de 8 dígitos + serial de culminación + serial de reintegro; verificado con el modelo: 46272V079246274628346286) y los **pendientes por período** una vez aplicado ese disfrute. Desde ese momento el trabajador y RRHH la descargan en PDF con el modelo «Constancia de Aprobación de Vacaciones» (membrete Prosein nuevo o Austral según la empresa).
+
+## Panel de días pendientes (RRHH → Vacaciones → «Días pendientes»)
+Días hábiles por disfrutar de cada colaborador activo, **por período**, descontando las solicitudes en trámite. Filtros por **empresa** (Prosein/Austral), **departamento** y **localidad** (la columna «Organización» del Detalle: Prosein Central, Austral y cada sucursal) y búsqueda por nombre o cédula. Totales (personas, días, promedio, quiénes acumulan más de 30), gráfico agrupado por departamento, localidad o empresa, tabla por persona y período, y descarga en CSV.
+
+## Planificación anual (RRHH → Vacaciones → «Planificación»)
+1. **RRHH abre la planificación**: nombre, período a planificar (por ejemplo, 01/01/2027 al 31/01/2028; máximo 15 meses) y fechas de carga (apertura y cierre). A todos les llega el aviso.
+2. **El colaborador** (en Vacaciones) carga sus bloques: fecha de inicio y días hábiles; ve el último día y el reintegro de cada uno. Debe planificar **sus días pendientes + los del período que cumple dentro de esos meses**, en días hábiles, sin cruces y **sin usar días antes de tenerlos** (los del nuevo período, desde su aniversario). Puede guardar un borrador y luego **enviarla a su jefe**.
+3. **El jefe** (Mi equipo) la aprueba o **pide corregirla** con un motivo; el colaborador la ajusta y la reenvía. Avisos en cada paso.
+4. Las **solicitudes** de vacaciones se comparan con el plan aprobado: se permiten fuera de lo planificado, pero se marcan («Planificada» / «Fuera de lo planificado») para el jefe y RRHH.
+5. **Cumplimiento** (RRHH): estado del plan de cada persona, días planificados y disfrutados (aprobados por el jefe o registrados), **cumplimiento a la fecha** (días disfrutados dentro de lo planificado sobre los que ya tocaban) y días fuera del plan; gráfico **por mes** planificado contra disfrutado, filtros por empresa, departamento y localidad, CSV y botón para **avisar a quienes no han enviado**.
+
+Hojas: `VAC_CICLOS` (planificaciones) y `VAC_PLANES` (un plan por persona y planificación, con sus bloques). Se crean solas.
+
+## Feriados 2026-2030
+«Configurar hojas» agrega los feriados nacionales de Venezuela de 2026 a 2030 que falten (no toca los que RRHH tenga o haya agregado). Carnaval y Semana Santa se calculan con la fecha de Pascua: 2027 (8-9 feb, 25-26 mar), 2028 (28-29 feb, 13-14 abr), 2029 (12-13 feb, 29-30 mar), 2030 (4-5 mar, 18-19 abr; el 19 de abril coincide con Viernes Santo).

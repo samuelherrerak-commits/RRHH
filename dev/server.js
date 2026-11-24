@@ -31,7 +31,7 @@ const RUTAS = {
   loginAdmin: (d) => S.iniciarSesionAdmin(repo, ctx, d.cedula, d.clave), bandejaAnticipos: (d) => S.bandejaAnticipos(repo, ctx, d.token, d.estado),
   decidirAnticipo: (d) => S.decidirAnticipo(repo, ctx, d.token, d.id, !!d.aprobar, d.motivoRechazo),
   archivoAnticipos: (d) => S.generarArchivoAnticipos(repo, ctx, d.token, d.empresa), pagarAnticipos: (d) => S.marcarAnticiposPagados(repo, ctx, d.token, d.ids || []),
-  emitirConstancia: (d) => S.emitirConstancia(repo, ctx, d.token), misConstancias: (d) => S.misConstancias(repo, ctx, d.token), verificarConstancia: (d) => S.verificarConstancia(repo, ctx, d.id),
+  emitirConstancia: (d) => S.emitirConstancia(repo, ctx, d.token, d.destinatario), misConstancias: (d) => S.misConstancias(repo, ctx, d.token), verificarConstancia: (d) => S.verificarConstancia(repo, ctx, d.id),
   listarConstancias: (d) => S.listarConstancias(repo, ctx, d.token), anularConstancia: (d) => S.anularConstancia(repo, ctx, d.token, d.id),
   cargarEmpleados: (d) => S.cargarEmpleados(repo, ctx, d.token, d.filas), listarEmpleados: (d) => S.listarEmpleados(repo, ctx, d.token, { buscar: d.buscar, departamento: d.departamento, sinJefe: !!d.sinJefe }),
   asignarJefe: (d) => S.asignarJefe(repo, ctx, d.token, d.claves, d.jefe), asignarJefeDepartamento: (d) => S.asignarJefeDepartamento(repo, ctx, d.token, d.departamento, d.jefe),
@@ -50,6 +50,8 @@ if (MODO_GAS) {
   // Samuel y Luis Paul (ADMIN, empleados) y Johanna, la CEO (ADMIN, no es empleada). Clave de los tres: clave-demo-123
   gas = crearEntorno({ respuestasUi: ['30580323', 'YES', 'clave-demo-123', '7952013', 'YES', 'clave-demo-123', '6291577', 'YES', 'clave-demo-123'] });
   gas.ejecutar('configurarInicial'); gas.ejecutar('ponerClaveRRHH'); gas.ejecutar('ponerClaveRRHH'); gas.ejecutar('ponerClaveRRHH');
+  // ONESIGNAL_DEMO=1: OneSignal «configurado» en la hoja simulada (los envíos no salen: el simulador los responde)
+  if (process.env.ONESIGNAL_DEMO) Object.assign(gas.props, { ONESIGNAL_APP_ID: '97b880ba-f53c-4cb8-88f3-9c4cf9fc186f', ONESIGNAL_API_KEY: 'demo', CAC_URL: 'http://localhost' });
 }
 
 http.createServer((req, res) => {
