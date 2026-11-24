@@ -80,6 +80,14 @@
   .telefono .pantalla { width: 100%; height: 100%; border-radius: 33px; overflow: hidden; background: var(--fondo); }
   .telefono img { width: 100%; display: block; }
   .telefono .pantalla.recorte img { transform: translateY(0); }
+  .con-ventana { display: grid; grid-template-columns: 1fr 640px; gap: 36px; align-items: start; }
+  .con-ventana .paso { padding: 10px 18px; } .con-ventana .paso p { font-size: 14px; }
+  .ventana { background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 24px 56px rgb(20 22 24 / .2), 0 0 0 1px rgb(20 22 24 / .08); }
+  .ventana img { width: 100%; display: block; }
+  .barra-v { height: 34px; background: #ECECEC; display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: 1px solid #DDD; }
+  .barra-v i { width: 11px; height: 11px; border-radius: 50%; background: #D0D0D0; }
+  .barra-v i:nth-child(1) { background: #FF5F57; } .barra-v i:nth-child(2) { background: #FEBC2E; } .barra-v i:nth-child(3) { background: #28C840; }
+  .barra-v span { margin-left: 14px; flex: 1; max-width: 340px; height: 22px; border-radius: 6px; background: #fff; font-size: 12px; color: var(--tinta-2); display: flex; align-items: center; padding: 0 10px; }
   .captura { border-radius: 16px; border: 1px solid var(--linea); box-shadow: 0 20px 50px rgb(20 22 24 / .18); overflow: hidden; background: #fff; }
   .captura img { width: 100%; display: block; }
 
@@ -230,7 +238,7 @@
 <!-- 3 · RECIBOS -->
 <section class="lamina">
   <div class="cab"><div><span class="bloque-tag"><i></i>Nuevas funciones</span><h2>Recibos de pago</h2><p class="sub">Tu recibo de nómina, siempre a mano y sin papel.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
-  <div class="con-telefono">
+  <div class="con-ventana">
     <div>
       <div class="pasos">
         <div class="paso f a-izq"><b class="n">1</b><div><h4>Te llega el aviso</h4><p>«Tienes un recibo de pago nuevo» cuando Gestión Humana lo publica.</p></div></div>
@@ -238,12 +246,13 @@
         <div class="paso f a-izq"><b class="n">3</b><div><h4>Haz clic en <span class="btn">Ver recibo</span></h4><p>Se abre tu recibo en PDF. Revísalo con calma.</p></div></div>
         <div class="paso f a-izq marcar"><b class="n">4</b><div><h4>Confirma con <span class="btn">Recibí conforme</span></h4><p>Así queda registrado que lo recibiste.</p></div></div>
       </div>
-      <div class="reglas">
+    </div>
+    <div style="display:grid;gap:16px"><div class="ventana f a-der"><div class="barra-v"><i></i><i></i><i></i><span>cads.onrender.com</span></div><img src="{{img:pc-recibos}}" alt="Recibos de pago en el CAC"></div>
+      <div class="reglas" style="margin-top:0">
         <div class="regla r-verde f arriba"><b>Tu historial</b>Tus recibos anteriores quedan disponibles.</div>
         <div class="regla r-azul f arriba"><b>Queda registrado</b>Gestión Humana ve la fecha y hora de tu confirmación.</div>
       </div>
-    </div>
-    <div class="telefono f a-der"><div class="pantalla"><img src="{{img:recibos}}" alt="Recibos de pago en el CAC"></div></div>
+</div>
   </div>
   <div class="pie"><span>¿Algo no cuadra en tu recibo? Escríbele a Gestión Humana antes de confirmar.</span><span>Gestión Humana</span></div>
 </section>
@@ -251,7 +260,7 @@
 <!-- 4 · PLANIFICACIÓN -->
 <section class="lamina">
   <div class="cab"><div><span class="bloque-tag"><i></i>Nuevas funciones</span><h2>Planificación de vacaciones 2027</h2><p class="sub">Tú planificas tus días del año y tu jefe directo los aprueba.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
-  <div class="con-telefono">
+  <div class="con-ventana">
     <div class="pasos">
       <div class="paso f a-izq"><b class="n">1</b><div><h4>Gestión Humana abre la carga</h4><p>Te llega el aviso con las fechas para enviar tu planificación.</p></div></div>
       <div class="paso f a-izq marcar"><b class="n">2</b><div><h4>El CAC te dice cuántos días planificar</h4><p>Tus días pendientes más los del período que cumples en 2027.</p></div></div>
@@ -259,7 +268,7 @@
       <div class="paso f a-izq"><b class="n">4</b><div><h4>Haz clic en <span class="btn">Enviar a mi jefe</span></h4><p>Tu jefe la <b>aprueba</b> o te <b>pide corregir</b> con el motivo. Te llega el aviso.</p></div></div>
       <div class="flujo f arriba" style="margin-top:6px"><span class="chip c-espera">Con el jefe</span><span class="flecha">→</span><span class="chip c-ok">Aprobada</span><span class="flecha" style="margin-left:14px">o</span><span class="chip c-error">Por corregir</span></div>
     </div>
-    <div class="telefono f a-der"><div class="pantalla"><img src="{{img:plan}}" alt="Planificación de vacaciones en el CAC"></div></div>
+    <div class="ventana f a-der"><div class="barra-v"><i></i><i></i><i></i><span>cads.onrender.com</span></div><img src="{{img:pc-plan}}" alt="Planificación de vacaciones en el CAC"></div>
   </div>
   <div class="pie"><span>Sin jefe directo asignado no puedes enviarla: avísale a Gestión Humana.</span><span>Gestión Humana</span></div>
 </section>
@@ -292,14 +301,14 @@
 <!-- 6 · ACTUALIZACIÓN DE DATOS -->
 <section class="lamina">
   <div class="cab"><div><span class="bloque-tag"><i></i>Nuevas funciones</span><h2>Actualización de datos</h2><p class="sub">«Mi perfil»: tus datos centralizados en un solo lugar.</p></div><span class="num"><span class="logo">CAC</span>{{n}}</span></div>
-  <div class="con-telefono">
+  <div class="con-ventana">
     <div class="pasos">
       <div class="paso f a-izq"><b class="n">{{ico:perfil}}</b><div><h4>Tus datos de nómina, para consultar</h4><p>Nombre, cargo, empresa y fecha de ingreso. Si algo está mal, avísale a Gestión Humana.</p></div></div>
       <div class="paso f a-izq marcar"><b class="n">?</b><div><h4>Una pregunta a la vez</h4><p>Responde con calma: te toma 2 o 3 minutos. Ves tu avance en cada paso.</p></div></div>
       <div class="paso f a-izq"><b class="n">✓</b><div><h4>Revisas y guardas</h4><p>Antes de guardar ves todas tus respuestas y puedes cambiar cualquiera.</p></div></div>
       <div class="paso f a-izq"><b class="n">↻</b><div><h4>Lo actualizas cuando cambie</h4><p>¿Te mudaste o cambiaste de número? Entra a «Mi perfil» y actualízalo.</p></div></div>
     </div>
-    <div class="telefono f a-der"><div class="pantalla"><img src="{{img:perfil}}" alt="Actualización de datos, una pregunta a la vez"></div></div>
+    <div class="ventana f a-der"><div class="barra-v"><i></i><i></i><i></i><span>cads.onrender.com</span></div><img src="{{img:pc-perfil}}" alt="Actualización de datos, una pregunta a la vez"></div>
   </div>
   <div class="pie"><span>Tus datos solo los ve Gestión Humana.</span><span>Gestión Humana</span></div>
 </section>

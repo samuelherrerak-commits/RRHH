@@ -23,13 +23,13 @@ def imagen(nombre, ancho, alto_max=None, calidad=84):
     b = io.BytesIO(); im.save(b, 'JPEG', quality=calidad, optimize=True, progressive=True)
     return 'data:image/jpeg;base64,' + base64.b64encode(b.getvalue()).decode()
 IMAGENES = {  # 2× el tamaño en pantalla
-  'recibos': ('recibos.png', 552, 1160), 'plan': ('plan.png', 552, 1160), 'perfil': ('perfil-pregunta.png', 552, 1160),
-  'inicio': ('inicio.png', 552, 1160), 'avisos': ('avisos.png', 552, 1160), 'cumple': ('tarjeta-cumple.png', 760, None),
+    'inicio': ('inicio.png', 552, 1160),
+  'pc-recibos': ('pc-recibos.png', 1320, 431), 'pc-plan': ('pc-plan.png', 1320, 761), 'pc-perfil': ('pc-perfil.png', 1320, 650), 'avisos': ('avisos.png', 552, 1160), 'cumple': ('tarjeta-cumple.png', 760, None),
 }
 qr = re.search(r'<figure class="qr">(<svg.*?</svg>)', (AQUI.parent / 'presentacion-cac.html').read_text(encoding='utf-8'), re.S).group(1)
 html = (AQUI / 'plantilla.html').read_text(encoding='utf-8')
 html = re.sub(r'\{\{ico:(\w+)\}\}', lambda m: icono(m.group(1)), html)
-html = re.sub(r'\{\{img:(\w+)\}\}', lambda m: imagen(*IMAGENES[m.group(1)]), html)
+html = re.sub(r'\{\{img:([\w-]+)\}\}', lambda m: imagen(*IMAGENES[m.group(1)]), html)
 html = html.replace('{{qr}}', qr)
 salida = AQUI.parent / 'novedades-cac.html'
 salida.write_text(html, encoding='utf-8')
