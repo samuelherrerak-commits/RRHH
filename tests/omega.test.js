@@ -120,3 +120,33 @@ test('Omega Capital: datos de las empresas y solo Gestión Humana', () => {
   assert.equal(S.omegaInicio(repo, ctx, 'x').code, 'SESION');
   assert.equal(S.omegaTarjetas(repo, ctx, t).data.length, 4);   // sin el egresado
 });
+
+test('2Q sin 1Q en el CAC: el anticipo se estima con la tasa de la 1Q o se coloca a mano por persona', () => {
+  const { repo, ctx, t } = escenario();
+  S.omegaImportarBeneficios(repo, ctx, t, [{ cedula: '7924627', complemento: 200 }]);
+  S.omegaAbrirQuincena(repo, ctx, t, '2026-11', 2, 930);
+  let ct = S.omegaLote(repo, ctx, t, '2026-11-2', 'CT-PCA');
+  assert.equal(linea(ct, 'ZORAYA').anticipoBs, 0);                          // sin 1Q: no descuenta nada
+  assert.equal(linea(ct, 'ZORAYA').montoBs, 37200);
+  assert.equal(S.omegaAnticipo1Q(repo, ctx, t, '2026-11-1', 900).code, 'NO_ENCONTRADO');   // la 1Q no existe
+  const q = S.omegaAnticipo1Q(repo, ctx, t, '2026-11-2', '900');
+  assert.equal(q.ok, true, JSON.stringify(q)); assert.equal(q.data.tasa1Q, 900);
+  ct = S.omegaLote(repo, ctx, t, '2026-11-2', 'CT-PCA');
+  assert.equal(linea(ct, 'ZORAYA').anticipoBs, 18000);                      // $20 × 900
+  assert.equal(linea(ct, 'ZORAYA').anticipoOrigen, 'tasa1Q');
+  assert.equal(linea(ct, 'ZORAYA').montoBs, 19200);                         // $40 × 930 − 18.000
+  const tr = S.omegaLote(repo, ctx, t, '2026-11-2', 'TR-PCA');
+  assert.equal(linea(tr, 'NUEVO').anticipoBs, 0);                           // ingresó tras el 15: no tuvo anticipo
+  assert.equal(linea(tr, 'ZORAYA').montoBs, 200 * 930 - 100 * 900);
+  // a mano, por persona
+  const aj = S.omegaAjustarLinea(repo, ctx, t, '2026-11-2', 'CT-PCA', 'V7924627', { anticipo: '18.600,00' });
+  assert.equal(aj.ok, true, JSON.stringify(aj));
+  assert.equal(linea(aj, 'ZORAYA').anticipoBs, 18600); assert.equal(linea(aj, 'ZORAYA').anticipoOrigen, 'manual');
+  assert.equal(linea(aj, 'ZORAYA').montoBs, 18600);
+  assert.equal(linea(S.omegaAjustarLinea(repo, ctx, t, '2026-11-2', 'CT-PCA', 'V7924627', { anticipo: null }), 'ZORAYA').anticipoBs, 18000);   // vuelve al estimado
+  // validado: queda fijo
+  S.omegaAjustarLinea(repo, ctx, t, '2026-11-2', 'CT-PCA', 'V7924627', { anticipo: 18600 });
+  S.omegaValidarLote(repo, ctx, t, '2026-11-2', 'CT-PCA');
+  assert.equal(linea(S.omegaLote(repo, ctx, t, '2026-11-2', 'CT-PCA'), 'ZORAYA').montoBs, 18600);
+  assert.equal(S.omegaAnticipo1Q(repo, ctx, t, '2026-11-2', 905).code, 'VALIDADO');
+});

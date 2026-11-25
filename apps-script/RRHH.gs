@@ -1627,19 +1627,21 @@ var Omega = (function () {
        * Líneas de los 4 lotes de una quincena.
        * personas: [{ clave, cedula, nombre, empresa, fechaIngreso, sinTarjeta }] (solo activos: los egresados no cobran)
        * beneficios: { clave: {...} }; pagado1Q: { loteId: { clave: Bs } } (lo cerrado en la 1Q, para la 2Q)
+       * tasa1Q: si la 1Q de un lote no se hizo en el CAC, el anticipo se estima con esa tasa (50 % del mes en $, salvo quien ingresó tras el 15).
        * Devuelve { 'CT-PCA': [ { clave, cedula, nombre, usd, montoBs, dias, sinAnticipo, detalle } ], ... }.
        */
-      function lineasQuincena(personas, beneficios, mes, q, tasa, pagado1Q, parametros) {
+      function lineasQuincena(personas, beneficios, mes, q, tasa, pagado1Q, parametros, tasa1Q) {
         var r = {}; LOTES.forEach(function (l) { r[l.id] = []; });
         personas.forEach(function (pe) {
           var m = montosDelMes(pe, mes, beneficios[pe.clave], parametros), sinAnticipo = ingresoTrasPrimeraQuincena(pe.fechaIngreso, mes);
           ['CESTATICKET', 'TRANSFERENCIA'].forEach(function (tipo) {
             var id = (tipo === 'CESTATICKET' ? 'CT-' : 'TR-') + pe.empresa;
             if (!r[id]) return;
-            var pag = pagado1Q && pagado1Q[id] ? pagado1Q[id][pe.clave] : 0;
+            var hay1Q = !!(pagado1Q && pagado1Q[id]), pag = hay1Q ? pagado1Q[id][pe.clave] || 0 : 0, origen = hay1Q ? '1Q' : '';
+            if (Number(q) === 2 && !hay1Q && Number(tasa1Q) > 0) { pag = sinAnticipo ? 0 : r2(m[tipo] / 2 * Number(tasa1Q)); origen = 'tasa1Q'; }
             if (!(m[tipo] > 0) && !(pag > 0)) return;
             var monto = montoQuincena(m[tipo], q, tasa, pag, sinAnticipo);
-            r[id].push({ clave: pe.clave, cedula: pe.cedula, nombre: pe.nombre, usd: m[tipo], montoBs: monto, anticipoBs: Number(q) === 2 ? r2(pag) : 0,
+            r[id].push({ clave: pe.clave, cedula: pe.cedula, nombre: pe.nombre, usd: m[tipo], montoBs: monto, anticipoBs: Number(q) === 2 ? r2(pag) : 0, anticipoOrigen: Number(q) === 2 ? origen : '',
               dias: m.dias, sinAnticipo: Number(q) === 1 && sinAnticipo, sinTarjeta: !!pe.sinTarjeta, ingresoMes: ingresoEnElMes(pe.fechaIngreso, mes),
               detalle: tipo === 'CESTATICKET' ? { cestaticket: m.CESTATICKET } : Object.assign({}, m.detalle, { cestaticket: m.cestaticketPor === 'TRANSFERENCIA' ? m.cestaticketUSD : 0 }) });
           });
@@ -3662,7 +3664,7 @@ var Servicio = (function () {
         if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
         var v = vistaQuincena(repo, q, configOmega(repo)), pasos = q.pasos || {};
         var com = pasos.comisiones && pasos.comisiones.nomina ? repo.nominaEspecialPorId(pasos.comisiones.nomina) : null;
-        return ok({ id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, pasos: pasos, orden: PASOS_QUINCENA, lotes: v.lotes, sin1Q: v.sin1Q,
+        return ok({ id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, pasos: pasos, orden: PASOS_QUINCENA, lotes: v.lotes, sin1Q: v.sin1Q, tasa1Q: v.tasa1Q,
           comisiones: com ? vistaNominaEsp(com) : null });
       }
     
@@ -3772,13 +3774,15 @@ var Servicio = (function () {
         if (!cache.calc) {
           var benef = {}; repo.omegaBeneficios().forEach(function (b) { benef[b.clave] = b; });
           var p1 = Number(q.quincena) === 2 ? pagado1Q(repo, q.mes) : { pagado: {} };
-          cache.calc = Omega.lineasQuincena(personasOmega(repo), benef, q.mes, q.quincena, q.tasa, p1.pagado, cfg.parametros);
+          cache.calc = Omega.lineasQuincena(personasOmega(repo), benef, q.mes, q.quincena, q.tasa, p1.pagado, cfg.parametros, q.tasa1Q);
         }
         var aj = q.ajustes[loteId] || {};
         var vistos = {};
         var lineas = (cache.calc[loteId] || []).map(function (l) {
           vistos[l.clave] = true;
           var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs, adicional: Number(a.adicional) || 0, notaAdicional: a.nota || '' });
+          // anticipo de la 1Q puesto a mano (2Q): el monto pasa a ser el mes completo a la tasa menos ese anticipo
+          if (Number(q.quincena) === 2 && a.anticipo != null) { x.anticipoBs = Omega.r2(a.anticipo); x.anticipoOrigen = 'manual'; x.calculado = x.montoBs = Math.max(0, Omega.r2(l.usd * q.tasa - a.anticipo)); }
           if (a.monto != null && a.monto !== '') { x.montoBs = Omega.r2(a.monto); x.ajustado = true; }
           if (x.adicional) x.montoBs = Omega.r2(x.montoBs + x.adicional);
           return x;
@@ -3804,7 +3808,7 @@ var Servicio = (function () {
       function vistaQuincena(repo, q, cfg) {
         var cache = {}, p1 = Number(q.quincena) === 2 ? pagado1Q(repo, q.mes) : null;
         return {
-          id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, creada: q.creada, por: q.por,
+          id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, tasa1Q: Number(q.tasa1Q) || 0, creada: q.creada, por: q.por,
           sin1Q: !!(p1 && !p1.existe),
           lotes: Omega.LOTES.map(function (l) {
             var st = q.lotes[l.id] || {};
@@ -3912,6 +3916,25 @@ var Servicio = (function () {
         return omegaQuincena(repo, ctx, token, id);
       }
     
+      /**
+       * 2.ª quincena cuya 1.ª no se hizo en el CAC: la tasa con la que se pagó el anticipo de la 1Q.
+       * Con ella se estima el anticipo de cada persona (50 % del mes en $). 0 o vacío la quita.
+       */
+      function omegaAnticipo1Q(repo, ctx, token, id, tasa1Q) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        var q = quincenaOmega(repo, id);
+        if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+        if (Number(q.quincena) !== 2) return err('VALIDACION', 'El anticipo de la 1.ª quincena solo se descuenta en la 2.ª.');
+        if (Object.keys(q.lotes).some(function (k) { return q.lotes[k].estado === 'VALIDADO'; })) return err('VALIDADO', 'Ya hay lotes validados: reábrelos para cambiar el anticipo.');
+        var t = tasa1Q == null || tasa1Q === '' ? 0 : Number(String(tasa1Q).replace(/\./g, '').replace(',', '.'));
+        if (!(t >= 0) || !isFinite(t)) return err('VALIDACION', 'Escribe la tasa con la que se pagó la 1.ª quincena.');
+        q.tasa1Q = Omega.r2(t); q.actualizada = ctx.ahora();
+        repo.guardarOmegaQuincena(q);
+        repo.log('OMEGA_ANTICIPO_1Q', s.clave, q.id + ' · tasa ' + q.tasa1Q);
+        return omegaQuincena(repo, ctx, token, id);
+      }
+    
       function omegaEliminarQuincena(repo, ctx, token, id) {
         var s = sesionRRHH(ctx, token);
         if (!s) return err('SESION', 'No autorizado.');
@@ -3953,6 +3976,11 @@ var Servicio = (function () {
             a.agregada = true; a.nombre = e.nombre; a.cedula = e.cedulaNumero;
           }
           if (a.agregada && !a.adicional) delete aj[clave];
+        }
+        if (cambio && 'anticipo' in cambio) {
+          if (Number(q.quincena) !== 2) return err('VALIDACION', 'El anticipo solo se descuenta en la 2.ª quincena.');
+          var an = cambio.anticipo == null || cambio.anticipo === '' ? null : Number(String(cambio.anticipo).replace(/\./g, '').replace(',', '.'));
+          if (an == null) delete a.anticipo; else if (isFinite(an) && an >= 0) { a.anticipo = Omega.r2(an); delete a.monto; } else return err('VALIDACION', 'Anticipo no válido.');
         }
         if (cambio && 'monto' in cambio) {
           var m = cambio.monto == null || cambio.monto === '' ? null : Number(String(cambio.monto).replace(/\./g, '').replace(',', '.'));
@@ -4546,7 +4574,7 @@ var Servicio = (function () {
         rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
         quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,
         omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
-        omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
+        omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaAnticipo1Q: omegaAnticipo1Q, omegaEliminarQuincena: omegaEliminarQuincena,
         omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,
         omegaImportarBeneficios: omegaImportarBeneficios, omegaBeneficios: omegaBeneficios, omegaEditarBeneficio: omegaEditarBeneficio,
         iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
@@ -4591,7 +4619,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-24.1';
+var VERSION = '2026-11-25.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -4639,7 +4667,7 @@ var HOJAS = {
   ALIAS_COMISIONES: ['alias', 'clave', 'actualizado'],
   OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
   OMEGA_CONFIG: ['clave', 'valor'],
-  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada', 'pasos'],
+  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada', 'pasos', 'tasa1Q'],
   OMEGA_PAGOS: ['quincena', 'lote', 'clave', 'cedula', 'nombre', 'usd', 'montoBs', 'anticipoBs', 'dias', 'detalle', 'validado'],
   PERFILES: ['clave', 'datos', 'confirmadas', 'actualizado', 'por'],
   CAMBIOS_PERFIL: ['cuando', 'clave', 'nombre', 'seccion', 'campo', 'antes', 'despues'],
@@ -4775,6 +4803,7 @@ var RUTAS_RRHH = {
   omegaAbrirQuincena: function (repo, ctx, d) { return Servicio.omegaAbrirQuincena(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
   omegaQuincena: function (repo, ctx, d) { return Servicio.omegaQuincena(repo, ctx, d.token, d.id); },
   omegaCambiarTasa: function (repo, ctx, d) { return Servicio.omegaCambiarTasa(repo, ctx, d.token, d.id, d.tasa); },
+  omegaAnticipo1Q: function (repo, ctx, d) { return Servicio.omegaAnticipo1Q(repo, ctx, d.token, d.id, d.tasa1Q); },
   omegaEliminarQuincena: function (repo, ctx, d) { return Servicio.omegaEliminarQuincena(repo, ctx, d.token, d.id); },
   omegaLote: function (repo, ctx, d) { return Servicio.omegaLote(repo, ctx, d.token, d.id, d.lote); },
   omegaAjustarLinea: function (repo, ctx, d) { return Servicio.omegaAjustarLinea(repo, ctx, d.token, d.id, d.lote, d.clave, d.cambio); },
@@ -5498,7 +5527,7 @@ function idQuincena_(f) {
 function omegaQuincena_(f) {
   var j = function (v) { try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } };
   return { _fila: f._fila, id: idQuincena_(f), mes: mesTexto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes), pasos: j(f.pasos),
-    creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+    creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0, tasa1Q: Number(f.tasa1Q) || 0 };
 }
 
 function lote_(f) {

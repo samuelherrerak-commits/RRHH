@@ -595,8 +595,8 @@ async function vistaRRHH() {
   const miEquipo = !!(sesion.leer() || {}).esJefe && !miCuenta;   // si es empleado, su equipo está en «Mi cuenta»
   if (['solicitudes', 'banco', 'anticipos', 'cierres'].includes(pestana)) { subFide = pestana === 'cierres' ? 'aportes' : 'anticipos'; pestana = 'fideicomiso'; }
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
-  // Quincena (con Omega Capital) y Nóminas especiales: por ahora solo en el sitio de pruebas
-  const soloPruebas = CONFIG.PRUEBAS ? [] : ['omega', 'nominas'];
+  // Pestañas que se pueden dejar solo en el sitio de pruebas (por ahora ninguna)
+  const soloPruebas = CONFIG.PRUEBAS ? [] : [];
   if (soloPruebas.includes(pestana)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
@@ -1643,7 +1643,7 @@ function irAviso(ruta) {
   cerrarAvisos();
   const s = sesion.leer() || {};
   const destino = SECCIONES.includes(ruta) ? ruta : 'inicio';
-  if (s.rol !== 'TRABAJADOR' && ruta === 'nominas' && CONFIG.PRUEBAS) { pestana = 'nominas'; subNom = 'pendientes'; return vistaRRHH(); }
+  if (s.rol !== 'TRABAJADOR' && ruta === 'nominas') { pestana = 'nominas'; subNom = 'pendientes'; return vistaRRHH(); }
   if (s.rol === 'TRABAJADOR') return navegar(destino);
   if (destino === 'equipo' && s.esJefe && !s.tokenTrabajador) pestana = 'miequipo';
   else if (s.tokenTrabajador) { pestana = 'micuenta'; seccionMiCuenta = destino; }
@@ -2106,7 +2106,7 @@ async function vistaQuincenaOmega(panel) {
     <div>${volverOmega()}</div>
     <section class="tarjeta">
       <div><h2>${esc(etiquetaQ(q))}</h2><p class="suave">${q.quincena === 1 ? 'Anticipo: 50 % del monto del mes en $ a la tasa estimada.' : '100 % del mes a la tasa estimada, menos lo pagado en la 1.ª quincena del mismo lote.'}</p></div>
-      ${q.sin1Q ? '<p class="aviso">No hay 1.ª quincena registrada para este mes: la 2.ª paga el mes completo, sin descontar anticipos.</p>' : ''}
+
       <form id="ft" class="fila" novalidate>
         <label class="grow">Tasa estimada (Bs. por $) <input name="tasa" inputmode="decimal" value="${q.tasa.toLocaleString('es-VE')}" ${hayValidados ? 'disabled' : ''}></label>
         ${hayValidados ? '<p class="suave">Para cambiar la tasa, reabre los lotes validados.</p>' : '<div><button class="btn btn-sec" type="submit">Cambiar tasa</button></div>'}
@@ -2129,7 +2129,7 @@ async function vistaQuincenaOmega(panel) {
     ${hayValidados ? '' : '<div><button class="btn btn-sec btn-chico" id="om-elim">Eliminar esta quincena</button></div>'}`;
   panel.querySelector('[data-om-volver]').addEventListener('click', () => irOmega(panel, { vista: 'inicio' }));
   panel.querySelectorAll('[data-om-lote]').forEach((b) => b.addEventListener('click', () => irOmega(panel, { vista: 'lote', lote: b.dataset.omLote, buscar: '', filtro: '' })));
-  const ft = panel.querySelector('#ft');
+  const ft =   panel.querySelector('#ft');
   ft.addEventListener('submit', (e) => { e.preventDefault(); conBoton(ft.querySelector('button'), async () => {
     const x = await llamar('omegaCambiarTasa', { id: q.id, tasa: numVe(ft.tasa.value) });
     if (!x.ok) return toast(x.message);
@@ -2173,7 +2173,7 @@ function pintarLoteOmega(panel, d) {
         ${validado ? '<button class="btn" id="om-txt">Generar archivo TXT</button><button class="btn btn-sec" id="om-reabrir">Reabrir lote</button>' : '<button class="btn" id="om-validar">Validar lote</button>'}
         <button class="btn btn-sec" id="om-xls">Descargar Excel</button>
       </div>
-      ${validado ? '' : '<p class="suave">Revisa personas y montos. Puedes excluir a alguien o cambiar su monto en Bs. Al validar, el lote queda fijo y se puede generar el TXT para Omega.</p>'}
+      ${validado ? '' : `<p class="suave">Revisa personas y montos. Puedes excluir a alguien o cambiar su monto en Bs.${q.quincena === 2 ? ' En «Anticipo 1Q» puedes poner a mano lo que cobró en la 1.ª quincena (si lo borras, vuelve al calculado).' : ''} Al validar, el lote queda fijo y se puede generar el TXT para Omega.</p>`}
     </section>
     <section class="tarjeta">
       <div class="fila">
@@ -2184,7 +2184,7 @@ function pintarLoteOmega(panel, d) {
       <tbody>${lineas.map((x) => `<tr class="${x.excluida ? 'inactivo' : ''}">
         <td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(detalle(x))}${notas(x).length ? ' · ' + notas(x).map(esc).join(' · ') : ''}</span>
           ${x.avisos.map((a) => `<span class="chip chip-${a.tipo === 'error' ? 'error' : 'espera'}">${esc(a.texto)}</span>`).join(' ')}</td>
-        <td class="num">${esc(x.cedula)}</td><td class="num">${usd(x.usd)}</td>${q.quincena === 2 ? `<td class="num">${bs(x.anticipoBs)}</td>` : ''}
+        <td class="num">${esc(x.cedula)}</td><td class="num">${usd(x.usd)}</td>${q.quincena === 2 ? `<td class="num">${validado || x.excluida || x.agregada ? bs(x.anticipoBs) : `<input class="monto-om${x.anticipoOrigen === 'manual' ? ' ajustado' : ''}" data-anticipo="${esc(x.clave)}" value="${(x.anticipoBs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" aria-label="Anticipo de la 1.ª quincena en Bs.">`}${x.anticipoOrigen && !validado ? `<br><span class="suave">${{ manual: 'a mano', tasa1Q: 'con tasa de la 1Q', '1Q': 'pagado en la 1Q' }[x.anticipoOrigen] || ''}</span>` : ''}</td>` : ''}
         <td class="num">${validado || x.excluida || x.agregada ? `<b>${bs(x.montoBs - (validado ? 0 : x.adicional || 0))}</b>` : `<input class="monto-om${x.ajustado ? ' ajustado' : ''}" data-monto="${esc(x.clave)}" value="${(x.montoBs - (x.adicional || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}" inputmode="decimal" aria-label="Monto en Bs.">`}</td>
         ${l.tipo === 'TRANSFERENCIA' ? `<td class="num">${validado ? (x.detalle && x.detalle.adicionalBs ? `${bs(x.detalle.adicionalBs)}<br><span class="suave">${esc(x.detalle.notaAdicional || '')}</span>` : '') : `<input class="monto-om${x.adicional ? ' ajustado' : ''}" data-adic="${esc(x.clave)}" value="${x.adicional ? x.adicional.toLocaleString('es-VE', { minimumFractionDigits: 2 }) : ''}" placeholder="0,00" inputmode="decimal" aria-label="Monto adicional">${x.notaAdicional ? `<br><span class="suave">${esc(x.notaAdicional)}</span>` : ''}`}</td>` : ''}
         ${validado ? '' : `<td><input type="checkbox" data-incluir="${esc(x.clave)}"${x.excluida ? '' : ' checked'} aria-label="Incluir en el lote"></td>`}</tr>`).join('') || '<tr><td colspan="7" class="vacio">Nadie coincide.</td></tr>'}</tbody></table></div>
@@ -2217,6 +2217,11 @@ function pintarLoteOmega(panel, d) {
     if (!x.ok) return toast(x.message);
     pintarLoteOmega(panel, x.data);
   };
+  panel.querySelectorAll('[data-anticipo]').forEach((i) => i.addEventListener('change', () => {
+    const v = numVe(i.value);
+    if (v !== '' && !(v >= 0)) { toast('Anticipo no válido.'); return; }
+    ajustar(i.dataset.anticipo, { anticipo: v === '' ? null : v });
+  }));
   panel.querySelectorAll('[data-incluir]').forEach((c) => c.addEventListener('change', () => ajustar(c.dataset.incluir, { excluir: !c.checked })));
   panel.querySelectorAll('[data-monto]').forEach((i) => i.addEventListener('change', () => {
     const linea = d.lineas.find((x) => x.clave === i.dataset.monto), v = numVe(i.value);
@@ -2753,6 +2758,12 @@ async function vistaProcesoQuincena(panel) {
     <section class="tarjeta">
       <div class="item-cab"><div><h2>${esc(etiquetaQ(q))}</h2><p class="suave">${q.quincena === 1 ? `Cestaticket: anticipo de $20 a la tasa estimada.` : 'Cestaticket: $40 a la tasa estimada menos el anticipo de la 1.ª quincena.'}</p></div>
         <form id="ft" class="fila" novalidate><label>Tasa estimada <input name="tasa" inputmode="decimal" value="${q.tasa.toLocaleString('es-VE')}" ${hayValidados ? 'disabled' : ''} style="max-width:140px"></label>${hayValidados ? '' : '<div><button class="btn btn-sec btn-chico" type="submit">Cambiar</button></div>'}</form></div>
+    ${q.quincena === 2 && (q.sin1Q || q.lotes.some((l) => l.falta1Q)) ? `<form id="fa1" class="recuadro-anticipo" novalidate>
+        <div><b>Anticipo de la 1.ª quincena</b><p class="suave">${q.sin1Q ? 'La 1.ª quincena de este mes no se hizo en el CAC' : 'Hay lotes de la 1.ª quincena sin validar en el CAC'}. Escribe la tasa con la que se pagó el anticipo y el CAC lo descuenta a cada persona (50 % del mes en $; quien ingresó después del 15 no tuvo anticipo). También puedes cambiarlo persona por persona dentro de cada lote.</p></div>
+        <div class="fila"><label class="grow">Tasa con la que se pagó la 1.ª quincena (Bs. por $) <input name="tasa1Q" inputmode="decimal" value="${q.tasa1Q ? q.tasa1Q.toLocaleString('es-VE') : ''}" placeholder="Ej.: 905" ${hayValidados ? 'disabled' : ''}></label>
+          ${hayValidados ? '' : `<div><button class="btn btn-sec" type="submit">${q.tasa1Q ? 'Cambiar' : 'Aplicar'}</button></div>`}</div>
+        ${q.tasa1Q ? `<p class="suave">Anticipo aplicado con tasa Bs. ${q.tasa1Q.toLocaleString('es-VE')}.</p>` : '<p class="suave">Sin tasa de la 1.ª quincena, la 2.ª paga el mes completo, sin descontar anticipos.</p>'}
+      </form>` : ''}
       <ol class="pasos-q">${PASOS_Q.map(([k, t], i) => `<li><button type="button" data-paso="${k}" aria-current="${k === omegaUI.paso ? 'step' : 'false'}" class="${q.pasos[k] && q.pasos[k].hecho ? 'hecho' : ''}"><span class="num-paso">${q.pasos[k] && q.pasos[k].hecho ? '✓' : i + 1}</span>${t}</button></li>`).join('')}</ol>
     </section>
     <div id="paso-q">${esqueleto(2)}</div>`;
@@ -2763,6 +2774,11 @@ async function vistaProcesoQuincena(panel) {
     const x = await llamar('omegaCambiarTasa', { id: q.id, tasa: numVe(ft.tasa.value) });
     if (!x.ok) return toast(x.message);
     toast('Tasa cambiada.'); panelOmega(panel);
+  }); });
+  panel.querySelector('#fa1')?.addEventListener('submit', (e) => { e.preventDefault(); const fa = e.currentTarget, tasa1Q = fa.tasa1Q.value.trim(); conBoton(e.submitter || fa.querySelector('button'), async () => {
+    const x = await llamar('omegaAnticipo1Q', { id: q.id, tasa1Q });
+    if (!x.ok) return toast(x.message);
+    toast(x.data.tasa1Q ? 'Anticipo de la 1.ª quincena aplicado.' : 'Anticipo quitado.'); panelOmega(panel);
   }); });
   const cont = panel.querySelector('#paso-q');
   const ctx = { panel, cont, q, guardar: async (paso, datos) => { const x = await llamar('quincenaPaso', { id: q.id, paso, ...datos }); if (!x.ok) toast(x.message); return x; } };

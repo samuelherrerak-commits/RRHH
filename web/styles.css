@@ -442,3 +442,5 @@ details.item[open] { gap: var(--s3); }
 
 .bloque label { min-width: 0; } .bloque input { min-width: 0; }
 @media (max-width: 420px) { .bloque { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 88px); } }
+.recuadro-anticipo { display: grid; gap: var(--s3); background: var(--espera-velo); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); }
+.recuadro-anticipo b { color: var(--espera); }

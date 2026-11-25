@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-24.1';
+var VERSION = '2026-11-25.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -54,7 +54,7 @@ var HOJAS = {
   ALIAS_COMISIONES: ['alias', 'clave', 'actualizado'],
   OMEGA_SIN_TARJETA: ['clave', 'nombre', 'desde', 'por'],
   OMEGA_CONFIG: ['clave', 'valor'],
-  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada', 'pasos'],
+  OMEGA_QUINCENAS: ['id', 'mes', 'quincena', 'tasa', 'lotes', 'ajustes', 'creada', 'por', 'actualizada', 'pasos', 'tasa1Q'],
   OMEGA_PAGOS: ['quincena', 'lote', 'clave', 'cedula', 'nombre', 'usd', 'montoBs', 'anticipoBs', 'dias', 'detalle', 'validado'],
   PERFILES: ['clave', 'datos', 'confirmadas', 'actualizado', 'por'],
   CAMBIOS_PERFIL: ['cuando', 'clave', 'nombre', 'seccion', 'campo', 'antes', 'despues'],
@@ -190,6 +190,7 @@ var RUTAS_RRHH = {
   omegaAbrirQuincena: function (repo, ctx, d) { return Servicio.omegaAbrirQuincena(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
   omegaQuincena: function (repo, ctx, d) { return Servicio.omegaQuincena(repo, ctx, d.token, d.id); },
   omegaCambiarTasa: function (repo, ctx, d) { return Servicio.omegaCambiarTasa(repo, ctx, d.token, d.id, d.tasa); },
+  omegaAnticipo1Q: function (repo, ctx, d) { return Servicio.omegaAnticipo1Q(repo, ctx, d.token, d.id, d.tasa1Q); },
   omegaEliminarQuincena: function (repo, ctx, d) { return Servicio.omegaEliminarQuincena(repo, ctx, d.token, d.id); },
   omegaLote: function (repo, ctx, d) { return Servicio.omegaLote(repo, ctx, d.token, d.id, d.lote); },
   omegaAjustarLinea: function (repo, ctx, d) { return Servicio.omegaAjustarLinea(repo, ctx, d.token, d.id, d.lote, d.clave, d.cambio); },
@@ -913,7 +914,7 @@ function idQuincena_(f) {
 function omegaQuincena_(f) {
   var j = function (v) { try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } };
   return { _fila: f._fila, id: idQuincena_(f), mes: mesTexto_(f.mes), quincena: Number(f.quincena) || 0, tasa: Number(f.tasa) || 0, lotes: j(f.lotes), ajustes: j(f.ajustes), pasos: j(f.pasos),
-    creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0 };
+    creada: Number(f.creada) || 0, por: texto_(f.por), actualizada: Number(f.actualizada) || 0, tasa1Q: Number(f.tasa1Q) || 0 };
 }
 
 function lote_(f) {

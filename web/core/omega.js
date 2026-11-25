@@ -78,19 +78,21 @@
    * Líneas de los 4 lotes de una quincena.
    * personas: [{ clave, cedula, nombre, empresa, fechaIngreso, sinTarjeta }] (solo activos: los egresados no cobran)
    * beneficios: { clave: {...} }; pagado1Q: { loteId: { clave: Bs } } (lo cerrado en la 1Q, para la 2Q)
+   * tasa1Q: si la 1Q de un lote no se hizo en el CAC, el anticipo se estima con esa tasa (50 % del mes en $, salvo quien ingresó tras el 15).
    * Devuelve { 'CT-PCA': [ { clave, cedula, nombre, usd, montoBs, dias, sinAnticipo, detalle } ], ... }.
    */
-  function lineasQuincena(personas, beneficios, mes, q, tasa, pagado1Q, parametros) {
+  function lineasQuincena(personas, beneficios, mes, q, tasa, pagado1Q, parametros, tasa1Q) {
     var r = {}; LOTES.forEach(function (l) { r[l.id] = []; });
     personas.forEach(function (pe) {
       var m = montosDelMes(pe, mes, beneficios[pe.clave], parametros), sinAnticipo = ingresoTrasPrimeraQuincena(pe.fechaIngreso, mes);
       ['CESTATICKET', 'TRANSFERENCIA'].forEach(function (tipo) {
         var id = (tipo === 'CESTATICKET' ? 'CT-' : 'TR-') + pe.empresa;
         if (!r[id]) return;
-        var pag = pagado1Q && pagado1Q[id] ? pagado1Q[id][pe.clave] : 0;
+        var hay1Q = !!(pagado1Q && pagado1Q[id]), pag = hay1Q ? pagado1Q[id][pe.clave] || 0 : 0, origen = hay1Q ? '1Q' : '';
+        if (Number(q) === 2 && !hay1Q && Number(tasa1Q) > 0) { pag = sinAnticipo ? 0 : r2(m[tipo] / 2 * Number(tasa1Q)); origen = 'tasa1Q'; }
         if (!(m[tipo] > 0) && !(pag > 0)) return;
         var monto = montoQuincena(m[tipo], q, tasa, pag, sinAnticipo);
-        r[id].push({ clave: pe.clave, cedula: pe.cedula, nombre: pe.nombre, usd: m[tipo], montoBs: monto, anticipoBs: Number(q) === 2 ? r2(pag) : 0,
+        r[id].push({ clave: pe.clave, cedula: pe.cedula, nombre: pe.nombre, usd: m[tipo], montoBs: monto, anticipoBs: Number(q) === 2 ? r2(pag) : 0, anticipoOrigen: Number(q) === 2 ? origen : '',
           dias: m.dias, sinAnticipo: Number(q) === 1 && sinAnticipo, sinTarjeta: !!pe.sinTarjeta, ingresoMes: ingresoEnElMes(pe.fechaIngreso, mes),
           detalle: tipo === 'CESTATICKET' ? { cestaticket: m.CESTATICKET } : Object.assign({}, m.detalle, { cestaticket: m.cestaticketPor === 'TRANSFERENCIA' ? m.cestaticketUSD : 0 }) });
       });
