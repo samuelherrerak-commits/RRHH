@@ -191,6 +191,7 @@
   #ayuda { position: fixed; right: 16px; bottom: 12px; font: 12px Poppins, sans-serif; color: rgb(255 255 255 / .35); z-index: 10; transition: opacity .6s; }
   body.quieto #ayuda { opacity: 0; }
 
+  .solo-pdf { display: none; }
   /* impresión / PDF: todas las láminas y todos los pasos */
   @media print {
     @page { size: 1280px 720px; margin: 0; }
@@ -199,7 +200,8 @@
     .lamina { position: relative; opacity: 1; visibility: visible; transform: none; width: 1280px; height: 720px; page-break-after: always; transition: none; }
     .f { opacity: 1 !important; transform: none !important; filter: none !important; }
     .barra .par span { transform: none; }
-    #barra, #ayuda { display: none; }
+    #barra, #ayuda, .solo-vivo { display: none; }
+    .solo-pdf { display: inline; }
   }
 </style>
 </head>
@@ -350,7 +352,7 @@
       </div>
     </div>
     <div class="telefono f desde-abajo"><div class="pantalla"><img src="{{img:inicio}}" alt="El CAC en el teléfono"></div></div>
-    <div class="qr f zoom"><div class="marco">{{qr}}</div><b>cads.onrender.com</b><small>Escanéalo ahora con tu celular</small></div>
+    <div class="qr f zoom"><div class="marco">{{qr}}</div><b>cads.onrender.com</b><small><span class="solo-vivo">Escanéalo ahora con tu celular</span><span class="solo-pdf">Escanéalo con tu celular</span></small></div>
   </div>
   <div class="pie"><span>Prosein · Austral · Mil Cerámicas</span><span>{{n}}</span></div>
 </section>
@@ -371,7 +373,7 @@
         <div class="paso"><b class="n">2</b><div><h4>Toca el menú <span class="btn">⋮</span></h4><p>Los tres puntos, arriba a la derecha.</p></div></div>
         <div class="paso"><b class="n">3</b><div><h4>«Instalar app» → Instalar</h4><p>En algunos teléfonos dice «Agregar a pantalla principal».</p></div></div>
       </div></div>
-    <div class="qr-chico f zoom"><div class="marco">{{qr}}</div><small>¿Llegaste tarde?<br>Escanéalo aquí</small></div>
+    <div class="qr-chico f zoom"><div class="marco">{{qr}}</div><small><span class="solo-vivo">¿Llegaste tarde?<br>Escanéalo aquí</span><span class="solo-pdf">Escanéalo con tu celular<br>o entra a cads.onrender.com</span></small></div>
   </div>
   <div class="regla r-verde f arriba" style="position:absolute;left:72px;right:72px;bottom:62px"><b>Al entrar, el CAC te lo sugiere</b>Si ves el mensaje «Instalar CAC», toca <b style="display:inline;font-size:inherit">Instalar</b> y listo: queda el ícono del CAC en tu teléfono.</div>
   <div class="pie"><span>CAC · Centro de Atención al Colaborador</span><span>Gestión Humana</span></div>
