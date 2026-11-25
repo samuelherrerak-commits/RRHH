@@ -1508,7 +1508,7 @@
     if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
     var v = vistaQuincena(repo, q, configOmega(repo)), pasos = q.pasos || {};
     var com = pasos.comisiones && pasos.comisiones.nomina ? repo.nominaEspecialPorId(pasos.comisiones.nomina) : null;
-    return ok({ id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, pasos: pasos, orden: PASOS_QUINCENA, lotes: v.lotes, sin1Q: v.sin1Q,
+    return ok({ id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, pasos: pasos, orden: PASOS_QUINCENA, lotes: v.lotes, sin1Q: v.sin1Q, tasa1Q: v.tasa1Q,
       comisiones: com ? vistaNominaEsp(com) : null });
   }
 
@@ -1618,13 +1618,15 @@
     if (!cache.calc) {
       var benef = {}; repo.omegaBeneficios().forEach(function (b) { benef[b.clave] = b; });
       var p1 = Number(q.quincena) === 2 ? pagado1Q(repo, q.mes) : { pagado: {} };
-      cache.calc = Omega.lineasQuincena(personasOmega(repo), benef, q.mes, q.quincena, q.tasa, p1.pagado, cfg.parametros);
+      cache.calc = Omega.lineasQuincena(personasOmega(repo), benef, q.mes, q.quincena, q.tasa, p1.pagado, cfg.parametros, q.tasa1Q);
     }
     var aj = q.ajustes[loteId] || {};
     var vistos = {};
     var lineas = (cache.calc[loteId] || []).map(function (l) {
       vistos[l.clave] = true;
       var a = aj[l.clave] || {}, x = Object.assign({}, l, { excluida: !!a.excluir, calculado: l.montoBs, adicional: Number(a.adicional) || 0, notaAdicional: a.nota || '' });
+      // anticipo de la 1Q puesto a mano (2Q): el monto pasa a ser el mes completo a la tasa menos ese anticipo
+      if (Number(q.quincena) === 2 && a.anticipo != null) { x.anticipoBs = Omega.r2(a.anticipo); x.anticipoOrigen = 'manual'; x.calculado = x.montoBs = Math.max(0, Omega.r2(l.usd * q.tasa - a.anticipo)); }
       if (a.monto != null && a.monto !== '') { x.montoBs = Omega.r2(a.monto); x.ajustado = true; }
       if (x.adicional) x.montoBs = Omega.r2(x.montoBs + x.adicional);
       return x;
@@ -1650,7 +1652,7 @@
   function vistaQuincena(repo, q, cfg) {
     var cache = {}, p1 = Number(q.quincena) === 2 ? pagado1Q(repo, q.mes) : null;
     return {
-      id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, creada: q.creada, por: q.por,
+      id: q.id, mes: q.mes, quincena: Number(q.quincena), tasa: q.tasa, tasa1Q: Number(q.tasa1Q) || 0, creada: q.creada, por: q.por,
       sin1Q: !!(p1 && !p1.existe),
       lotes: Omega.LOTES.map(function (l) {
         var st = q.lotes[l.id] || {};
@@ -1758,6 +1760,25 @@
     return omegaQuincena(repo, ctx, token, id);
   }
 
+  /**
+   * 2.ª quincena cuya 1.ª no se hizo en el CAC: la tasa con la que se pagó el anticipo de la 1Q.
+   * Con ella se estima el anticipo de cada persona (50 % del mes en $). 0 o vacío la quita.
+   */
+  function omegaAnticipo1Q(repo, ctx, token, id, tasa1Q) {
+    var s = sesionRRHH(ctx, token);
+    if (!s) return err('SESION', 'No autorizado.');
+    var q = quincenaOmega(repo, id);
+    if (!q) return err('NO_ENCONTRADO', 'No existe esa quincena.');
+    if (Number(q.quincena) !== 2) return err('VALIDACION', 'El anticipo de la 1.ª quincena solo se descuenta en la 2.ª.');
+    if (Object.keys(q.lotes).some(function (k) { return q.lotes[k].estado === 'VALIDADO'; })) return err('VALIDADO', 'Ya hay lotes validados: reábrelos para cambiar el anticipo.');
+    var t = tasa1Q == null || tasa1Q === '' ? 0 : Number(String(tasa1Q).replace(/\./g, '').replace(',', '.'));
+    if (!(t >= 0) || !isFinite(t)) return err('VALIDACION', 'Escribe la tasa con la que se pagó la 1.ª quincena.');
+    q.tasa1Q = Omega.r2(t); q.actualizada = ctx.ahora();
+    repo.guardarOmegaQuincena(q);
+    repo.log('OMEGA_ANTICIPO_1Q', s.clave, q.id + ' · tasa ' + q.tasa1Q);
+    return omegaQuincena(repo, ctx, token, id);
+  }
+
   function omegaEliminarQuincena(repo, ctx, token, id) {
     var s = sesionRRHH(ctx, token);
     if (!s) return err('SESION', 'No autorizado.');
@@ -1799,6 +1820,11 @@
         a.agregada = true; a.nombre = e.nombre; a.cedula = e.cedulaNumero;
       }
       if (a.agregada && !a.adicional) delete aj[clave];
+    }
+    if (cambio && 'anticipo' in cambio) {
+      if (Number(q.quincena) !== 2) return err('VALIDACION', 'El anticipo solo se descuenta en la 2.ª quincena.');
+      var an = cambio.anticipo == null || cambio.anticipo === '' ? null : Number(String(cambio.anticipo).replace(/\./g, '').replace(',', '.'));
+      if (an == null) delete a.anticipo; else if (isFinite(an) && an >= 0) { a.anticipo = Omega.r2(an); delete a.monto; } else return err('VALIDACION', 'Anticipo no válido.');
     }
     if (cambio && 'monto' in cambio) {
       var m = cambio.monto == null || cambio.monto === '' ? null : Number(String(cambio.monto).replace(/\./g, '').replace(',', '.'));
@@ -2392,7 +2418,7 @@
     rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
     quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,
     omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
-    omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaEliminarQuincena: omegaEliminarQuincena,
+    omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaAnticipo1Q: omegaAnticipo1Q, omegaEliminarQuincena: omegaEliminarQuincena,
     omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,
     omegaImportarBeneficios: omegaImportarBeneficios, omegaBeneficios: omegaBeneficios, omegaEditarBeneficio: omegaEditarBeneficio,
     iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
