@@ -595,8 +595,8 @@ async function vistaRRHH() {
   const miEquipo = !!(sesion.leer() || {}).esJefe && !miCuenta;   // si es empleado, su equipo está en «Mi cuenta»
   if (['solicitudes', 'banco', 'anticipos', 'cierres'].includes(pestana)) { subFide = pestana === 'cierres' ? 'aportes' : 'anticipos'; pestana = 'fideicomiso'; }
   if ((pestana === 'micuenta' && !miCuenta) || (pestana === 'miequipo' && !miEquipo)) pestana = 'vacaciones';
-  // Quincena (con Omega Capital) y Nóminas especiales: por ahora solo en el sitio de pruebas
-  const soloPruebas = CONFIG.PRUEBAS ? [] : ['omega', 'nominas'];
+  // Pestañas que se pueden dejar solo en el sitio de pruebas (por ahora ninguna)
+  const soloPruebas = CONFIG.PRUEBAS ? [] : [];
   if (soloPruebas.includes(pestana)) pestana = 'vacaciones';
   app.innerHTML = `<div class="layout">
     <div class="pestanas" role="tablist" aria-orientation="vertical"><p class="lateral-titulo">Gestión Humana</p>
@@ -1643,7 +1643,7 @@ function irAviso(ruta) {
   cerrarAvisos();
   const s = sesion.leer() || {};
   const destino = SECCIONES.includes(ruta) ? ruta : 'inicio';
-  if (s.rol !== 'TRABAJADOR' && ruta === 'nominas' && CONFIG.PRUEBAS) { pestana = 'nominas'; subNom = 'pendientes'; return vistaRRHH(); }
+  if (s.rol !== 'TRABAJADOR' && ruta === 'nominas') { pestana = 'nominas'; subNom = 'pendientes'; return vistaRRHH(); }
   if (s.rol === 'TRABAJADOR') return navegar(destino);
   if (destino === 'equipo' && s.esJefe && !s.tokenTrabajador) pestana = 'miequipo';
   else if (s.tokenTrabajador) { pestana = 'micuenta'; seccionMiCuenta = destino; }
