@@ -77,3 +77,39 @@ test('salarios por tramos (como la macro de la 14-100) y otras asignaciones del 
   S.guardarOtrasAsignaciones(repo, ctx, rrhh, '2026-11-2', [{ clave: 'V12345678', monto: 2000 }], 'resumen 2Q bis.pdf');   // reemplaza
   assert.equal(S.historialSalarios(repo, ctx, rrhh, 'V12345678').data.meses.find((m) => m.mes === '2026-11').otras, 3000);
 });
+
+test('AR-I del año: RRHH la abre, el colaborador la entrega con su porcentaje y una subida de salario pide la variación', () => {
+  const e = escenario(Date.UTC(2027, 0, 5, 15)), { repo, ctx, cargar } = e;
+  cargar([{ ...ANA, salarioMensual: 3000 }, { cedula: 'V234567891', nombre: 'BETO GOMEZ', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2024', salarioMensual: 2000 }]);
+  S.guardarOtrasAsignaciones(repo, ctx, e.rrhh, '2026-12-2', [{ clave: 'V12345678', monto: 27000 }], 'resumen.pdf');
+  assert.match(S.abrirAri(repo, ctx, e.rrhh, { anio: 2027, ut: 43, hasta: '2026-12-01' }).message, /fecha límite/);
+  const ab = S.abrirAri(repo, ctx, e.rrhh, { anio: 2027, ut: '43', hasta: '2027-01-31' });
+  assert.equal(ab.ok, true, JSON.stringify(ab)); assert.equal(ab.data.personas, 2);
+  assert.equal(repo.st.notificaciones.filter((n) => n.tipo === 'ARI').length, 2);
+  assert.equal(S.abrirAri(repo, ctx, e.rrhh, { anio: 2027, ut: 43, hasta: '2027-01-31' }).code, 'DUPLICADO');
+  const ana = S.iniciarSesion(repo, ctx, '12345678').data.token;
+  const m = S.miAri(repo, ctx, ana).data.pendiente;
+  assert.equal(m.tipo, 'INICIAL'); assert.equal(m.salarioMensual, 3000); assert.equal(m.otrasPromedio, 27000);
+  assert.equal(m.aniosServicio, 6); assert.equal(m.estimacion.diasBono, 20);
+  assert.equal(m.estimacion.total, 36000 + 324000 + 120000 + 20000);           // diario 1.000 × (120 utilidades + 20 bono)
+  assert.match(S.enviarAri(repo, ctx, ana, m.id, { remuneraciones: [0], unico: true, cargas: 0 }).message, /cuánto estimas/);
+  assert.match(S.enviarAri(repo, ctx, ana, m.id, { remuneraciones: [500000], unico: false, cargas: 0 }).message, /al menos un desgravamen/);
+  const env = S.enviarAri(repo, ctx, ana, m.id, { remuneraciones: ['3.000.000,00'], unico: true, cargas: 2 });
+  assert.equal(env.ok, true, JSON.stringify(env)); assert.equal(env.data.resultado.J, 32.33);   // igual al Excel
+  assert.equal(S.miAri(repo, ctx, ana).data.pendiente, null);
+  const panel = S.panelAri(repo, ctx, e.rrhh, 'ARI-2027').data;
+  assert.deepEqual(panel.filas.map((f) => [f.nombre, f.porcentaje, !!f.pendiente]), [['ANA PEREZ', 32.33, false], ['BETO GOMEZ', null, true]]);
+  assert.equal(S.recordarAri(repo, ctx, e.rrhh, 'ARI-2027').data.avisados, 1);
+  // sube el salario de Ana en febrero: se le pide la variación (a Beto no, no la ha entregado)
+  ctx.reloj.t = Date.UTC(2027, 1, 3, 15);
+  cargar([{ ...ANA, salarioMensual: 4000 }, { cedula: 'V234567891', nombre: 'BETO GOMEZ', organizacion: 'PROSEIN CENTRAL', fechaInicio: '01/01/2024', salarioMensual: 2500 }]);
+  const v = S.miAri(repo, ctx, S.iniciarSesion(repo, ctx, '12345678').data.token).data.pendiente;
+  assert.equal(v.tipo, 'VARIACION'); assert.match(v.motivo, /de Bs\. 3000 a Bs\. 4000/);
+  assert.equal(v.percibido, 3000);                                               // enero 2027 ya cobrado
+  const ana2 = S.iniciarSesion(repo, ctx, '12345678').data.token;
+  const ev = S.enviarAri(repo, ctx, ana2, v.id, { remuneraciones: [3500000], unico: true, cargas: 2, retenido: 80000, percibido: 300000 });
+  assert.equal(ev.ok, true, JSON.stringify(ev)); assert.ok(ev.data.resultado.K > 0);
+  assert.equal(S.panelAri(repo, ctx, e.rrhh, 'ARI-2027').data.filas[0].porcentaje, ev.data.resultado.K);   // vale la variación
+  assert.equal(S.pedirVariacionAri(repo, ctx, e.rrhh, 'ARI-2027', 3).data.pedidas, 1);                   // marzo: solo Ana
+  assert.equal(S.pedirVariacionAri(repo, ctx, e.rrhh, 'ARI-2027', 4).code, 'VALIDACION');
+});

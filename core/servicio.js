@@ -23,6 +23,7 @@
   var Omega = isNode ? require('./omega.js') : dependencia(raiz, 'Omega');
   var Comisiones = isNode ? require('./comisiones.js') : dependencia(raiz, 'Comisiones');
   var Perfil = isNode ? require('./perfil.js') : dependencia(raiz, 'Perfil');
+  var Ari = isNode ? require('./ari.js') : dependencia(raiz, 'Ari');
 
   var HORAS_SESION = 8;
   var MAX_FALLOS_CEDULA = 5;
@@ -2530,7 +2531,190 @@
     return ok({ periodo: periodo, guardados: lista.length });
   }
 
+  /* ---------- Planilla AR-I (retención de ISLR) ---------- */
+
+  function vistaAriPeriodo(p, hoy) { return { id: p.id, anio: p.anio, ut: p.ut, hasta: p.hasta, estado: p.estado, creada: p.creada, vencida: p.estado === 'ABIERTA' && hoy > p.hasta }; }
+  function vistaAri(a) {
+    return { id: a.id, periodo: a.periodo, clave: a.clave, tipo: a.tipo, mes: a.mes || 0, motivo: a.motivo || '', estado: a.estado, solicitada: a.solicitada, entregada: a.entregada || 0,
+      datos: a.datos || null, resultado: a.resultado || null };
+  }
+  function ariPeriodoAbierto(repo, anio) {
+    return repo.ariPeriodos().filter(function (p) { return p.estado === 'ABIERTA' && (!anio || p.anio === anio); }).sort(function (a, b) { return b.anio - a.anio; })[0] || null;
+  }
+  /** Cargas familiares para la AR-I según «Mi perfil»: cónyuge o concubino, hijos y padres registrados. */
+  function cargasDelPerfil(repo, clave) {
+    var p = repo.perfil ? repo.perfil(clave) : null, fam = (p && p.datos && p.datos.familia) || [];
+    return fam.filter(function (f) { return /Hijo|Cónyuge|Concubino|Padre|Madre/.test(f.parentesco || ''); }).length;
+  }
+  function crearSolicitudesAri(repo, ctx, periodo, claves, tipo, mes, motivo) {
+    var ya = {}, ahora = ctx.ahora(), lista = [];
+    repo.ariSolicitudes().forEach(function (a) { if (a.periodo === periodo.id && a.estado === 'PENDIENTE') ya[a.clave] = true; });
+    claves.forEach(function (k) {
+      if (ya[k]) return;
+      lista.push({ id: repo.nuevoIdAri(), periodo: periodo.id, clave: k, tipo: tipo, mes: mes || 0, motivo: motivo || '', estado: 'PENDIENTE', solicitada: ahora, entregada: 0, datos: null, resultado: null });
+    });
+    if (lista.length) repo.guardarAriSolicitudes(lista);
+    return lista;
+  }
+
+  /** RRHH abre la AR-I de un año: se la pide a todos los activos (fecha límite y valor de la U.T.). */
+  function abrirAri(repo, ctx, token, d) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    d = d || {};
+    var anio = Number(d.anio), ut = Number(String(d.ut || '').replace(',', '.')), hoy = hoyCaracas(ctx);
+    if (!(anio >= 2024 && anio <= 2100)) return err('VALIDACION', 'Elige el año gravable.');
+    if (!(ut > 0)) return err('VALIDACION', 'Escribe el valor de la unidad tributaria del año.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d.hasta || '')) || d.hasta < hoy) return err('VALIDACION', 'La fecha límite debe ser hoy o una fecha futura.');
+    if (repo.ariPeriodos().some(function (p) { return p.anio === anio; })) return err('DUPLICADO', 'La AR-I ' + anio + ' ya está abierta.');
+    var p = { id: 'ARI-' + anio, anio: anio, ut: Calculo.redondear2(ut), hasta: d.hasta, estado: 'ABIERTA', creada: ctx.ahora(), por: s.clave };
+    repo.guardarAriPeriodo(p);
+    var claves = activosConCedula(repo).map(function (e) { return Empleados.claveCedula(e); });
+    crearSolicitudesAri(repo, ctx, p, claves, 'INICIAL', 0, '');
+    notificar(repo, ctx, claves, { tipo: 'ARI', ruta: 'ari', titulo: 'Llena tu planilla AR-I ' + anio, texto: 'Con ella se calcula la retención del ISLR de tu salario. Tienes hasta el ' + fechaCorta(d.hasta) + '.' });
+    repo.log('ARI_ABIERTA', s.clave, p.id + ' · ' + claves.length);
+    return ok(Object.assign(vistaAriPeriodo(p, hoy), { personas: claves.length }));
+  }
+
+  /** RRHH pide la variación de un mes (marzo, junio, septiembre o diciembre) a quienes ya entregaron la AR-I del año. */
+  function pedirVariacionAri(repo, ctx, token, periodoId, mes) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var p = repo.ariPeriodos().filter(function (x) { return x.id === periodoId; })[0];
+    if (!p || p.estado !== 'ABIERTA') return err('NO_ENCONTRADO', 'Esa AR-I no está abierta.');
+    mes = Number(mes);
+    if (!Ari.MESES_VARIACION[mes]) return err('VALIDACION', 'La variación es de marzo, junio, septiembre o diciembre.');
+    var entregaron = {}; repo.ariSolicitudes().forEach(function (a) { if (a.periodo === p.id && a.estado === 'ENTREGADA') entregaron[a.clave] = true; });
+    var claves = activosConCedula(repo).map(function (e) { return Empleados.claveCedula(e); }).filter(function (k) { return entregaron[k]; });
+    var nuevas = crearSolicitudesAri(repo, ctx, p, claves, 'VARIACION', mes, 'Variación de ' + Ari.MESES_VARIACION[mes].toLowerCase());
+    notificar(repo, ctx, nuevas.map(function (a) { return a.clave; }), { tipo: 'ARI', ruta: 'ari', titulo: 'Actualiza tu planilla AR-I', texto: 'Revisa tu estimación del año para la variación de ' + Ari.MESES_VARIACION[mes].toLowerCase() + '.' });
+    repo.log('ARI_VARIACION', s.clave, p.id + ' · ' + mes + ' · ' + nuevas.length);
+    return ok({ pedidas: nuevas.length });
+  }
+
+  /** Al subir el salario (carga del Detalle): pide la variación de la AR-I a quien ya la entregó este año. */
+  function variacionesPorAumento(repo, ctx, aumentos) {
+    if (!repo.ariPeriodos) return;
+    var p = ariPeriodoAbierto(repo, Number(hoyCaracas(ctx).slice(0, 4)));
+    if (!p) return;
+    var entregaron = {}; repo.ariSolicitudes().forEach(function (a) { if (a.periodo === p.id && a.estado === 'ENTREGADA') entregaron[a.clave] = true; });
+    var mes = Number(hoyCaracas(ctx).slice(5, 7));
+    aumentos.filter(function (x) { return entregaron[x.clave]; }).forEach(function (x) {
+      var n = crearSolicitudesAri(repo, ctx, p, [x.clave], 'VARIACION', mes, 'Aumento de salario: de Bs. ' + x.antes + ' a Bs. ' + x.ahora);
+      if (n.length) notificar(repo, ctx, [x.clave], { tipo: 'ARI', ruta: 'ari', titulo: 'Tu salario aumentó: actualiza tu AR-I', texto: 'Revisa tu estimación del año para que la retención del ISLR sea la correcta.' });
+    });
+  }
+
+  /** Lo que ve el colaborador: su AR-I pendiente (con los datos precalculados) y las que ya entregó. */
+  function miAri(repo, ctx, token) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var emp = repo.empleadoPorClave(s.clave);
+    if (!emp || emp.estado === 'Inactivo') return ok({ pendiente: null, entregadas: [] });
+    var hoy = hoyCaracas(ctx), periodos = {}; repo.ariPeriodos().forEach(function (p) { periodos[p.id] = p; });
+    var mias = repo.ariSolicitudes().filter(function (a) { return a.clave === s.clave; }).sort(function (a, b) { return b.solicitada - a.solicitada; });
+    var pend = mias.filter(function (a) { return a.estado === 'PENDIENTE' && periodos[a.periodo] && periodos[a.periodo].estado === 'ABIERTA'; })[0] || null;
+    var entregadas = mias.filter(function (a) { return a.estado === 'ENTREGADA'; });
+    var prev = null;
+    if (pend) {
+      var p = periodos[pend.periodo], f = emp.fechaIngreso, anios = f ? Number(hoy.slice(0, 4)) - f.y - (hoy.slice(5) < ('0' + f.m).slice(-2) + '-' + ('0' + f.d).slice(-2) ? 1 : 0) : 0;
+      var param = repo.parametros(), sal = salarioActual(repo, emp), otras = otrasPromedio(repo, s.clave, 6);
+      var anterior = entregadas.filter(function (a) { return a.periodo === pend.periodo; })[0];
+      var percibido = 0;
+      repo.salariosMes().forEach(function (x) { if (x.clave === s.clave && x.mes.slice(0, 4) === String(p.anio) && x.mes < hoy.slice(0, 7)) percibido += Number(x.salario) || 0; });
+      Object.keys(otrasPorMes(repo, s.clave)).forEach(function (m) { if (m.slice(0, 4) === String(p.anio) && m < hoy.slice(0, 7)) percibido += otrasPorMes(repo, s.clave)[m]; });
+      prev = {
+        periodo: vistaAriPeriodo(p, hoy), estimacion: Ari.estimarRemuneracion({ salarioMensual: sal, otrasPromedio: otras, diasUtilidades: param.diasUtilidades, aniosServicio: anios }),
+        salarioMensual: sal, otrasPromedio: otras, aniosServicio: anios, cargasPerfil: cargasDelPerfil(repo, s.clave), anterior: anterior ? vistaAri(anterior) : null,
+        percibido: Calculo.redondear2(percibido), empresa: Empleados.empresaFideicomiso(emp),
+      };
+    }
+    return ok({ pendiente: pend ? Object.assign(vistaAri(pend), prev) : null, entregadas: entregadas.map(function (a) { return Object.assign(vistaAri(a), { anio: periodos[a.periodo] ? periodos[a.periodo].anio : '' }); }),
+      persona: { nombre: emp.nombre, cedula: emp.cedulaNumero, letra: emp.cedulaLetra, empresa: Empleados.empresaFideicomiso(emp) } });
+  }
+
+  /** El colaborador entrega su AR-I: se calcula y queda guardada con el porcentaje de retención. */
+  function enviarAri(repo, ctx, token, id, datos) {
+    var s = leerToken(ctx, token, ['TRABAJADOR']);
+    if (!s) return err('SESION', 'Tu sesión venció. Entra de nuevo.');
+    var a = repo.ariSolicitudes().filter(function (x) { return x.id === id && x.clave === s.clave; })[0];
+    if (!a) return err('NO_ENCONTRADO', 'No encontramos esa solicitud de AR-I.');
+    if (a.estado !== 'PENDIENTE') return err('TRANSICION', 'Esa AR-I ya fue entregada.');
+    var p = repo.ariPeriodos().filter(function (x) { return x.id === a.periodo; })[0];
+    if (!p || p.estado !== 'ABIERTA') return err('CERRADA', 'La AR-I ' + (p ? p.anio : '') + ' ya está cerrada.');
+    var d = datos || {};
+    var num = function (v) { var x = Number(String(v == null ? '' : v).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isFinite(x) && x >= 0 ? Calculo.redondear2(x) : NaN; };
+    var rem = [0, 1, 2, 3].map(function (i) { return num((d.remuneraciones || [])[i] || 0); });
+    var des = {}; Ari.DESGRAVAMENES.forEach(function (x) { des[x.id] = d.unico ? 0 : num((d.desgravamenes || {})[x.id] || 0); });
+    var cargas = Number(d.cargas), retenidoDeMas = num(d.retenidoDeMas || 0);
+    var malos = rem.concat(Object.keys(des).map(function (k) { return des[k]; }), [retenidoDeMas]).some(function (x) { return isNaN(x); });
+    if (malos) return err('VALIDACION', 'Revisa los montos: escribe solo números.');
+    if (!(rem[0] > 0)) return err('VALIDACION', 'Escribe cuánto estimas cobrar en el año en la empresa.');
+    if (!(cargas >= 0 && cargas <= 20 && Math.floor(cargas) === cargas)) return err('VALIDACION', 'Revisa la cantidad de cargas familiares.');
+    if (!d.unico && !Object.keys(des).some(function (k) { return des[k] > 0; })) return err('VALIDACION', 'Escribe al menos un desgravamen, o elige el desgravamen único.');
+    var variacion = null;
+    if (a.tipo === 'VARIACION') {
+      var ret = num(d.retenido || 0), per = num(d.percibido || 0);
+      if (isNaN(ret) || isNaN(per)) return err('VALIDACION', 'Revisa lo retenido y lo percibido hasta la fecha.');
+      variacion = { retenido: ret, percibido: per };
+    }
+    var calc = { ut: p.ut, remuneraciones: rem, desgravamenes: des, cargas: cargas, retenidoDeMas: retenidoDeMas, variacion: variacion };
+    var r = Ari.calcular(calc);
+    a.datos = Object.assign({ unico: !!d.unico }, calc); a.resultado = r; a.estado = 'ENTREGADA'; a.entregada = ctx.ahora();
+    repo.guardarAriSolicitudes([a]);
+    repo.log('ARI_ENTREGADA', s.clave, a.id + ' · ' + (a.tipo === 'VARIACION' ? 'K ' + r.K : 'J ' + r.J) + '%');
+    return ok(Object.assign(vistaAri(a), { anio: p.anio }));
+  }
+
+  function listarAri(repo, ctx, token) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var hoy = hoyCaracas(ctx), sol = repo.ariSolicitudes();
+    return ok(repo.ariPeriodos().sort(function (a, b) { return b.anio - a.anio; }).map(function (p) {
+      var de = sol.filter(function (a) { return a.periodo === p.id; });
+      return Object.assign(vistaAriPeriodo(p, hoy), { entregadas: de.filter(function (a) { return a.estado === 'ENTREGADA'; }).length, pendientes: de.filter(function (a) { return a.estado === 'PENDIENTE'; }).length });
+    }));
+  }
+
+  /** RRHH: cada colaborador con su última AR-I del año (porcentaje vigente) y si tiene una pendiente. */
+  function panelAri(repo, ctx, token, periodoId) {
+    if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+    var p = repo.ariPeriodos().filter(function (x) { return x.id === periodoId; })[0];
+    if (!p) return err('NO_ENCONTRADO', 'No existe esa AR-I.');
+    var por = {}; repo.ariSolicitudes().forEach(function (a) { if (a.periodo === p.id) (por[a.clave] = por[a.clave] || []).push(a); });
+    var filas = activosConCedula(repo).map(function (e) {
+      var k = Empleados.claveCedula(e), lista = (por[k] || []).sort(function (a, b) { return (b.entregada || 0) - (a.entregada || 0); });
+      var ult = lista.filter(function (a) { return a.estado === 'ENTREGADA'; })[0], pend = lista.filter(function (a) { return a.estado === 'PENDIENTE'; })[0];
+      var pct = ult ? (ult.tipo === 'VARIACION' && ult.resultado.K != null ? ult.resultado.K : ult.resultado.J) : null;
+      return Object.assign({ clave: k, nombre: e.nombre, cedula: e.cedulaNumero, letra: e.cedulaLetra, cargo: e.puesto || '', porcentaje: pct, ultima: ult ? vistaAri(ult) : null,
+        pendiente: pend ? { tipo: pend.tipo, mes: pend.mes, motivo: pend.motivo, solicitada: pend.solicitada } : null }, ubicacion(e));
+    }).sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+    return ok({ periodo: vistaAriPeriodo(p, hoyCaracas(ctx)), filas: filas });
+  }
+
+  function recordarAri(repo, ctx, token, periodoId) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var r = panelAri(repo, ctx, token, periodoId);
+    if (!r.ok) return r;
+    var faltan = r.data.filas.filter(function (f) { return f.pendiente; }).map(function (f) { return f.clave; });
+    if (faltan.length) notificar(repo, ctx, faltan, { tipo: 'ARI', ruta: 'ari', titulo: 'Falta tu planilla AR-I', texto: 'Llénala en el CAC: toma pocos minutos.' });
+    repo.log('ARI_RECORDATORIO', s.clave, periodoId + ' · ' + faltan.length);
+    return ok({ avisados: faltan.length });
+  }
+
+  function cerrarAri(repo, ctx, token, periodoId) {
+    var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+    if (!s) return err('SESION', 'No autorizado.');
+    var p = repo.ariPeriodos().filter(function (x) { return x.id === periodoId; })[0];
+    if (!p) return err('NO_ENCONTRADO', 'No existe esa AR-I.');
+    p.estado = p.estado === 'ABIERTA' ? 'CERRADA' : 'ABIERTA';
+    repo.guardarAriPeriodo(p);
+    repo.log('ARI_' + p.estado, s.clave, p.id);
+    return ok(vistaAriPeriodo(p, hoyCaracas(ctx)));
+  }
+
   var api = {
+    abrirAri: abrirAri, pedirVariacionAri: pedirVariacionAri, miAri: miAri, enviarAri: enviarAri, listarAri: listarAri, panelAri: panelAri, recordarAri: recordarAri, cerrarAri: cerrarAri,
     historialSalarios: historialSalarios, empresasIvss: empresasIvss, guardarEmpresasIvss: guardarEmpresasIvss, guardarTramoSalario: guardarTramoSalario, guardarOtrasAsignaciones: guardarOtrasAsignaciones,
     avisosCelebraciones: function (repo, ctx) { return ok(avisosCelebraciones(repo, ctx)); }, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes, reenviarCelebracion: reenviarCelebracion,
     miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,

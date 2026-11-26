@@ -6,9 +6,9 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-25.1';
+var VERSION = '2026-11-26.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
-var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
+var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Perfil', 'Ari', 'Servicio'];
 
 /** Qué módulos están cargados (se nombran uno a uno: no se busca por texto en el global). */
 function modulosCargados_() {
@@ -20,6 +20,7 @@ function modulosCargados_() {
     Planificacion: typeof Planificacion !== 'undefined' && !!Planificacion,
     Omega: typeof Omega !== 'undefined' && !!Omega,
     Comisiones: typeof Comisiones !== 'undefined' && !!Comisiones,
+    Perfil: typeof Perfil !== 'undefined' && !!Perfil, Ari: typeof Ari !== 'undefined' && !!Ari,
     Servicio: typeof Servicio !== 'undefined' && !!Servicio,
   };
 }
@@ -60,6 +61,8 @@ var HOJAS = {
   CAMBIOS_PERFIL: ['cuando', 'clave', 'nombre', 'seccion', 'campo', 'antes', 'despues'],
   CAMPANAS_DATOS: ['id', 'titulo', 'estado', 'creada', 'por', 'cerrada', 'detalle'],
   SALARIOS_MES: ['clave', 'mes', 'salario', 'fuente', 'actualizado'],
+  ARI_PERIODOS: ['id', 'anio', 'ut', 'hasta', 'estado', 'creada', 'por'],
+  ARI_SOLICITUDES: ['id', 'periodo', 'clave', 'tipo', 'mes', 'motivo', 'estado', 'solicitada', 'entregada', 'datos', 'resultado'],
   EMPRESAS_IVSS: ['razonSocial', 'numeroIvss', 'direccion', 'representante', 'ciRepresentante', 'telefono', 'correo', 'rif', 'firmante', 'cargoFirmante', 'ciFirmante', 'lugar', 'empresaCac'],
   OTRAS_ASIG: ['clave', 'periodo', 'monto', 'fuente', 'actualizado'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
@@ -163,6 +166,14 @@ var RUTAS_RRHH = {
   rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
   cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
   datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
+  abrirAri: function (repo, ctx, d) { return Servicio.abrirAri(repo, ctx, d.token, d); },
+  pedirVariacionAri: function (repo, ctx, d) { return Servicio.pedirVariacionAri(repo, ctx, d.token, d.periodo, d.mes); },
+  miAri: function (repo, ctx, d) { return Servicio.miAri(repo, ctx, d.token); },
+  enviarAri: function (repo, ctx, d) { return Servicio.enviarAri(repo, ctx, d.token, d.id, d.datos); },
+  listarAri: function (repo, ctx, d) { return Servicio.listarAri(repo, ctx, d.token); },
+  panelAri: function (repo, ctx, d) { return Servicio.panelAri(repo, ctx, d.token, d.periodo); },
+  recordarAri: function (repo, ctx, d) { return Servicio.recordarAri(repo, ctx, d.token, d.periodo); },
+  cerrarAri: function (repo, ctx, d) { return Servicio.cerrarAri(repo, ctx, d.token, d.periodo); },
   empresasIvss: function (repo, ctx, d) { return Servicio.empresasIvss(repo, ctx, d.token); },
   guardarEmpresasIvss: function (repo, ctx, d) { return Servicio.guardarEmpresasIvss(repo, ctx, d.token, d.empresas); },
   historialSalarios: function (repo, ctx, d) { return Servicio.historialSalarios(repo, ctx, d.token, d.clave, d.hasta); },
@@ -233,7 +244,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, historialSalarios: 1, empresasIvss: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, historialSalarios: 1, empresasIvss: 1, miAri: 1, listarAri: 1, panelAri: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -784,6 +795,26 @@ function crearRepo_() {
         escribirFila_('ALIAS_COMISIONES', { _fila: ya ? ya._fila : undefined, alias: k, clave: mapa[k], actualizado: ahora });
       });
     },
+    ariPeriodos: function () {
+      asegurarHoja_('ARI_PERIODOS');
+      return leer_('ARI_PERIODOS').filter(function (f) { return texto_(f.id); }).map(function (f) {
+        return { id: texto_(f.id), anio: Number(f.anio) || 0, ut: Number(f.ut) || 0, hasta: fechaIsoTexto_(f.hasta), estado: texto_(f.estado), creada: Number(f.creada) || 0, por: texto_(f.por) };
+      });
+    },
+    guardarAriPeriodo: function (p) { asegurarHoja_('ARI_PERIODOS'); upsert_('ARI_PERIODOS', [p], function (x) { return x.id; }, function (f) { return texto_(f.id); }); },
+    ariSolicitudes: function () {
+      asegurarHoja_('ARI_SOLICITUDES');
+      return leer_('ARI_SOLICITUDES').filter(function (f) { return texto_(f.id); }).map(function (f) {
+        return { id: texto_(f.id), periodo: texto_(f.periodo), clave: texto_(f.clave), tipo: texto_(f.tipo), mes: Number(f.mes) || 0, motivo: texto_(f.motivo), estado: texto_(f.estado),
+          solicitada: Number(f.solicitada) || 0, entregada: Number(f.entregada) || 0, datos: jsonSeguro_(f.datos, null), resultado: jsonSeguro_(f.resultado, null) };
+      });
+    },
+    guardarAriSolicitudes: function (lista) {
+      asegurarHoja_('ARI_SOLICITUDES');
+      upsert_('ARI_SOLICITUDES', lista.map(function (a) { return Object.assign({}, a, { datos: a.datos ? JSON.stringify(a.datos) : '', resultado: a.resultado ? JSON.stringify(a.resultado) : '' }); }),
+        function (x) { return x.id; }, function (f) { return texto_(f.id); });
+    },
+    nuevoIdAri: function () { return 'AR-' + Utilities.getUuid().slice(0, 8).toUpperCase(); },
     empresasIvss: function () { asegurarHoja_('EMPRESAS_IVSS'); return leer_('EMPRESAS_IVSS').filter(function (f) { return texto_(f.razonSocial); }).map(function (f) { var o = {}; HOJAS.EMPRESAS_IVSS.forEach(function (c) { o[c] = texto_(f[c]); }); return o; }); },
     guardarEmpresasIvss: function (lista) {
       asegurarHoja_('EMPRESAS_IVSS');
@@ -922,6 +953,11 @@ function upsert_(nombre, lista, claveNueva, claveFila) {
   h.getRange(1, 1, 1, cab.length).setValues([cab]);
   if (datos.length) { var r = h.getRange(2, 1, datos.length, cab.length); r.setNumberFormat('@'); r.setValues(datos); }
   invalidar_(nombre);
+}
+/** «aaaa-mm-dd» aunque Sheets lo haya convertido en fecha. */
+function fechaIsoTexto_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, 'America/Caracas', 'yyyy-MM-dd');
+  return texto_(v);
 }
 /** «aaaa-mm» o «aaaa-mm-q» aunque Sheets lo haya convertido en fecha. */
 function periodoTexto_(v) {

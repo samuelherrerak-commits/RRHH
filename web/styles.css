@@ -453,3 +453,8 @@ details.item[open] { gap: var(--s3); }
 .tabla-sal td.manual, .leyenda-sal .manual { color: var(--espera); font-weight: 600; }
 .tabla-sal td.falta, .leyenda-sal .falta { background: var(--error-velo); color: var(--error); }
 .leyenda-sal span { padding: 0 6px; border-radius: 4px; }
+/* AR-I */
+.desglose { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; background: var(--fondo); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); font-size: 14px; }
+.desglose b { text-align: right; color: var(--carbon); font-variant-numeric: tabular-nums; }
+.resultado-ari { display: grid; justify-items: center; gap: 2px; background: var(--marca); color: #fff; border-radius: var(--radio); padding: var(--s4); text-align: center; }
+.resultado-ari span { font-size: 14px; opacity: .8; } .resultado-ari b { font-size: 40px; font-weight: 700; line-height: 1.1; } .resultado-ari small { font-size: 12px; opacity: .75; }

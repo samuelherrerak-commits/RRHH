@@ -3,6 +3,7 @@ import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
 import { descargarForma14100 } from './forma14100-pdf.js';
+import { descargarAriPdf } from './ari-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
 import { dibujarTarjeta, descargarTarjeta } from './tarjeta.js';
 import { vincular, desvincular, estadoPush, activarPush, esIphone, registrarServiceWorker, suscritoEnOneSignal } from './push.js';
@@ -143,7 +144,7 @@ function vistaLogin() {
 // así funcionan los botones Atrás/Adelante del navegador y del celular.
 let cuenta = { cont: app, token: '', seccion: 'inicio' };
 const conToken = () => (cuenta.token ? { token: cuenta.token } : {});
-const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'perfil', 'celebracion', 'equipo'];
+const SECCIONES = ['inicio', 'constancia', 'vacaciones', 'fideicomiso', 'recibos', 'perfil', 'celebracion', 'ari', 'equipo'];
 // Fideicomiso queda en «Próximamente» para los trabajadores hasta que esté la pantalla de aportes (cambiar a true para abrirlo).
 const FIDEICOMISO_ACTIVO = true;
 const seccionDesdeHash = () => { const m = /^#\/(\w+)$/.exec(location.hash); return m && SECCIONES.includes(m[1]) ? m[1] : 'inicio'; };
@@ -218,6 +219,7 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
   else if (seccion === 'recibos') await seccionRecibos(destino);
   else if (seccion === 'perfil') await seccionPerfil(destino);
   else if (seccion === 'celebracion') await seccionCelebracion(destino);
+  else if (seccion === 'ari') await seccionAri(destino);
   else if (seccion === 'fideicomiso') await seccionFideicomiso(destino);
   else seccionInicio(destino);
   if (cont !== app && !token) destino.querySelectorAll('.volver').forEach((b) => b.remove());   // «Mi equipo» del panel de RRHH
@@ -274,6 +276,14 @@ function seccionInicio(cont) {
         <span><b>${esc(c.titulo)}</b><span>Gestión Humana te pide actualizar tus datos antes del ${esc(V().corta(c.hasta))}.</span></span>${icono('ir')}</button>`);
       cont.querySelector('.aviso-inicio').addEventListener('click', () => navegar('perfil'));
     }
+  }).catch(() => {});
+  // ¿Tiene la AR-I pendiente?
+  obtener('miAri', conToken()).then((r) => {
+    const b = cont.querySelector('.bienvenida'), p = r.ok && r.data.pendiente;
+    if (!p || !b || cont.querySelector('.aviso-ari')) return;
+    b.insertAdjacentHTML('afterend', `<button type="button" class="aviso-campana aviso-inicio aviso-ari" data-ir="ari">${icono('recibos')}
+      <span><b>${p.tipo === 'VARIACION' ? 'Actualiza tu planilla AR-I' : `Llena tu planilla AR-I ${p.periodo.anio}`}</b><span>${p.tipo === 'VARIACION' ? esc(p.motivo || 'Variación de tu estimación del año') : `Para calcular la retención del ISLR. Tienes hasta el ${esc(V().corta(p.periodo.hasta))}.`}</span></span>${icono('ir')}</button>`);
+    cont.querySelector('.aviso-ari').addEventListener('click', () => navegar('ari'));
   }).catch(() => {});
   // ¿Celebra algo hoy? Su tarjeta, arriba de todo
   obtener('miCelebracion', conToken()).then((r) => {
@@ -3246,13 +3256,14 @@ function pintarAsistente(cont) {
 let subDatos = 'campanas', campanaAbierta = '', buscaDatos = '';
 
 async function panelDatosPersonal(panel) {
-  const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes'], ['celebraciones', 'Cumpleaños y aniversarios'], ['salarios', 'Salarios e IVSS']];
+  const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes'], ['celebraciones', 'Cumpleaños y aniversarios'], ['salarios', 'Salarios e IVSS'], ['ari', 'Planilla AR-I']];
   panel.innerHTML = `<div class="submodulos" role="tablist">${SUB.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subDatos}">${t}</button>`).join('')}</div><div id="sub">${esqueleto(2)}</div>`;
   panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subDatos = b.dataset.sub; campanaAbierta = ''; editandoCamp = null; panelDatosPersonal(panel); }));
   const sub = panel.querySelector('#sub');
   if (subDatos === 'campanas') return campanaAbierta ? pintarCampana(panel, sub, campanaAbierta) : pintarCampanas(panel, sub);
   if (subDatos === 'celebraciones') return pintarCelebraciones(sub);
   if (subDatos === 'salarios') return pintarSalarios(sub);
+  if (subDatos === 'ari') return pintarAriRRHH(sub);
   const r = await obtener('datosPersonal', {});
   if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
   if (subDatos === 'cambios') return pintarCambiosPerfil(sub, r.data.cambios);
@@ -3622,4 +3633,196 @@ async function pintarEmpresasIvss(caja) {
       toast(`${x.data.length} empresas importadas.`); pintarEmpresasIvss(caja);
     } catch (e) { toast('No se pudo leer el archivo: ' + (e.message || e)); }
   });
+}
+
+/* ---------- Planilla AR-I (colaborador): paso a paso ---------- */
+
+let ariAsis = null;
+const montoTxt = (v) => (v === '' || v == null ? '' : Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+async function seccionAri(cont) {
+  cont.innerHTML = `${volver()}${esqueleto(2)}`;
+  const r = await obtener('miAri', conToken());
+  if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } cont.innerHTML = `${volver()}<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const d = r.data, p = d.pendiente;
+  if (p && (!ariAsis || ariAsis.id !== p.id)) {
+    const ant = p.anterior && p.anterior.datos;
+    ariAsis = { id: p.id, i: 0, d, v: {
+      rem: ant ? ant.remuneraciones.slice() : [p.estimacion.total, 0, 0, 0], otras: ant ? ant.remuneraciones.slice(1).some((x) => x > 0) : null,
+      unico: ant ? !!ant.unico : null, des: ant ? { ...ant.desgravamenes } : { educacion: 0, hcm: 0, medicos: 0, vivienda: 0 },
+      cargas: ant ? ant.cargas : p.cargasPerfil, retenidoDeMas: ant ? ant.retenidoDeMas : 0, retenido: '', percibido: p.percibido } };
+  }
+  if (p) return pintarAsistenteAri(cont);
+  ariAsis = null;
+  cont.innerHTML = `${volver()}<section class="tarjeta"><div><h2>Planilla AR-I</h2><p class="suave">Con la AR-I estimas lo que cobrarás en el año y se calcula el porcentaje de retención del ISLR de tu salario. Gestión Humana te avisa cuando debas llenarla.</p></div>
+    ${d.entregadas.length ? `<div class="lista">${d.entregadas.map((a, k) => `<div class="item"><div class="item-cab"><div><b>AR-I ${esc(a.anio)} · ${a.tipo === 'VARIACION' ? 'variación' : 'estimación inicial'}</b>
+      <p class="suave">Entregada el ${fechaHoraMin(a.entregada)} · retención ${a.tipo === 'VARIACION' && a.resultado.K != null ? montoTxt(a.resultado.K) : montoTxt(a.resultado.J)} %</p></div></div>
+      <div><button class="btn btn-sec btn-chico" data-pdf-ari="${k}">Descargar PDF</button></div></div>`).join('')}</div>` : '<p class="vacio">No tienes planillas AR-I pendientes.</p>'}</section>`;
+  cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+  cont.querySelectorAll('[data-pdf-ari]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => descargarAriPdf({ persona: d.persona, ari: d.entregadas[Number(b.dataset.pdfAri)] }))));
+}
+
+function pasosAri(a) {
+  const p = a.d.pendiente, v = a.v;
+  return ['intro', 'a', 'otras', ...(v.otras ? ['bcd'] : []), 'desg', ...(v.unico === false ? ['detalle'] : []), 'cargas', 'retenidoMas', ...(p.tipo === 'VARIACION' ? ['variacion'] : []), 'revisar'];
+}
+function datosAri(a) {
+  const v = a.v, p = a.d.pendiente;
+  return { ut: p.periodo.ut, remuneraciones: v.rem.map((x, i) => (i && !v.otras ? 0 : Number(x) || 0)), desgravamenes: v.unico ? {} : v.des, cargas: Number(v.cargas) || 0,
+    retenidoDeMas: Number(v.retenidoDeMas) || 0, variacion: p.tipo === 'VARIACION' ? { retenido: Number(v.retenido) || 0, percibido: Number(v.percibido) || 0 } : null };
+}
+
+function pintarAsistenteAri(cont) {
+  const a = ariAsis, p = a.d.pendiente, v = a.v, pasos = pasosAri(a);
+  a.i = Math.max(0, Math.min(a.i, pasos.length - 1));
+  const paso = pasos[a.i], total = pasos.length - 1, ultimo = paso === 'revisar', e = p.estimacion;
+  const campoBs = (nombre, valor, foco = true) => `<label class="respuesta"><span class="sr">Monto en Bs.</span><input name="${nombre}" inputmode="decimal" value="${montoTxt(valor)}" placeholder="0,00"${foco ? ' autofocus' : ''}></label>`;
+  const opciones = (attr, lista, actual) => `<div class="opciones">${lista.map(([val, txt]) => `<button type="button" class="opcion" data-${attr}="${val}" aria-pressed="${actual === (val === 'si')}">${txt}</button>`).join('')}</div>`;
+  const r = window.Ari.calcular(datosAri(a));
+  const C = {
+    intro: `<p class="kicker-perfil">AR-I ${p.periodo.anio}${p.tipo === 'VARIACION' ? ' · variación' : ''}</p><h2 class="pregunta">${p.tipo === 'VARIACION' ? 'Actualiza tu estimación del año' : 'Vamos a llenar tu planilla AR-I'}</h2>
+      <p class="suave">Con la AR-I estimas lo que cobrarás en ${p.periodo.anio} y el CAC calcula el <b>porcentaje de retención del ISLR</b> que se aplicará a tu salario. ${p.tipo === 'VARIACION' ? esc(p.motivo) + '.' : 'Son unas pocas preguntas: muchas ya vienen con una propuesta.'}</p>
+      <p class="suave">Unidad tributaria del año: <b>Bs. ${montoTxt(p.periodo.ut)}</b>. Si estimas menos de 1.000 U.T. (Bs. ${montoTxt(1000 * p.periodo.ut)}) no se te retiene.</p>`,
+    a: `<p class="kicker-perfil">A · Remuneraciones</p><h2 class="pregunta">¿Cuánto estimas cobrar en ${p.periodo.anio} en ${p.empresa === 'AIV' ? 'Austral' : 'Prosein'}?</h2>
+      <p class="suave">Incluye salario, comisiones, utilidades, bono vacacional y demás pagos (no los viáticos). Te proponemos este cálculo; ajústalo si esperas algo distinto.</p>
+      <div class="desglose"><span>Salario: Bs. ${montoTxt(p.salarioMensual)} × 12</span><b>${montoTxt(e.partes.salario)}</b>
+        <span>Otras asignaciones (promedio Bs. ${montoTxt(p.otrasPromedio)}) × 12</span><b>${montoTxt(e.partes.otras)}</b>
+        <span>Utilidades (${e.diasUtilidades} días)</span><b>${montoTxt(e.partes.utilidades)}</b>
+        <span>Bono vacacional (${e.diasBono} días)</span><b>${montoTxt(e.partes.bonoVacacional)}</b>
+        <span><b>Propuesta</b></span><b>Bs. ${montoTxt(e.total)}</b></div>${campoBs('r0', v.rem[0])}`,
+    otras: `<p class="kicker-perfil">A · Remuneraciones</p><h2 class="pregunta">¿Trabajas también en otra empresa u organismo este año?</h2><p class="suave">Por ejemplo, un segundo empleo con recibo de pago.</p>${opciones('otras', [['si', 'Sí'], ['no', 'No']], v.otras)}`,
+    bcd: `<p class="kicker-perfil">A · Remuneraciones</p><h2 class="pregunta">¿Cuánto estimas cobrar en el año en las otras empresas?</h2>
+      <div class="campos-familiar">${[1, 2, 3].map((i) => `<label>Empresa u organismo ${'bcd'[i - 1]}) (Bs.) <input name="r${i}" inputmode="decimal" value="${montoTxt(v.rem[i] || '')}" placeholder="0,00"${i === 1 ? ' autofocus' : ''}></label>`).join('')}</div>`,
+    desg: `<p class="kicker-perfil">C · Desgravámenes</p><h2 class="pregunta">¿Qué desgravamen usarás?</h2>
+      <p class="suave">El <b>desgravamen único</b> (774 U.T.) no necesita soportes y es lo más común. El <b>detallado</b> suma lo que pagues de educación, HCM, gastos médicos y vivienda: debes guardar las facturas.</p>
+      ${opciones('unico', [['si', 'Desgravamen único (774 U.T.)'], ['no', 'Desgravamen detallado']], v.unico)}`,
+    detalle: `<p class="kicker-perfil">C · Desgravámenes detallados</p><h2 class="pregunta">¿Cuánto estimas pagar en el año?</h2>
+      <div class="campos-familiar">${window.Ari.DESGRAVAMENES.map((x, i) => `<label>${esc(x.nombre)} (Bs.) <input name="d_${x.id}" inputmode="decimal" value="${montoTxt(v.des[x.id] || '')}" placeholder="0,00"${i ? '' : ' autofocus'}></label>`).join('')}</div>`,
+    cargas: `<p class="kicker-perfil">H · Rebajas</p><h2 class="pregunta">¿Cuántas cargas familiares tienes?</h2>
+      <p class="suave">Cónyuge no separado de bienes, hijos menores de 18 años (o hasta 25 si estudian, o incapacitados) y padres que dependan de ti. Cada uno rebaja 10 U.T. ${p.cargasPerfil ? `En tu perfil tienes <b>${p.cargasPerfil}</b> registrada${p.cargasPerfil === 1 ? '' : 's'}.` : ''}</p>
+      <label class="respuesta"><span class="sr">Cargas familiares</span><input name="cargas" type="number" min="0" max="20" step="1" inputmode="numeric" value="${esc(v.cargas)}" autofocus></label>`,
+    retenidoMas: `<p class="kicker-perfil">H · Rebajas</p><h2 class="pregunta">¿Te retuvieron ISLR de más en años anteriores?</h2>
+      <p class="suave">Solo si tu declaración de ISLR te dio un monto a favor (reintegro). Si no, déjalo en 0.</p>${campoBs('retenidoDeMas', v.retenidoDeMas)}`,
+    variacion: `<p class="kicker-perfil">K · Variación</p><h2 class="pregunta">¿Cuánto llevas cobrado y retenido este año?</h2>
+      <p class="suave">Los encuentras en tus recibos de pago. Te proponemos lo cobrado según el CAC.</p>
+      <div class="campos-familiar"><label>Remuneraciones percibidas hasta la fecha (Bs.) <input name="percibido" inputmode="decimal" value="${montoTxt(v.percibido)}" autofocus></label>
+        <label>Impuesto retenido hasta la fecha (Bs.) <input name="retenido" inputmode="decimal" value="${montoTxt(v.retenido)}" placeholder="0,00"></label></div>`,
+    revisar: `<h2 class="pregunta">Revisa tu AR-I</h2>
+      <div class="resultado-ari"><span>Porcentaje de retención${p.tipo === 'VARIACION' ? ' (variación)' : ''}</span><b>${montoTxt(p.tipo === 'VARIACION' && r.K != null ? r.K : r.J)} %</b>${r.sobreUmbral ? '' : '<small>Estimas menos de 1.000 U.T.: no se te retiene.</small>'}</div>
+      <div class="desglose">
+        <span>A · Total que estimas percibir</span><b>Bs. ${montoTxt(r.A)}</b><span>B · En unidades tributarias</span><b>${montoTxt(r.B)} U.T.</b>
+        <span>${r.unico ? 'E · Desgravamen único' : 'D · Desgravámenes detallados'}</span><b>${montoTxt(r.unico ? r.E : r.D)} U.T.</b>
+        <span>G · Impuesto según la tarifa</span><b>${montoTxt(r.G)} U.T.</b><span>H · Rebajas (personal + ${r.cargas} carga${r.cargas === 1 ? '' : 's'})</span><b>${montoTxt(r.H)} U.T.</b>
+        <span>I · Impuesto estimado del año</span><b>${montoTxt(r.I)} U.T.</b></div>
+      <div class="revisa">${[['Lo que estimas cobrar', 1], ['Desgravamen', pasos.indexOf('desg')], ['Cargas familiares', pasos.indexOf('cargas')]].map(([t2, idx]) => `<div class="revisa-fila"><div><span class="suave">${t2}</span></div><button type="button" class="enlace" data-ir-paso="${idx}">Cambiar</button></div>`).join('')}</div>
+      <p class="suave">Al entregarla, Gestión Humana recibe tu AR-I y aplicará este porcentaje en tus pagos. Podrás descargarla en PDF para firmarla.</p>`,
+  };
+  cont.innerHTML = `<div><button class="btn btn-sec btn-chico" type="button" id="salir-ari">✕ Salir</button></div>
+    <form class="tarjeta asistente" id="fari" novalidate>
+      <div class="avance-asis"><div class="barra-avance"><span style="width:${Math.round((a.i / total) * 100)}%"></span></div><span class="suave">${ultimo ? 'Último paso' : `Paso ${a.i + 1} de ${total}`}</span></div>
+      ${C[paso]}
+      <div class="error-msg" id="err-ari" hidden></div>
+      <div class="fila nav-asis">${a.i > 0 ? '<button class="btn btn-sec" type="button" id="atras-ari">Atrás</button>' : ''}<button class="btn" type="submit">${ultimo ? 'Entregar mi AR-I' : paso === 'intro' ? 'Empezar' : 'Siguiente'}</button></div>
+    </form>`;
+  window.scrollTo(0, 0);
+  const f = cont.querySelector('#fari'), err = cont.querySelector('#err-ari');
+  const ir = (i) => { a.i = i; pintarAsistenteAri(cont); };
+  const num = (n) => { const x = numVe(f.elements[n] ? f.elements[n].value : ''); return x === '' ? 0 : x; };
+  const tomar = () => {
+    if (paso === 'a') { const x = num('r0'); if (!(x > 0)) return 'Escribe cuánto estimas cobrar en el año.'; v.rem[0] = x; }
+    if (paso === 'otras' && v.otras == null) return 'Elige una opción.';
+    if (paso === 'bcd') { [1, 2, 3].forEach((i) => { v.rem[i] = num('r' + i); }); if (![1, 2, 3].some((i) => v.rem[i] > 0)) return 'Escribe al menos un monto, o vuelve y responde que no.'; }
+    if (paso === 'desg' && v.unico == null) return 'Elige una opción.';
+    if (paso === 'detalle') { window.Ari.DESGRAVAMENES.forEach((x) => { v.des[x.id] = num('d_' + x.id); }); if (!Object.values(v.des).some((x) => x > 0)) return 'Escribe al menos un monto, o elige el desgravamen único.'; }
+    if (paso === 'cargas') { const c = Number(f.cargas.value); if (!(c >= 0 && c <= 20 && Math.floor(c) === c)) return 'Escribe un número de 0 a 20.'; v.cargas = c; }
+    if (paso === 'retenidoMas') v.retenidoDeMas = num('retenidoDeMas');
+    if (paso === 'variacion') { v.percibido = num('percibido'); v.retenido = num('retenido'); }
+    if ([v.rem[0], v.retenidoDeMas].some((x) => !isFinite(x))) return 'Revisa el monto: escribe solo números.';
+    return '';
+  };
+  cont.querySelector('#salir-ari').addEventListener('click', () => navegar('inicio'));
+  cont.querySelector('#atras-ari')?.addEventListener('click', () => { tomar(); ir(a.i - 1); });
+  cont.querySelectorAll('[data-otras]').forEach((b) => b.addEventListener('click', () => { v.otras = b.dataset.otras === 'si'; ir(a.i + 1); }));
+  cont.querySelectorAll('[data-unico]').forEach((b) => b.addEventListener('click', () => { v.unico = b.dataset.unico === 'si'; ir(a.i + 1); }));
+  cont.querySelectorAll('[data-ir-paso]').forEach((b) => b.addEventListener('click', () => ir(Number(b.dataset.irPaso))));
+  f.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const e2 = tomar(); if (e2) return errorEn(err, e2);
+    if (!ultimo) return ir(a.i + 1);
+    conBoton(ev.submitter || f.querySelector('button[type=submit]'), async () => {
+      const dd = datosAri(a);
+      const x = await llamar('enviarAri', { id: a.id, datos: { ...dd, unico: !!v.unico, retenido: v.retenido, percibido: v.percibido }, ...conToken() });
+      if (!x.ok) { if (x.code === 'SESION') { toast(x.message); return arrancar(); } return errorEn(err, x.message); }
+      ariAsis = null;
+      const persona = a.d.persona;
+      cont.innerHTML = `${volver()}<section class="tarjeta"><h2>¡Listo! Entregaste tu AR-I ${esc(x.data.anio)}</h2>
+        <div class="resultado-ari"><span>Porcentaje de retención</span><b>${montoTxt(x.data.tipo === 'VARIACION' && x.data.resultado.K != null ? x.data.resultado.K : x.data.resultado.J)} %</b></div>
+        <p class="suave">Descárgala en PDF y fírmala si Gestión Humana te la pide firmada.</p><div><button class="btn" id="pdf-ari">Descargar mi AR-I (PDF)</button></div></section>`;
+      cont.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.ir)));
+      cont.querySelector('#pdf-ari').addEventListener('click', (e3) => conBoton(e3.currentTarget, () => descargarAriPdf({ persona, ari: x.data })));
+      toast('AR-I entregada.');
+    });
+  });
+}
+
+/* ---------- Planilla AR-I (Gestión Humana) ---------- */
+
+let ariRRHH = '';
+async function pintarAriRRHH(sub) {
+  const r = await llamar('listarAri', {});
+  if (!r.ok) { sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const periodos = r.data, hoy = fechaIsoLocal(), anioSug = new Date().getMonth() >= 9 ? new Date().getFullYear() + 1 : new Date().getFullYear();
+  if (!ariRRHH && periodos.length) ariRRHH = periodos[0].id;
+  sub.innerHTML = `<div class="dos-col"><div class="col"><section class="tarjeta"><div><h2>Abrir la AR-I del año</h2><p class="suave">Se la pide a todos los colaboradores activos: les llega el aviso y la llenan paso a paso en el CAC. Cuando suba un salario (al cargar el Detalle), el CAC le pide la variación a esa persona.</p></div>
+      <form id="fari-abrir" class="form-vac" novalidate><div class="fila">
+        <label class="grow">Año gravable <input name="anio" type="number" value="${anioSug}" min="2024" max="2100"></label>
+        <label class="grow">Valor de la U.T. (Bs.) <input name="ut" inputmode="decimal" value="43"></label>
+        <label class="grow">Fecha límite <input name="hasta" type="date" min="${hoy}" value="${fechaIsoLocal(21)}"></label></div>
+        <div class="error-msg" id="err-ari-a" hidden></div><div><button class="btn" type="submit">Abrir AR-I y avisar</button></div></form></section></div>
+    <div class="col"><section class="tarjeta"><h2>AR-I</h2>${periodos.length ? `<div class="lista">${periodos.map((p) => `<div class="item"><div class="item-cab"><div><b>AR-I ${p.anio}</b><p class="suave">U.T. Bs. ${montoTxt(p.ut)} · hasta el ${esc(V().corta(p.hasta))} · ${p.entregadas} entregadas · ${p.pendientes} pendientes</p></div>
+      ${p.estado === 'CERRADA' ? '<span class="chip chip-neutro">Cerrada</span>' : '<span class="chip chip-ok">Abierta</span>'}</div><div><button class="btn btn-sec btn-chico" data-ari-p="${esc(p.id)}">Ver</button></div></div>`).join('')}</div>` : '<p class="vacio">Todavía no has abierto ninguna AR-I.</p>'}</section></div></div>
+    <div id="panel-ari"></div>`;
+  const f = sub.querySelector('#fari-abrir');
+  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(f.querySelector('button'), async () => {
+    if (!confirm(`¿Abrir la AR-I ${f.anio.value} y avisar a todos los colaboradores?`)) return;
+    const x = await llamar('abrirAri', { anio: f.anio.value, ut: f.ut.value, hasta: f.hasta.value });
+    if (!x.ok) return errorEn(sub.querySelector('#err-ari-a'), x.message);
+    toast(`AR-I ${x.data.anio} abierta: se avisó a ${x.data.personas} personas.`); ariRRHH = x.data.id; pintarAriRRHH(sub);
+  }); });
+  sub.querySelectorAll('[data-ari-p]').forEach((b) => b.addEventListener('click', () => { ariRRHH = b.dataset.ariP; pintarPanelAri(sub.querySelector('#panel-ari')); }));
+  if (ariRRHH) pintarPanelAri(sub.querySelector('#panel-ari'));
+}
+
+async function pintarPanelAri(caja) {
+  caja.innerHTML = esqueleto(1);
+  const r = await llamar('panelAri', { periodo: ariRRHH });
+  if (!r.ok) { caja.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const { periodo: p, filas } = r.data, pend = filas.filter((x) => x.pendiente).length;
+  caja.innerHTML = `<section class="tarjeta"><div class="item-cab"><div><h2>AR-I ${p.anio}</h2><p class="suave">${filas.length - pend} con AR-I vigente · ${pend} pendientes</p></div>
+      ${p.estado === 'CERRADA' ? '<span class="chip chip-neutro">Cerrada</span>' : '<span class="chip chip-ok">Abierta</span>'}</div>
+    <div class="fila">${p.estado === 'ABIERTA' && pend ? `<button class="btn" id="ari-rec">Recordar a los ${pend} pendientes</button>` : ''}
+      ${p.estado === 'ABIERTA' ? `<label>Pedir variación de <select id="ari-mes">${[[3, 'marzo'], [6, 'junio'], [9, 'septiembre'], [12, 'diciembre']].map(([m, t]) => `<option value="${m}">${t}</option>`).join('')}</select></label><button class="btn btn-sec" id="ari-var">Pedir variación</button>` : ''}
+      <button class="btn btn-sec" id="ari-xls">Descargar Excel</button><button class="btn btn-sec" id="ari-cerrar">${p.estado === 'ABIERTA' ? 'Cerrar' : 'Reabrir'}</button></div></section>
+    <section class="tarjeta"><div class="tabla-caja"><table class="tabla-omega tabla-cel"><thead><tr><th>Colaborador</th><th>Estado</th><th class="num">Retención</th><th>Entregada</th><th></th></tr></thead><tbody>
+    ${filas.map((x, k) => `<tr><td><b>${esc(x.nombre)}</b><br><span class="suave">${esc(x.clave)} · ${esc(x.cargo)}</span></td>
+      <td>${x.pendiente ? `<span class="chip chip-espera">${x.pendiente.tipo === 'VARIACION' ? 'Variación pendiente' : 'Pendiente'}</span>${x.pendiente.motivo ? `<br><span class="suave">${esc(x.pendiente.motivo)}</span>` : ''}` : '<span class="chip chip-ok">Entregada</span>'}</td>
+      <td class="num"><b>${x.porcentaje == null ? '—' : montoTxt(x.porcentaje) + ' %'}</b></td><td>${x.ultima ? fechaHoraMin(x.ultima.entregada) : '—'}</td>
+      <td>${x.ultima ? `<button class="btn btn-sec btn-chico" data-ari-pdf="${k}">PDF</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>`;
+  caja.querySelector('#ari-rec')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => { const x = await llamar('recordarAri', { periodo: p.id }); toast(x.ok ? `Recordatorio enviado a ${x.data.avisados}.` : x.message); }));
+  caja.querySelector('#ari-var')?.addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    const mes = caja.querySelector('#ari-mes').value;
+    if (!confirm('¿Pedir la variación a todos los que ya entregaron su AR-I?')) return;
+    const x = await llamar('pedirVariacionAri', { periodo: p.id, mes }); toast(x.ok ? `Variación pedida a ${x.data.pedidas} personas.` : x.message); if (x.ok) pintarPanelAri(caja);
+  }));
+  caja.querySelector('#ari-cerrar').addEventListener('click', (e) => conBoton(e.currentTarget, async () => { const x = await llamar('cerrarAri', { periodo: p.id }); if (!x.ok) return toast(x.message); pintarAriRRHH(caja.closest('#sub')); }));
+  caja.querySelectorAll('[data-ari-pdf]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => { const x = filas[Number(b.dataset.ariPdf)];
+    return descargarAriPdf({ persona: { nombre: x.nombre, cedula: x.cedula, letra: x.letra, empresa: x.empresa }, ari: { ...x.ultima, anio: p.anio } }); })));
+  caja.querySelector('#ari-xls').addEventListener('click', (e) => conBoton(e.currentTarget, async () => {
+    const XLSX = await cargarXlsx(), libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(filas.map((x) => { const u = x.ultima, rr = u && u.resultado; return {
+      'Cédula': Number(x.cedula), Nombre: x.nombre, Empresa: x.empresa, Localidad: x.localidad, Estado: x.pendiente ? (x.pendiente.tipo === 'VARIACION' ? 'Variación pendiente' : 'Pendiente') : 'Entregada',
+      'Retención %': x.porcentaje == null ? '' : x.porcentaje, Tipo: u ? (u.tipo === 'VARIACION' ? 'Variación' : 'Inicial') : '', 'Remuneración estimada (A)': rr ? rr.A : '',
+      Desgravamen: rr ? (rr.unico ? 'Único' : 'Detallado') : '', 'Cargas': rr ? rr.cargas : '', 'J %': rr ? rr.J : '', 'K %': rr && rr.K != null ? rr.K : '', Entregada: u ? fechaHoraMin(u.entregada) : '' }; })), `AR-I ${p.anio}`);
+    XLSX.writeFile(libro, `AR-I-${p.anio}.xlsx`);
+  }));
 }
