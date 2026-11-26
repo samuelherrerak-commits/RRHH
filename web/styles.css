@@ -444,3 +444,12 @@ details.item[open] { gap: var(--s3); }
 @media (max-width: 420px) { .bloque { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 88px); } }
 .recuadro-anticipo { display: grid; gap: var(--s3); background: var(--espera-velo); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); }
 .recuadro-anticipo b { color: var(--espera); }
+/* Salarios mes a mes */
+.tabla-sal td, .tabla-sal th { padding: 6px 8px; }
+.tabla-sal td:first-child { min-width: 0; }
+.tabla-sal td small { display: block; color: var(--austral); font-size: 10.5px; }
+.tabla-sal td.fuera { background: var(--fondo); }
+.tabla-sal td.auto, .leyenda-sal .auto { color: var(--tinta-3); }
+.tabla-sal td.manual, .leyenda-sal .manual { color: var(--espera); font-weight: 600; }
+.tabla-sal td.falta, .leyenda-sal .falta { background: var(--error-velo); color: var(--error); }
+.leyenda-sal span { padding: 0 6px; border-radius: 4px; }

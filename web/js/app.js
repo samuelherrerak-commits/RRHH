@@ -2,6 +2,7 @@ import { llamar, sesion, obtener, precargar, olvidar } from './api.js';
 import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
+import { descargarForma14100 } from './forma14100-pdf.js';
 import { iniciarInstalacion, sugerirInstalacion } from './instalar.js';
 import { dibujarTarjeta, descargarTarjeta } from './tarjeta.js';
 import { vincular, desvincular, estadoPush, activarPush, esIphone, registrarServiceWorker, suscritoEnOneSignal } from './push.js';
@@ -2974,6 +2975,8 @@ async function pasoComisionesQ(ctx) {
     try {
       const r = await revisarPdfNomina(archivo, { excluir: () => '' });
       const emp = r.rev.empresas.join('+') || 'SIN EMPRESA';
+      // las otras asignaciones de cada persona en esta quincena quedan en su historial (AR-I y 14-100)
+      await llamar('guardarOtrasAsignaciones', { periodo: `${ctx.q.mes}-${ctx.q.quincena}`, items: r.rev.ok.concat(r.rev.egresados).map((x) => ({ clave: x.clave, monto: x.otras || 0 })), fuente: archivo.name });
       let comHtml = '', comOk = 0, comMal = 0;
       if (n) {
         const deEmpresa = n.items.filter((x) => !x.empresa || r.rev.empresas.includes(x.empresa));
@@ -3243,12 +3246,13 @@ function pintarAsistente(cont) {
 let subDatos = 'campanas', campanaAbierta = '', buscaDatos = '';
 
 async function panelDatosPersonal(panel) {
-  const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes'], ['celebraciones', 'Cumpleaños y aniversarios']];
+  const SUB = [['campanas', 'Campañas de actualización'], ['consultar', 'Consultar datos'], ['cambios', 'Cambios recientes'], ['celebraciones', 'Cumpleaños y aniversarios'], ['salarios', 'Salarios e IVSS']];
   panel.innerHTML = `<div class="submodulos" role="tablist">${SUB.map(([k, t]) => `<button class="submodulo" role="tab" data-sub="${k}" aria-selected="${k === subDatos}">${t}</button>`).join('')}</div><div id="sub">${esqueleto(2)}</div>`;
   panel.querySelectorAll('[data-sub]').forEach((b) => b.addEventListener('click', () => { subDatos = b.dataset.sub; campanaAbierta = ''; editandoCamp = null; panelDatosPersonal(panel); }));
   const sub = panel.querySelector('#sub');
   if (subDatos === 'campanas') return campanaAbierta ? pintarCampana(panel, sub, campanaAbierta) : pintarCampanas(panel, sub);
   if (subDatos === 'celebraciones') return pintarCelebraciones(sub);
+  if (subDatos === 'salarios') return pintarSalarios(sub);
   const r = await obtener('datosPersonal', {});
   if (!r.ok) { if (r.code === 'SESION') { toast(r.message); return arrancar(); } sub.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
   if (subDatos === 'cambios') return pintarCambiosPerfil(sub, r.data.cambios);
@@ -3499,4 +3503,123 @@ async function pintarCelebraciones(sub) {
     toast(x.data.push === 'ENVIADO' ? `Aviso enviado a ${x.data.nombre}.` : `Aviso enviado a la campanita de ${x.data.nombre}${x.data.push === 'SIN_DESTINATARIOS' ? ' (no tiene los avisos al celular activados)' : ''}.`);
   })));
   sub.querySelectorAll('[data-tarjeta]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => { const f = d.filas[Number(b.dataset.tarjeta)]; return descargarTarjeta({ tipo: f.tipo, nombre: f.nombre, anios: f.anios }); })));
+}
+
+/* ---------- Salarios mes a mes y forma 14-100 del IVSS ---------- */
+
+const NOMBRES_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+let salariosUI = { clave: '', buscar: '' };
+const hoyIso = () => fechaIsoLocal();
+/** «NOMBRE1 NOMBRE2 APELLIDO1 APELLIDO2» → «APELLIDO1 APELLIDO2 NOMBRE1 NOMBRE2» (como va en la 14-100). */
+const apellidosPrimero = (n) => { const p = String(n || '').trim().split(/\s+/); return p.length === 4 ? [p[2], p[3], p[0], p[1]].join(' ') : p.length === 3 ? [p[1], p[2], p[0]].join(' ') : p.join(' '); };
+
+async function pintarSalarios(sub) {
+  sub.innerHTML = `<section class="tarjeta"><div><h2>Salarios e IVSS</h2><p class="suave">El salario de cada mes se guarda solo al cargar el Detalle de empleado, y las otras asignaciones al leer el Resumen de Pago en la Quincena. Hasta septiembre de 2021 la 14-100 lleva 0,01 (reconversión). Los meses anteriores a hoy se cargan por tramos.</p></div>
+      <label>Buscar colaborador (activo o egresado) <input id="busca-sal" value="${esc(salariosUI.buscar)}" placeholder="Nombre o cédula" autocomplete="off"></label>
+      <div id="res-sal" class="lista"></div></section>
+    <div id="persona-sal"></div>
+    <section class="tarjeta" id="empresas-ivss">${esqueleto(1)}</section>`;
+  const busca = sub.querySelector('#busca-sal'), res = sub.querySelector('#res-sal'); let tb;
+  const buscar = async () => {
+    salariosUI.buscar = busca.value;
+    if (busca.value.trim().length < 2) { res.innerHTML = ''; return; }
+    const x = await llamar('listarEmpleados', { buscar: busca.value.trim() });
+    const lista = x.ok ? x.data.empleados.slice(0, 8) : [];
+    res.innerHTML = lista.map((e) => `<button type="button" class="opcion-nom" data-sal="${esc(e.clave)}"><b>${esc(e.nombre)}</b><span>${esc(e.clave)}${e.puesto ? ' · ' + esc(e.puesto) : ''}${e.estado === 'Inactivo' ? ' · egresado' : ''}</span></button>`).join('') || '<p class="suave">Nadie coincide.</p>';
+    res.querySelectorAll('[data-sal]').forEach((b) => b.addEventListener('click', () => { salariosUI.clave = b.dataset.sal; res.innerHTML = ''; pintarPersonaSalarios(sub); }));
+  };
+  busca.addEventListener('input', () => { clearTimeout(tb); tb = setTimeout(buscar, 300); });
+  pintarEmpresasIvss(sub.querySelector('#empresas-ivss'));
+  if (salariosUI.clave) pintarPersonaSalarios(sub);
+}
+
+async function pintarPersonaSalarios(sub, hasta = '') {
+  const caja = sub.querySelector('#persona-sal');
+  caja.innerHTML = esqueleto(2);
+  const [r, re] = await Promise.all([llamar('historialSalarios', { clave: salariosUI.clave, hasta }), obtener('empresasIvss', {})]);
+  if (!r.ok) { caja.innerHTML = `<p class="error-msg">${esc(r.message)}</p>`; return; }
+  const { persona: p, meses, faltan } = r.data, empresas = re.ok ? re.data : [];
+  const porMes = Object.fromEntries(meses.map((m) => [m.mes, m]));
+  const anios = [...new Set(meses.map((m) => m.mes.slice(0, 4)))];
+  const celda = (a, i) => { const m = porMes[`${a}-${String(i + 1).padStart(2, '0')}`]; if (!m) return '<td class="fuera"></td>';
+    return `<td class="num ${m.salario == null ? 'falta' : m.fuente === 'RECONVERSION' ? 'auto' : m.fuente === 'MANUAL' ? 'manual' : ''}" title="${m.otras ? 'Otras asignaciones: ' + bs(m.otras) : ''}">${m.salario == null ? '—' : bs(m.salario).replace('Bs. ', '')}${m.otras ? `<small>+${bs(m.otras).replace('Bs. ', '')}</small>` : ''}</td>`; };
+  const empDef = empresas.find((e) => e.empresaCac === p.empresa) || empresas[0];
+  const ultimo = meses[meses.length - 1].mes;
+  caja.innerHTML = `<section class="tarjeta">
+      <div class="item-cab"><div><h2>${esc(p.nombre)}</h2><p class="suave">${esc(p.clave)} · ${esc(p.cargo)} · ${p.empresa === 'AIV' ? 'Austral' : 'Prosein'} · ingresó el ${esc(V().corta(p.fechaIngreso))}${p.estado === 'Inactivo' ? ' · egresado' : ''}</p></div>
+        ${faltan ? `<span class="chip chip-espera">${faltan} mes${faltan === 1 ? '' : 'es'} sin salario</span>` : '<span class="chip chip-ok">Completo</span>'}</div>
+      <div class="tabla-caja"><table class="tabla-omega tabla-sal"><thead><tr><th>Año</th>${NOMBRES_MES.map((m) => `<th class="num">${m}</th>`).join('')}</tr></thead><tbody>
+        ${anios.map((a) => `<tr><td><b>${a}</b></td>${NOMBRES_MES.map((_, i) => celda(a, i)).join('')}</tr>`).join('')}</tbody></table></div>
+      <p class="suave leyenda-sal"><span class="auto">0,01</span> reconversión · <span class="manual">a mano</span> · <span class="falta">—</span> falta · <small>+ otras asignaciones del mes</small></p>
+      <form id="ftramo" class="fila" novalidate>
+        <label>Desde (mes) <input type="month" name="desde" value="${esc((meses.find((m) => m.salario == null) || meses[0]).mes)}"></label>
+        <label>Hasta (mes) <input type="month" name="hasta" value="${esc(ultimo)}"></label>
+        <label class="grow">Salario mensual (Bs.) <input name="monto" inputmode="decimal" placeholder="0,00"></label>
+        <div><button class="btn btn-sec" type="submit">Guardar tramo</button></div>
+      </form>
+    </section>
+    <section class="tarjeta"><div><h2>Forma 14-100</h2><p class="suave">Constancia de trabajo para el IVSS: una planilla por cada 6 años desde el año de ingreso, con el salario de cada mes. ${faltan ? '<b>Los meses sin salario salen en 0,00.</b>' : ''}</p></div>
+      <form id="f14100" class="form-vac" novalidate>
+        <div class="fila">
+          <label class="grow">Empresa <select name="empresa">${empresas.map((e, k) => `<option value="${k}"${e === empDef ? ' selected' : ''}>${esc(e.razonSocial)}</option>`).join('') || '<option value="">Primero carga las empresas (abajo)</option>'}</select></label>
+          <label>Nacionalidad <select name="nac">${['V', 'E', 'A', 'R'].map((x) => `<option${x === (p.letra || 'V') ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
+        </div>
+        <label>Apellidos y nombres (como van en la planilla) <input name="nombre" value="${esc(apellidosPrimero(p.nombre))}"></label>
+        <div class="fila">
+          <label class="grow">Fecha de retiro (vacía si sigue activo) <input type="date" name="retiro"></label>
+          <label class="grow">Fecha de emisión <input type="date" name="emision" value="${hoyIso()}"></label>
+        </div>
+        <label>Observaciones (opcional) <input name="obs" maxlength="200"></label>
+        <div class="error-msg" id="err-14100" hidden></div>
+        <div><button class="btn" type="submit">Generar 14-100 (PDF)</button></div>
+      </form></section>`;
+  const ft = caja.querySelector('#ftramo');
+  ft.addEventListener('submit', (e) => { e.preventDefault(); conBoton(ft.querySelector('button'), async () => {
+    const x = await llamar('guardarTramoSalario', { clave: p.clave, desde: ft.desde.value, hasta: ft.hasta.value, monto: ft.monto.value });
+    if (!x.ok) return toast(x.message);
+    toast('Tramo guardado.'); pintarPersonaSalarios(sub);
+  }); });
+  const f = caja.querySelector('#f14100'), err = caja.querySelector('#err-14100');
+  f.retiro.addEventListener('change', () => { if (f.retiro.value) pintarPersonaSalarios(sub, f.retiro.value.slice(0, 7)).then(() => { const g = sub.querySelector('#f14100'); if (g) g.retiro.value = f.retiro.value; }); });
+  f.addEventListener('submit', (e) => { e.preventDefault(); conBoton(f.querySelector('button'), async () => {
+    errorEn(err, '');
+    const emp = empresas[Number(f.empresa.value)];
+    if (!emp) return errorEn(err, 'Carga primero los datos de las empresas ante el IVSS.');
+    if (f.retiro.value && f.retiro.value < p.fechaIngreso) return errorEn(err, 'La fecha de retiro es anterior al ingreso.');
+    const salarios = Object.fromEntries(meses.filter((m) => m.salario != null).map((m) => [m.mes, m.salario]));
+    const n = await descargarForma14100({ empresa: emp, trabajador: { nombre: f.nombre.value.trim().toUpperCase(), nacionalidad: f.nac.value, cedula: p.cedula },
+      ingreso: p.fechaIngreso, retiro: f.retiro.value, emision: f.emision.value || hoyIso(), observaciones: f.obs.value.trim(), salarios });
+    toast(`Forma 14-100 generada: ${n} planilla${n === 1 ? '' : 's'}.`);
+  }); });
+}
+
+async function pintarEmpresasIvss(caja) {
+  const r = await llamar('empresasIvss', {});
+  const lista = r.ok ? r.data : [];
+  const CAMPOS = [['razonSocial', 'Razón social'], ['numeroIvss', 'N.º empresa IVSS'], ['rif', 'RIF'], ['direccion', 'Dirección'], ['representante', 'Representante legal'], ['ciRepresentante', 'C.I. representante'],
+    ['telefono', 'Teléfono'], ['correo', 'Correo'], ['firmante', 'Firmante'], ['cargoFirmante', 'Cargo del firmante'], ['ciFirmante', 'C.I. firmante'], ['lugar', 'Lugar'], ['empresaCac', 'Empresa en el CAC (PCA/AIV)']];
+  caja.innerHTML = `<div class="item-cab"><div><h2>Empresas ante el IVSS</h2><p class="suave">Datos que salen en la 14-100. Puedes importarlos de tu planilla con macros (hoja EMPRESAS).</p></div>
+      <label class="btn btn-sec btn-chico" style="display:inline-flex">Importar de la planilla 14-100 <input type="file" id="imp-ivss" accept=".xlsm,.xlsx" hidden></label></div>
+    ${lista.length ? `<div class="tabla-caja"><table class="tabla-omega"><thead><tr><th>Razón social</th><th>N.º IVSS</th><th>RIF</th><th>Firmante</th><th>En el CAC</th></tr></thead><tbody>
+      ${lista.map((e) => `<tr><td><b>${esc(e.razonSocial)}</b><br><span class="suave">${esc(e.direccion)}</span></td><td>${esc(e.numeroIvss)}</td><td>${esc(e.rif)}</td><td>${esc(e.firmante)}<br><span class="suave">${esc(e.cargoFirmante)}</span></td><td>${esc(e.empresaCac || '—')}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="vacio">Todavía no hay empresas: importa la hoja EMPRESAS de tu planilla 14-100.</p>'}`;
+  caja.querySelector('#imp-ivss').addEventListener('change', async (ev) => {
+    const archivo = ev.target.files[0]; if (!archivo) return;
+    try {
+      const XLSX = await cargarXlsx(), libro = XLSX.read(await archivo.arrayBuffer(), { type: 'array' });
+      const hoja = libro.Sheets.EMPRESAS || libro.Sheets[libro.SheetNames.find((n) => /empresa/i.test(n))];
+      if (!hoja) return toast('No encontré la hoja EMPRESAS en ese archivo.');
+      const filas = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: false, defval: '' });
+      const ini = filas.findIndex((f) => /raz[oó]n social/i.test(String(f[0])));
+      const empresas = filas.slice(ini + 1).filter((f) => String(f[0]).trim()).map((f) => {
+        const o = {}; CAMPOS.slice(0, 12).forEach(([k], i) => { o[k] = String(f[[0, 1, 7, 2, 3, 4, 5, 6, 8, 9, 10, 11][i]] || '').trim(); });
+        o.empresaCac = /austral/i.test(o.razonSocial) ? 'AIV' : /^prosein c\.?a/i.test(o.razonSocial) ? 'PCA' : '';
+        return o;
+      });
+      if (!empresas.length) return toast('La hoja EMPRESAS no trae empresas.');
+      const x = await llamar('guardarEmpresasIvss', { empresas });
+      if (!x.ok) return toast(x.message);
+      toast(`${x.data.length} empresas importadas.`); pintarEmpresasIvss(caja);
+    } catch (e) { toast('No se pudo leer el archivo: ' + (e.message || e)); }
+  });
 }

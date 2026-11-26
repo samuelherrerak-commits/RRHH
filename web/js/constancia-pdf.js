@@ -1,17 +1,17 @@
 // Genera la constancia de trabajo en PDF (hoja carta) en el navegador, con el membrete de la empresa,
 // la firma del modelo y un código QR que lleva a la página de verificación.
-const URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+export const URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const URL_QR = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
 const MEMBRETES = { PCA: ['assets/membrete-prosein.jpg', 'JPEG'], AIV: ['assets/membrete-austral.png', 'PNG'] };
 
 const scripts = {};
-function cargarScript(url) {
+export function cargarScript(url) {
   return (scripts[url] ||= new Promise((ok, no) => {
     document.head.appendChild(Object.assign(document.createElement('script'), { src: url, onload: ok, onerror: () => no(new Error('No se pudo cargar una herramienta del PDF. Revisa tu conexión.')) }));
   }));
 }
 
-async function comoDataUrl(ruta) {
+export async function comoDataUrl(ruta) {
   const r = await fetch(ruta);
   if (!r.ok) throw new Error('No se pudo cargar el membrete.');
   const b = await r.blob();

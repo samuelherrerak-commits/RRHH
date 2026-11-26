@@ -3026,13 +3026,15 @@ var Servicio = (function () {
         var r = Empleados.fusionarDetalle(repo.todosEmpleados(), filas);
         var jefes = asignarJefesDelDetalle(r.empleados, filas, usuariosNoEmpleados(repo, r.empleados));
         repo.guardarEmpleados(r.empleados);
+        var salarios = registrarSalariosDetalle(repo, ctx, r.empleados);
+        if (salarios.aumentos.length && typeof variacionesPorAumento === 'function') variacionesPorAumento(repo, ctx, salarios.aumentos);
         var revisar = r.empleados.filter(function (e) { return e.revisarCedula && e.estado !== 'Inactivo'; })
           .map(function (e) { return { clave: Empleados.claveCedula(e), nombre: e.nombre, motivo: e.motivoRevision }; });
         var sinFecha = r.empleados.filter(function (e) { return !e.fechaIngreso && e.estado !== 'Inactivo'; }).length;
         var activos = r.empleados.filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina; });
         var conNacimiento = activos.filter(function (e) { return e.fechaNacimiento; }).length;
         repo.log('EMPLEADOS_CARGADOS', s.clave, JSON.stringify(r.resumen));
-        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula, conNacimiento: conNacimiento, activos: activos.length });
+        return ok({ resumen: r.resumen, total: r.empleados.length, revisar: revisar, sinFecha: sinFecha, jefes: jefes, sinCedula: sinCedula, conNacimiento: conNacimiento, activos: activos.length, salarios: { mes: salarios.mes, guardados: salarios.guardados, aumentos: salarios.aumentos } });
       }
     
       /** opciones: { buscar, departamento, sinJefe } */
@@ -4566,7 +4568,126 @@ var Servicio = (function () {
         return ok({ mes: mes, hoy: hoy, filas: filas, sinNacimiento: sinNacimiento });
       }
     
+      /* ---------- Salarios mes a mes y otras asignaciones (para la AR-I y la forma 14-100) ---------- */
+    
+      var CORTE_RECONVERSION = '2021-09';   // hasta este mes la 14-100 lleva 0,01 (reconversión monetaria de octubre de 2021)
+      var SALARIO_RECONVERSION = 0.01;
+      function mesTxt(y, m) { return y + '-' + ('0' + m).slice(-2); }
+      function mesSiguiente(mes) { var y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7)) + 1; if (m > 12) { m = 1; y++; } return mesTxt(y, m); }
+      function mesValido(t) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(t || '')); }
+    
+      /**
+       * Al cargar el Detalle: guarda el «Salario M.» de cada activo en el mes actual y detecta los aumentos
+       * contra el último mes anterior con salario. Devuelve { mes, guardados, aumentos: [{ clave, nombre, antes, ahora }] }.
+       */
+      function registrarSalariosDetalle(repo, ctx, empleados) {
+        if (!repo.salariosMes) return { mes: '', guardados: 0, aumentos: [] };
+        var mes = hoyCaracas(ctx).slice(0, 7), previos = {}, ahora = ctx.ahora(), lista = [], aumentos = [];
+        repo.salariosMes().forEach(function (s) {
+          if (s.mes === mes) { previos[s.clave + '|' + mes] = s; return; }
+          if (s.mes < mes && (!previos[s.clave] || s.mes > previos[s.clave].mes)) previos[s.clave] = s;
+        });
+        empleados.forEach(function (e) {
+          if (e.estado === 'Inactivo' || !(Number(e.salarioMensual) > 0)) return;
+          var k = Empleados.claveCedula(e), sal = Calculo.redondear2(e.salarioMensual), ya = previos[k + '|' + mes], ant = previos[k];
+          if (ya && ya.fuente === 'MANUAL') return;                       // lo corregido a mano no se pisa
+          if (!ya || Number(ya.salario) !== sal) lista.push({ clave: k, mes: mes, salario: sal, fuente: 'DETALLE', actualizado: ahora });
+          if (ant && sal > Number(ant.salario) + 0.005 && !(ya && Number(ya.salario) >= sal)) aumentos.push({ clave: k, nombre: e.nombre, antes: Number(ant.salario), ahora: sal });
+        });
+        if (lista.length) repo.guardarSalariosMes(lista);
+        return { mes: mes, guardados: lista.length, aumentos: aumentos };
+      }
+    
+      /** Suma de otras asignaciones por mes de una persona: { 'aaaa-mm': Bs. } (las quincenas del mes se suman). */
+      function otrasPorMes(repo, clave) {
+        var m = {};
+        (repo.otrasAsignaciones ? repo.otrasAsignaciones() : []).forEach(function (o) {
+          if (o.clave !== clave) return;
+          var mes = String(o.periodo).slice(0, 7); m[mes] = Calculo.redondear2((m[mes] || 0) + Number(o.monto || 0));
+        });
+        return m;
+      }
+      /** Promedio mensual de otras asignaciones de los últimos n meses con datos. */
+      function otrasPromedio(repo, clave, n) {
+        var m = otrasPorMes(repo, clave), meses = Object.keys(m).sort().slice(-(n || 6));
+        return meses.length ? Calculo.redondear2(meses.reduce(function (t, k) { return t + m[k]; }, 0) / meses.length) : 0;
+      }
+      /** Último salario mensual conocido (tabla o, si no hay, el del Detalle). */
+      function salarioActual(repo, emp) {
+        var k = Empleados.claveCedula(emp), ult = null;
+        (repo.salariosMes ? repo.salariosMes() : []).forEach(function (s) { if (s.clave === k && (!ult || s.mes > ult.mes)) ult = s; });
+        return ult ? Number(ult.salario) : Number(emp.salarioMensual) || 0;
+      }
+    
+      var CAMPOS_IVSS = ['razonSocial', 'numeroIvss', 'direccion', 'representante', 'ciRepresentante', 'telefono', 'correo', 'rif', 'firmante', 'cargoFirmante', 'ciFirmante', 'lugar', 'empresaCac'];
+      /** Empresas ante el IVSS (para la 14-100): razón social, N.º patronal, RIF, representante y firmante. */
+      function empresasIvss(repo, ctx, token) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        return ok(repo.empresasIvss ? repo.empresasIvss() : []);
+      }
+      function guardarEmpresasIvss(repo, ctx, token, lista) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var limpia = (lista || []).slice(0, 20).map(function (e) { var o = {}; CAMPOS_IVSS.forEach(function (c) { o[c] = String(e && e[c] != null ? e[c] : '').replace(/\s+/g, ' ').trim().slice(0, 200); }); return o; })
+          .filter(function (e) { return e.razonSocial; });
+        var mal = limpia.filter(function (e) { return e.numeroIvss && !/^[A-Z]\d{8}$/i.test(e.numeroIvss.replace(/[\s-]/g, '')); })[0];
+        if (mal) return err('VALIDACION', 'El N.º de empresa IVSS de «' + mal.razonSocial + '» debe ser una letra y 8 números (ej. D26161204).');
+        repo.guardarEmpresasIvss(limpia);
+        repo.log('EMPRESAS_IVSS', s.clave, limpia.length + ' empresas');
+        return ok(limpia);
+      }
+    
+      /** RRHH: historial de una persona desde su ingreso (salario y otras asignaciones por mes). */
+      function historialSalarios(repo, ctx, token, clave, hasta) {
+        if (!leerToken(ctx, token, ['RRHH', 'ADMIN'])) return err('SESION', 'No autorizado.');
+        var e = repo.empleadoPorClave(clave);
+        if (!e) return err('NO_ENCONTRADO', 'No encontramos a esa persona.');
+        if (!e.fechaIngreso) return err('VALIDACION', 'Esa persona no tiene fecha de ingreso.');
+        var k = Empleados.claveCedula(e), tabla = {};
+        repo.salariosMes().forEach(function (s) { if (s.clave === k) tabla[s.mes] = s; });
+        var otras = otrasPorMes(repo, k), ini = mesTxt(e.fechaIngreso.y, e.fechaIngreso.m);
+        var fin = mesValido(hasta) ? hasta : hoyCaracas(ctx).slice(0, 7), meses = [];
+        for (var m = ini; m <= fin && meses.length < 600; m = mesSiguiente(m)) {
+          var s = tabla[m], auto = m <= CORTE_RECONVERSION;
+          meses.push({ mes: m, salario: s ? Number(s.salario) : auto ? SALARIO_RECONVERSION : null, fuente: s ? s.fuente : auto ? 'RECONVERSION' : '', otras: otras[m] || 0 });
+        }
+        var f = e.fechaIngreso;
+        return ok({ persona: Object.assign({ clave: k, nombre: e.nombre, cedula: e.cedulaNumero, letra: e.cedulaLetra, estado: e.estado, cargo: e.puesto || '',
+          fechaIngreso: mesTxt(f.y, f.m) + '-' + ('0' + f.d).slice(-2) }, ubicacion(e)), meses: meses, faltan: meses.filter(function (x) { return x.salario == null; }).length });
+      }
+    
+      /** RRHH: salario de un tramo de meses («desde tal mes hasta tal mes, tanto»), como la macro de la 14-100. */
+      function guardarTramoSalario(repo, ctx, token, clave, desde, hasta, monto) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        var e = repo.empleadoPorClave(clave);
+        if (!e) return err('NO_ENCONTRADO', 'No encontramos a esa persona.');
+        if (!mesValido(desde) || !mesValido(hasta) || hasta < desde) return err('VALIDACION', 'Revisa los meses del tramo.');
+        var v = Number(String(monto).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+        if (!(v >= 0) || !isFinite(v)) return err('VALIDACION', 'Escribe el salario mensual del tramo.');
+        var k = Empleados.claveCedula(e), lista = [], ahora = ctx.ahora();
+        for (var m = desde; m <= hasta && lista.length < 600; m = mesSiguiente(m)) lista.push({ clave: k, mes: m, salario: Calculo.redondear2(v), fuente: 'MANUAL', actualizado: ahora });
+        repo.guardarSalariosMes(lista);
+        repo.log('SALARIOS_TRAMO', s.clave, k + ' · ' + desde + ' a ' + hasta + ' · ' + v);
+        return historialSalarios(repo, ctx, token, clave);
+      }
+    
+      /**
+       * RRHH: otras asignaciones de un período leídas del Resumen de Pago (el navegador ya identificó a cada persona).
+       * periodo: 'aaaa-mm-1' / 'aaaa-mm-2' (quincena) o 'aaaa-mm' (mes). items: [{ clave, monto }]. Reemplaza lo de esas personas en ese período.
+       */
+      function guardarOtrasAsignaciones(repo, ctx, token, periodo, items, fuente) {
+        var s = leerToken(ctx, token, ['RRHH', 'ADMIN']);
+        if (!s) return err('SESION', 'No autorizado.');
+        if (!/^\d{4}-(0[1-9]|1[0-2])(-[12])?$/.test(String(periodo || ''))) return err('VALIDACION', 'Período no válido.');
+        var ahora = ctx.ahora(), lista = (items || []).filter(function (x) { return repo.empleadoPorClave(x.clave) && Number(x.monto) >= 0; }).slice(0, 2000)
+          .map(function (x) { return { clave: Empleados.claveCedula(repo.empleadoPorClave(x.clave)), periodo: periodo, monto: Calculo.redondear2(x.monto), fuente: String(fuente || '').slice(0, 80), actualizado: ahora }; });
+        if (lista.length) repo.guardarOtrasAsignaciones(lista);
+        return ok({ periodo: periodo, guardados: lista.length });
+      }
+    
       var api = {
+        historialSalarios: historialSalarios, empresasIvss: empresasIvss, guardarEmpresasIvss: guardarEmpresasIvss, guardarTramoSalario: guardarTramoSalario, guardarOtrasAsignaciones: guardarOtrasAsignaciones,
         avisosCelebraciones: function (repo, ctx) { return ok(avisosCelebraciones(repo, ctx)); }, miCelebracion: miCelebracion, celebracionesDelMes: celebracionesDelMes, reenviarCelebracion: reenviarCelebracion,
         miPerfil: miPerfil, guardarMiPerfil: guardarMiPerfil, crearCampanaDatos: crearCampanaDatos, listarCampanasDatos: listarCampanasDatos,
         panelCampanaDatos: panelCampanaDatos, editarCampanaDatos: editarCampanaDatos, lanzarCampanaDatos: lanzarCampanaDatos, eliminarCampanaDatos: eliminarCampanaDatos, cargarPlanCampanas: cargarPlanCampanas, recordarCampanaDatos: recordarCampanaDatos, cerrarCampanaDatos: cerrarCampanaDatos, datosPersonal: datosPersonal,
@@ -4672,6 +4793,9 @@ var HOJAS = {
   PERFILES: ['clave', 'datos', 'confirmadas', 'actualizado', 'por'],
   CAMBIOS_PERFIL: ['cuando', 'clave', 'nombre', 'seccion', 'campo', 'antes', 'despues'],
   CAMPANAS_DATOS: ['id', 'titulo', 'estado', 'creada', 'por', 'cerrada', 'detalle'],
+  SALARIOS_MES: ['clave', 'mes', 'salario', 'fuente', 'actualizado'],
+  EMPRESAS_IVSS: ['razonSocial', 'numeroIvss', 'direccion', 'representante', 'ciRepresentante', 'telefono', 'correo', 'rif', 'firmante', 'cargoFirmante', 'ciFirmante', 'lugar', 'empresaCac'],
+  OTRAS_ASIG: ['clave', 'periodo', 'monto', 'fuente', 'actualizado'],
   LOG: ['cuando', 'accion', 'actor', 'detalle'],
 };
 
@@ -4773,6 +4897,11 @@ var RUTAS_RRHH = {
   rechazarNominaEspecial: function (repo, ctx, d) { return Servicio.rechazarNominaEspecial(repo, ctx, d.token, d.id, d.motivo); },
   cancelarNominaEspecial: function (repo, ctx, d) { return Servicio.cancelarNominaEspecial(repo, ctx, d.token, d.id); },
   datosCruceNomina: function (repo, ctx, d) { return Servicio.datosCruceNomina(repo, ctx, d.token); },
+  empresasIvss: function (repo, ctx, d) { return Servicio.empresasIvss(repo, ctx, d.token); },
+  guardarEmpresasIvss: function (repo, ctx, d) { return Servicio.guardarEmpresasIvss(repo, ctx, d.token, d.empresas); },
+  historialSalarios: function (repo, ctx, d) { return Servicio.historialSalarios(repo, ctx, d.token, d.clave, d.hasta); },
+  guardarTramoSalario: function (repo, ctx, d) { return Servicio.guardarTramoSalario(repo, ctx, d.token, d.clave, d.desde, d.hasta, d.monto); },
+  guardarOtrasAsignaciones: function (repo, ctx, d) { return Servicio.guardarOtrasAsignaciones(repo, ctx, d.token, d.periodo, d.items, d.fuente); },
   miCelebracion: function (repo, ctx, d) { return Servicio.miCelebracion(repo, ctx, d.token); },
   reenviarCelebracion: function (repo, ctx, d) { return Servicio.reenviarCelebracion(repo, ctx, d.token, d.clave, d.tipo); },
   celebracionesDelMes: function (repo, ctx, d) { return Servicio.celebracionesDelMes(repo, ctx, d.token, d.mes); },
@@ -4838,7 +4967,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, historialSalarios: 1, empresasIvss: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
@@ -5389,6 +5518,28 @@ function crearRepo_() {
         escribirFila_('ALIAS_COMISIONES', { _fila: ya ? ya._fila : undefined, alias: k, clave: mapa[k], actualizado: ahora });
       });
     },
+    empresasIvss: function () { asegurarHoja_('EMPRESAS_IVSS'); return leer_('EMPRESAS_IVSS').filter(function (f) { return texto_(f.razonSocial); }).map(function (f) { var o = {}; HOJAS.EMPRESAS_IVSS.forEach(function (c) { o[c] = texto_(f[c]); }); return o; }); },
+    guardarEmpresasIvss: function (lista) {
+      asegurarHoja_('EMPRESAS_IVSS');
+      var h = hoja_('EMPRESAS_IVSS'), cab = HOJAS.EMPRESAS_IVSS, u = h.getLastRow();
+      if (u > 1) h.getRange(2, 1, u - 1, cab.length).clearContent();
+      if (lista.length) { var r = h.getRange(2, 1, lista.length, cab.length); r.setNumberFormat('@'); r.setValues(lista.map(function (e) { return cab.map(function (c) { return e[c] || ''; }); })); }
+      invalidar_('EMPRESAS_IVSS');
+    },
+    salariosMes: function () {
+      asegurarHoja_('SALARIOS_MES');
+      return leer_('SALARIOS_MES').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { clave: texto_(f.clave), mes: mesTexto_(f.mes), salario: Number(f.salario) || 0, fuente: texto_(f.fuente), actualizado: Number(f.actualizado) || 0 };
+      });
+    },
+    guardarSalariosMes: function (lista) { asegurarHoja_('SALARIOS_MES'); upsert_('SALARIOS_MES', lista, function (x) { return x.clave + '|' + x.mes; }, function (f) { return texto_(f.clave) + '|' + mesTexto_(f.mes); }); },
+    otrasAsignaciones: function () {
+      asegurarHoja_('OTRAS_ASIG');
+      return leer_('OTRAS_ASIG').filter(function (f) { return texto_(f.clave); }).map(function (f) {
+        return { clave: texto_(f.clave), periodo: periodoTexto_(f.periodo), monto: Number(f.monto) || 0, fuente: texto_(f.fuente), actualizado: Number(f.actualizado) || 0 };
+      });
+    },
+    guardarOtrasAsignaciones: function (lista) { asegurarHoja_('OTRAS_ASIG'); upsert_('OTRAS_ASIG', lista, function (x) { return x.clave + '|' + x.periodo; }, function (f) { return texto_(f.clave) + '|' + periodoTexto_(f.periodo); }); },
     perfiles: function () { asegurarHoja_('PERFILES'); return leer_('PERFILES').filter(function (f) { return texto_(f.clave); }).map(perfil_); },
     perfil: function (clave) {
       asegurarHoja_('PERFILES');
@@ -5490,6 +5641,26 @@ function plan_(f) {
   return { _fila: f._fila, id: texto_(f.id), ciclo: texto_(f.ciclo), clave: texto_(f.clave), estado: texto_(f.estado), bloques: b,
     requeridos: Number(f.requeridos) || 0, planificados: Number(f.planificados) || 0, jefe: texto_(f.jefe), enviada: Number(f.enviada) || 0,
     decidida: Number(f.decidida) || 0, decididaPor: texto_(f.decididaPor), motivo: texto_(f.motivo), actualizada: Number(f.actualizada) || 0 };
+}
+
+/** Agrega o reemplaza filas por su clave, de una sola escritura (todo como texto: Sheets no convierte los meses en fechas). */
+function upsert_(nombre, lista, claveNueva, claveFila) {
+  var cab = HOJAS[nombre], filas = leer_(nombre), idx = {};
+  filas.forEach(function (f, i) { idx[claveFila(f)] = i; });
+  var datos = filas.map(function (f) { return cab.map(function (c) { return f[c] == null ? '' : String(f[c] instanceof Date ? (c === 'mes' ? mesTexto_(f[c]) : periodoTexto_(f[c])) : f[c]); }); });
+  lista.forEach(function (x) {
+    var fila = cab.map(function (c) { return x[c] == null ? '' : String(x[c]); }), k = claveNueva(x);
+    if (k in idx) datos[idx[k]] = fila; else { idx[k] = datos.length; datos.push(fila); }
+  });
+  var h = hoja_(nombre);
+  h.getRange(1, 1, 1, cab.length).setValues([cab]);
+  if (datos.length) { var r = h.getRange(2, 1, datos.length, cab.length); r.setNumberFormat('@'); r.setValues(datos); }
+  invalidar_(nombre);
+}
+/** «aaaa-mm» o «aaaa-mm-q» aunque Sheets lo haya convertido en fecha. */
+function periodoTexto_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, 'America/Caracas', 'yyyy-MM');
+  return texto_(v);
 }
 
 function jsonSeguro_(t, def) { try { return t ? JSON.parse(t) : def; } catch (e) { return def; } }
