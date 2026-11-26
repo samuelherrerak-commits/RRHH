@@ -5105,7 +5105,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-26.4';
+var VERSION = '2026-11-26.5';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Perfil', 'Ari', 'Servicio'];
 
@@ -5342,13 +5342,35 @@ var RUTAS_RRHH = {
  * Las que escriben se hacen de una en una para no pisarse.
  */
 var LECTURAS = {
-  login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
+  varias: 1, login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
   misNotificaciones: 1, historialSalarios: 1, empresasIvss: 1, omegaNuevosBeneficiarios: 1, miAri: 1, listarAri: 1, panelAri: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
+
+/**
+ * Varias consultas en una sola petición: cada llamada a Google cuesta ~1 s solo en arrancar, y así las hojas
+ * se leen una vez para todas. Solo acepta consultas (nunca acciones que guardan). Cada una responde por su cuenta:
+ * si una falla, las demás llegan igual.
+ */
+var VARIAS_MAXIMO = 12;
+function variasConsultas_(d) {
+  var pedidos = Array.isArray(d.pedidos) ? d.pedidos.slice(0, VARIAS_MAXIMO) : [];
+  var repo = crearRepo_(), ctx = crearCtx_();
+  return { ok: true, data: pedidos.map(function (p) {
+    p = p || {};
+    var ruta = LECTURAS[p.action] && p.action !== 'subirRecibos' && !/^login/.test(p.action) && (RUTAS_TRABAJADOR[p.action] || RUTAS_RRHH[p.action]);
+    if (!ruta) return { ok: false, code: 'ACCION', message: 'Acción no permitida en una consulta múltiple.' };
+    var datos = Object.assign({}, p.datos || {});
+    if (!('token' in datos)) datos.token = d.token;
+    try { return ruta(repo, ctx, datos); } catch (err) {
+      console.error(err && err.stack || err); registrarError_(err);
+      return { ok: false, code: 'SERVER', message: /^Falta /.test(String(err && err.message)) ? err.message : 'Error del servidor. Intenta de nuevo.' };
+    }
+  }) };
+}
 
 function doPost(e) {
   var lock = LockService.getScriptLock(), bloqueado = false;
@@ -5364,6 +5386,7 @@ function doPost(e) {
     if (esperado && d.api_token !== esperado) return salida_({ ok: false, code: 'TOKEN', message: 'Acceso no autorizado.' });
     var cargados = modulosCargados_(), sinCargar = MODULOS.filter(function (k) { return !cargados[k]; });
     if (sinCargar.length) throw new Error('Falta código en Apps Script (' + sinCargar.join(', ') + '). ' + AVISO_CODIGO);
+    if (d.action === 'varias') return salida_(variasConsultas_(d));
     var ruta = RUTAS_TRABAJADOR[d.action] || RUTAS_RRHH[d.action];
     if (!ruta) return salida_({ ok: false, code: 'ACCION', message: 'Acción desconocida.' });
     return salida_(ruta(crearRepo_(), crearCtx_(), d));

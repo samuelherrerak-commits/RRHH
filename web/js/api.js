@@ -57,7 +57,10 @@ async function llamarUnaVez(action, datos) {
  */
 const LECTURAS = new Set(['estadoDeCuenta', 'datosAnticipo', 'listarAperturas', 'estadoAporte', 'prepararAporte', 'archivoAporte', 'candidatosCancelacion', 'listarCancelaciones', 'misConstancias', 'verificarConstancia', 'datosVacaciones', 'equipoVacaciones', 'bandejaAnticipos',
   'bandejaVacaciones', 'listarEmpleados', 'listarConstancias', 'listarUsuariosJefes', 'saldoVacacionesEmpleado',
-  'misNotificaciones', 'miAri', 'miCelebracion', 'celebracionesDelMes', 'miPerfil', 'listarCampanasDatos', 'datosPersonal', 'datosCruceNomina', 'misRecibos', 'listarLotes', 'detalleLote', 'panelSaldosVacaciones', 'listarPlanificacionesVac', 'panelPlanificacionVac', 'miPlanificacion', 'equipoPlanificacion']);
+  'misNotificaciones', 'miAri', 'miCelebracion', 'celebracionesDelMes', 'miPerfil', 'listarCampanasDatos', 'datosPersonal', 'datosCruceNomina', 'misRecibos', 'listarLotes', 'detalleLote', 'panelSaldosVacaciones', 'listarPlanificacionesVac', 'panelPlanificacionVac', 'miPlanificacion', 'equipoPlanificacion',
+  // pantallas de RRHH (quincena, Omega, AR-I, salarios): también solo consultan; antes borraban la memoria al abrirse
+  'historialSalarios', 'empresasIvss', 'omegaNuevosBeneficiarios', 'listarAri', 'panelAri', 'panelCampanaDatos', 'listarNominasEspeciales', 'quincenaListar', 'quincenaVer', 'previaDetalle', 'vacacionesQuincena',
+  'omegaInicio', 'omegaTarjetas', 'omegaQuincena', 'omegaLote', 'omegaBeneficios', 'asignarRecibos', 'verReciboRRHH', 'varias']);
 const memoria = new Map();
 const VIGENCIA_MS = 60000;
 
@@ -75,6 +78,25 @@ export function obtener(action, datos = {}) {
 
 /** Pide algo en segundo plano para tenerlo listo cuando la persona lo abra. */
 export function precargar(action, datos = {}) { obtener(action, datos).catch(() => {}); }
+
+/**
+ * Varias consultas en UNA sola llamada a Google (cada llamada tarda ~1 s solo en arrancar).
+ * Cada respuesta queda en la memoria como si se hubiera pedido sola: la pantalla que la necesite la encuentra lista.
+ * Si alguna ya está en memoria (o en camino) no se vuelve a pedir.
+ */
+export async function precargarVarios(acciones, datos = {}) {
+  const claves = (a) => a + '|' + JSON.stringify(datos);
+  const faltan = acciones.filter((a) => { const m = memoria.get(claves(a)); return !(m && Date.now() - m.t < VIGENCIA_MS); });
+  if (!faltan.length) return;
+  const avisos = {};
+  faltan.forEach((a) => { let listo; const promesa = new Promise((r) => { listo = r; }); avisos[a] = listo; memoria.set(claves(a), { t: Date.now(), promesa }); });
+  const r = await llamar('varias', { pedidos: faltan.map((action) => ({ action, datos })), ...('token' in datos ? { token: datos.token } : {}) });
+  faltan.forEach((a, i) => {
+    const res = r.ok && r.data && r.data[i] ? r.data[i] : r;   // si la llamada entera falló, cada una recibe ese error
+    if (!res.ok) memoria.delete(claves(a));
+    avisos[a](res);
+  });
+}
 
 export { LECTURAS };
 function LECTURAS_SET() { return LECTURAS; }

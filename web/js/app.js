@@ -1,4 +1,4 @@
-import { llamar, sesion, obtener, precargar, olvidar } from './api.js';
+import { llamar, sesion, obtener, precargar, precargarVarios, olvidar } from './api.js';
 import { CONFIG } from '../config.js';
 import { bs, esc, chip, fechaHora, fechaHoraMin, leerMonto, fechaCaracas, chipConstancia } from './formato.js';
 import { descargarConstanciaPdf, descargarConstanciaVacacionesPdf } from './constancia-pdf.js';
@@ -45,7 +45,7 @@ async function arrancar() {
   if (s) { precargarTrabajador(); return vistaCuenta(app, '', seccionDesdeHash()); }
   return vistaLogin();
 }
-btnSalir.addEventListener('click', () => { desvincular(); vinculado = false; cerrarAvisos(); sesion.borrar(); olvidar(); history.replaceState(null, '', location.pathname); arrancar(); });
+btnSalir.addEventListener('click', () => { desvincular(); vinculado = false; cerrarAvisos(); sesion.borrar(); olvidar(); campanaPedida = 0; history.replaceState(null, '', location.pathname); arrancar(); });
 let vinculado = false;
 /** El servidor registra en OneSignal la suscripción de avisos de este dispositivo. */
 const registrarDispositivo = (d) => llamar('registrarDispositivo', { token: (sesion.leer() || {}).token, ...d });
@@ -228,10 +228,8 @@ async function vistaCuenta(cont = app, token = '', seccion = 'inicio') {
 
 /** Mientras la persona ve su inicio, se piden en segundo plano los datos de cada tarjeta. */
 async function precargarTrabajador(tk = {}) {
-  // De una en una: así cada persona ocupa un solo cupo de Google a la vez (el límite es 30 simultáneas).
-  for (const accion of ['miCelebracion', 'equipoVacaciones', 'misRecibos', 'miPerfil', 'datosVacaciones', 'misConstancias', 'datosAnticipo']) {
-    await obtener(accion, tk).catch(() => {});
-  }
+  // Todo en una sola llamada: un solo cupo de Google (el límite es 30 simultáneas) y ~1 s en vez de ~1 s por cada una.
+  await precargarVarios(['miCelebracion', 'equipoVacaciones', 'misRecibos', 'miPerfil', 'datosVacaciones', 'misConstancias', 'datosAnticipo', 'miAri', 'miPlanificacion'], tk).catch(() => {});
 }
 
 /** Bloques grises animados mientras llega la respuesta (se nota menos la espera que con un texto). */
@@ -1593,11 +1591,16 @@ const avisosEl = document.getElementById('avisos');
 let avisos = { items: [], noLeidas: 0 };
 let relojCampana = null;
 
-async function actualizarCampana() {
+let campanaPedida = 0;
+/** Al cambiar de pantalla no se vuelve a preguntar si se preguntó hace menos de 1 minuto (cada pregunta tarda ~1 s en Google). */
+async function actualizarCampana(forzar = false) {
   const s = sesion.leer();
   if (!s) return;
-  if (!relojCampana) relojCampana = setInterval(() => { if (sesion.leer()) actualizarCampana(); }, 3 * 60 * 1000);
+  if (!relojCampana) relojCampana = setInterval(() => { if (sesion.leer()) actualizarCampana(true); }, 3 * 60 * 1000);
+  if (forzar !== true && Date.now() - campanaPedida < 60000) return;
+  campanaPedida = Date.now();
   const r = await llamar('misNotificaciones', { token: s.token });
+  if (!r.ok) campanaPedida = 0;
   if (!r.ok) return;
   avisos = r.data;
   const n = campana.querySelector('.campana-n');
@@ -1695,7 +1698,7 @@ function pintarEstadoPush(caja, pushId, compacto = false) {
         SIN_DESTINATARIOS: 'OneSignal no tiene este dispositivo registrado. Cierra el CAC, ábrelo de nuevo y toca «Terminar de activar avisos».',
         SIN_CONFIGURAR: p.detalle || 'Falta configurar OneSignal en la hoja (menú RRHH → «3 · Notificaciones al celular»).',
       }[p.estado] || `OneSignal respondió con un error: ${p.detalle || 'desconocido'}`);
-      actualizarCampana();
+      actualizarCampana(true);
     }));
     return;
   }
