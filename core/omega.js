@@ -19,7 +19,7 @@
   var PARAMETROS = { cestaticket: 40, comision: 0.013, iva: 0.16, retencion: 0.75 };
   var EMPRESAS = {
     PCA: { razonSocial: 'PROSEIN PROVEEDURIA Y SERVICIO INDUSTRIAL CA', rif: 'J001417710' },
-    AIV: { razonSocial: 'AUSTRAL IMPORT DE VENEZUELA CA', rif: '' },
+    AIV: { razonSocial: 'AUSTRAL IMPORT DE VENEZUELA CA', rif: 'J003266191' },
   };
   var LOTES = [
     { id: 'CT-PCA', tipo: 'CESTATICKET', empresa: 'PCA', nombre: 'Cestaticket PCA' },
@@ -145,6 +145,55 @@
     return { nombre: 'DEP' + empresa.replace(/ /g, '') + aammdd + '.txt', contenido: control + '\r\n' + det.join('\r\n'), beneficiarios: lineas.length, total: total / 100 };
   }
 
+  function filtrar(t, validos, mayus) {
+    return String(t == null ? '' : t).replace(/\u00a0/g, ' ').split('').filter(function (c) { return c === ' ' || validos.indexOf(c.toUpperCase()) !== -1; }).join('').replace(/\s+/g, ' ').trim()[mayus ? 'toUpperCase' : 'toString']();
+  }
+  var LETRAS = 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÄËÏÖÜ', ALFA = '0123456789' + LETRAS + '-', IMPRIMIBLES = ALFA + '(),@.';
+  /** Teléfono como la macro: solo dígitos, sin el 0 inicial, 10 dígitos (si no, vacío). */
+  function telefonoOmega(t) { var d = String(t || '').replace(/\D/g, ''); if (d.charAt(0) === '0') d = d.slice(1); return d.length === 10 ? d : ''; }
+
+  /**
+   * Archivo de nuevos beneficiarios de Omega (igual que la macro «Formato de registro de beneficiarios V10.1»):
+   *   control: '255' + aammdd + RIF (10) + n.º de beneficiarios (5) + '007' + aaaammdd + 18 ceros + TAB + correo de la empresa (mayúsculas)
+   *   detalle: n.º, tipo doc., cédula, 1er nombre, 1er apellido, 2do nombre, 2do apellido, sexo, nacimiento ddmmaaaa, correo, celular,
+   *            teléfono, dirección, código de localidad, código de beneficiario, cuenta (cada uno seguido de TAB), con CRLF; la última sin salto.
+   * datos: { empresa, rif, correo, servicio: 'TRANSFERENCIA'|'TARJETA', fecha: { y, m, d }, filas: [{ tipo, cedula, nombre1, nombre2, apellido1, apellido2,
+   *          sexo, nacimiento: 'aaaa-mm-dd', correo, celular, telefono, direccion, localidad, codigo, cuenta }] }
+   * Devuelve { nombre, contenido, beneficiarios } o { error, errores: [{ fila, texto }] }.
+   */
+  function archivoBeneficiarios(datos) {
+    var empresa = filtrar(datos.empresa, ALFA, true);
+    if (!empresa) return { error: 'Indica el nombre de la empresa.' };
+    var rif = String(datos.rif || '').replace(/-/g, '').trim().toUpperCase();
+    if (!/^[JGVE]\d{9}$/.test(rif)) return { error: 'El RIF debe comenzar con J, G, V o E y tener 9 dígitos luego de la letra. Ejemplo: J001417710.' };
+    var servicio = String(datos.servicio || 'TRANSFERENCIA').toUpperCase(), correoEmp = String(datos.correo || '').trim().toUpperCase();
+    if (servicio === 'TRANSFERENCIA' && !correoEmp) return { error: 'Indica el correo electrónico de la empresa.' };
+    var errores = [], filas = datos.filas || [];
+    if (!filas.length) return { error: 'Agrega al menos un beneficiario.' };
+    var det = filas.map(function (f, i) {
+      var n = i + 1, mal = function (t) { errores.push({ fila: n, texto: t }); };
+      var tipo = filtrar(f.tipo, LETRAS, true) || 'V';
+      if ('VEJ'.indexOf(tipo.charAt(0)) === -1) mal('tipo de documento (V, E o J)');
+      var ced = Number(String(f.cedula || '').replace(/\D/g, ''));
+      if (!(ced > 0)) mal('cédula');
+      var n1 = filtrar(f.nombre1, LETRAS), a1 = filtrar(f.apellido1, LETRAS);
+      if (!n1) mal('primer nombre'); if (!a1) mal('primer apellido');
+      var sx = String(f.sexo || '').trim().toUpperCase().charAt(0); if (sx !== 'F' && sx !== 'M') sx = '';
+      var nac = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(f.nacimiento || ''));
+      if (!nac) mal('fecha de nacimiento');
+      var correo = filtrar(f.correo, IMPRIMIBLES);
+      if (!correo) mal('correo electrónico');
+      var cuenta = String(f.cuenta || '').replace(/\D/g, '').slice(0, 20);
+      if (servicio === 'TRANSFERENCIA' && cuenta.length < 20) mal('cuenta de 20 dígitos');
+      return [n, tipo, ced, n1, a1, filtrar(f.nombre2, LETRAS), filtrar(f.apellido2, LETRAS), sx, nac ? nac[3] + nac[2] + nac[1] : '', correo,
+        telefonoOmega(f.celular), telefonoOmega(f.telefono), filtrar(f.direccion, IMPRIMIBLES), filtrar(f.localidad, ALFA), filtrar(f.codigo, ALFA), cuenta].join('\t') + '\t';
+    });
+    if (errores.length) return { error: errores.length + ' dato(s) por corregir.', errores: errores };
+    var fch = datos.fecha, dos = function (x) { return ('0' + x).slice(-2); }, aammdd = String(fch.y).slice(2) + dos(fch.m) + dos(fch.d);
+    var control = '255' + aammdd + (rif + '               ').slice(0, 10) + ('0000' + filas.length).slice(-5) + '007' + fch.y + dos(fch.m) + dos(fch.d) + '000000000000000000' + '\t' + correoEmp;
+    return { nombre: 'EMP' + empresa.replace(/ /g, '') + aammdd + '.txt', contenido: control + '\r\n' + det.join('\r\n'), beneficiarios: filas.length };
+  }
+
   /**
    * Lee el Excel de beneficios de Omega Transferencia (encabezados en las primeras filas):
    * «Cédula», «Nombre…», «Monto de complemento de alimentación aprobado», «Ayuda de vehículo», «Bono especial», «Comisiones garantizadas».
@@ -191,7 +240,7 @@
 
   var api = { PARAMETROS: PARAMETROS, EMPRESAS: EMPRESAS, LOTES: LOTES, ADICIONALES: ADICIONALES, r2: r2, esMes: esMes, idQuincena: idQuincena, lote: lote,
     diasCestaticket: diasCestaticket, ingresoEnElMes: ingresoEnElMes, ingresoTrasPrimeraQuincena: ingresoTrasPrimeraQuincena, montosDelMes: montosDelMes,
-    montoQuincena: montoQuincena, lineasQuincena: lineasQuincena, totalesOmega: totalesOmega, revisarLinea: revisarLinea, archivoDeposito: archivoDeposito,
+    montoQuincena: montoQuincena, lineasQuincena: lineasQuincena, totalesOmega: totalesOmega, revisarLinea: revisarLinea, archivoDeposito: archivoDeposito, archivoBeneficiarios: archivoBeneficiarios, telefonoOmega: telefonoOmega,
     leerExcelBeneficios: leerExcelBeneficios, soloAlfanumerico: soloAlfanumerico, quincenaDePagoVacaciones: quincenaDePagoVacaciones };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Omega = api;
