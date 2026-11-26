@@ -2042,6 +2042,7 @@ async function panelOmega(panel) {
     if (omegaUI.vista === 'tarjetas') return await vistaTarjetasOmega(panel);
     if (omegaUI.vista === 'beneficios') return await vistaBeneficiosOmega(panel);
     if (omegaUI.vista === 'empresas') return await vistaEmpresasOmega(panel);
+    if (omegaUI.vista === 'nuevos') return await vistaNuevosBeneficiarios(panel);
     return await vistaInicioQuincena(panel);
   } catch (ex) { panel.innerHTML = `<p class="error-msg">${esc(ex.message || 'Error')}</p>`; }
 }
@@ -2076,6 +2077,7 @@ async function vistaInicioOmega(panel) {
       <div class="accesos">
         <button class="acceso acceso-azul" type="button" data-om-ir="tarjetas"><span class="acceso-texto"><b>Tarjetas de alimentación</b><span>${d.sinTarjeta} persona${d.sinTarjeta === 1 ? '' : 's'} sin tarjeta: su cestaticket va por Transferencia. Márcalas aquí.</span></span></button>
         <button class="acceso acceso-rojo" type="button" data-om-ir="beneficios"><span class="acceso-texto"><b>Beneficios de Omega Transferencia</b><span>${d.beneficiosCargados} persona${d.beneficiosCargados === 1 ? '' : 's'} con complemento, vehículo, bono o comisiones en $.</span></span></button>
+        <button class="acceso acceso-oro" type="button" data-om-ir="nuevos"><span class="acceso-texto"><b>Nuevos beneficiarios</b><span>Archivo TXT para registrar en Omega a quienes ingresaron a la empresa.</span></span></button>
         <button class="acceso acceso-carbon" type="button" data-om-ir="empresas"><span class="acceso-texto"><b>Empresas y porcentajes</b><span>Razón social y RIF de cada empresa para el archivo de Omega; comisión, IVA y retención.</span>${faltaRif.length ? `<span class="chip chip-error">Falta el RIF de ${faltaRif.join(' y ')}</span>` : ''}</span></button>
       </div>
     </section>
@@ -2734,6 +2736,7 @@ async function vistaInicioQuincena(panel) {
       <div class="accesos">
         <button class="acceso acceso-azul" type="button" data-om-ir="tarjetas"><span class="acceso-texto"><b>Tarjetas de alimentación</b><span>${d.sinTarjeta} sin tarjeta: su cestaticket va por Transferencia.</span></span></button>
         <button class="acceso acceso-rojo" type="button" data-om-ir="beneficios"><span class="acceso-texto"><b>Complemento de alimentación</b><span>${d.beneficiosCargados} personas con montos en $ (complemento, vehículo, bono, comisiones garantizadas).</span></span></button>
+        <button class="acceso acceso-oro" type="button" data-om-ir="nuevos"><span class="acceso-texto"><b>Nuevos beneficiarios</b><span>Archivo TXT para registrar en Omega a quienes ingresaron a la empresa.</span></span></button>
         <button class="acceso acceso-carbon" type="button" data-om-ir="empresas"><span class="acceso-texto"><b>Empresas y porcentajes</b><span>Razón social y RIF para los archivos de Omega.</span>${faltaRif.length ? `<span class="chip chip-error">Falta el RIF de ${faltaRif.join(' y ')}</span>` : ''}</span></button>
       </div></section>`;
   panel.querySelectorAll('[data-om-ir]').forEach((b) => b.addEventListener('click', () => irOmega(panel, { vista: b.dataset.omIr, buscar: '', filtro: '' })));
@@ -3499,4 +3502,65 @@ async function pintarCelebraciones(sub) {
     toast(x.data.push === 'ENVIADO' ? `Aviso enviado a ${x.data.nombre}.` : `Aviso enviado a la campanita de ${x.data.nombre}${x.data.push === 'SIN_DESTINATARIOS' ? ' (no tiene los avisos al celular activados)' : ''}.`);
   })));
   sub.querySelectorAll('[data-tarjeta]').forEach((b) => b.addEventListener('click', () => conBoton(b, () => { const f = d.filas[Number(b.dataset.tarjeta)]; return descargarTarjeta({ tipo: f.tipo, nombre: f.nombre, anios: f.anios }); })));
+}
+
+/* ---------- Omega: archivo de nuevos beneficiarios (formato de registro V10.1) ---------- */
+
+let nuevosUI = { empresa: 'PCA', servicio: 'TRANSFERENCIA', todos: false, datos: null, sel: {} };
+async function vistaNuevosBeneficiarios(panel) {
+  if (!nuevosUI.datos || nuevosUI.datos.empresa.id !== nuevosUI.empresa) {
+    panel.innerHTML = `<div>${volverOmega()}</div>${esqueleto(2)}`;
+    const r = await llamar('omegaNuevosBeneficiarios', { empresa: nuevosUI.empresa });
+    if (!r.ok) { panel.innerHTML = `<div>${volverOmega()}</div><p class="error-msg">${esc(r.message)}</p>`; panel.querySelector('[data-om-volver]').addEventListener('click', () => irOmega(panel, { vista: 'inicio' })); return; }
+    nuevosUI.datos = r.data; nuevosUI.sel = {};
+    r.data.personas.forEach((x) => { if (x.reciente && !x.registrado) nuevosUI.sel[x.clave] = true; });
+  }
+  const d = nuevosUI.datos, e = d.empresa, lista = d.personas.filter((x) => nuevosUI.todos || nuevosUI.sel[x.clave] || (x.reciente && !x.registrado));
+  const CAMPOS = [['tipo', 'Tipo', 3], ['cedula', 'Cédula', 9], ['nombre1', '1er nombre', 12], ['nombre2', '2do nombre', 10], ['apellido1', '1er apellido', 12], ['apellido2', '2do apellido', 10],
+    ['sexo', 'Sexo', 3], ['nacimiento', 'Nacimiento', 0], ['correo', 'Correo', 18], ['celular', 'Celular', 11], ['cuenta', 'Cuenta (20 dígitos)', 20]];
+  const marcadas = d.personas.filter((x) => nuevosUI.sel[x.clave]);
+  panel.innerHTML = `<div>${volverOmega()}</div>
+    <section class="tarjeta"><div><h2>Nuevos beneficiarios de Omega</h2><p class="suave">Arma el TXT del «Formato de registro de beneficiarios» (V10.1) para registrar en Omega a quienes ingresaron. Te proponemos a los que entraron en los últimos 60 días y no se han registrado; revisa sus datos (los que faltan vienen de «Mi perfil» o hay que escribirlos).</p></div>
+      <div class="fila">
+        <label>Empresa <select id="nb-emp">${[['PCA', 'Prosein'], ['AIV', 'Austral']].map(([k, t]) => `<option value="${k}"${k === nuevosUI.empresa ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label>Tipo de servicio <select id="nb-serv">${['TRANSFERENCIA', 'TARJETA'].map((k) => `<option${k === nuevosUI.servicio ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+        <label>Empresa (nombre del archivo) <input id="nb-nom" value="${esc(e.nombreArchivo)}" style="max-width:160px"></label>
+        <label>RIF <input id="nb-rif" value="${esc(e.rif)}" style="max-width:140px"></label>
+        <label class="grow">Correo de la empresa <input id="nb-correo" value="${esc(e.correo)}"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="nb-todos"${nuevosUI.todos ? ' checked' : ''}> Mostrar a todos los activos de la empresa (para agregar a alguien más)</label>
+    </section>
+    <section class="tarjeta"><div class="item-cab"><div><h2>${marcadas.length} beneficiario${marcadas.length === 1 ? '' : 's'} en el archivo</h2></div></div>
+      <div class="tabla-caja"><table class="tabla-omega tabla-nb"><thead><tr><th></th><th>Colaborador</th>${CAMPOS.map(([, t]) => `<th>${t}</th>`).join('')}</tr></thead><tbody>
+      ${lista.map((x) => `<tr class="${nuevosUI.sel[x.clave] ? '' : 'inactivo'}" data-fila="${esc(x.clave)}"><td><input type="checkbox" data-sel="${esc(x.clave)}"${nuevosUI.sel[x.clave] ? ' checked' : ''} aria-label="Incluir"></td>
+        <td><b>${esc(x.nombre)}</b><br><span class="suave">ingresó ${x.ingreso ? esc(V().corta(x.ingreso)) : '—'}${x.sinTarjeta ? ' · sin tarjeta' : ''}${x.registrado ? ` · registrado el ${esc(V().corta(x.registrado.fecha))}` : ''}</span></td>
+        ${CAMPOS.map(([k, , w]) => `<td><input data-k="${k}" value="${esc(x[k] || '')}"${k === 'nacimiento' ? ' type="date"' : ` style="width:${Math.max(3, w) * 0.62 + 1}em"`}${k === 'cedula' || k === 'cuenta' || k === 'celular' ? ' inputmode="numeric"' : ''}></td>`).join('')}</tr>`).join('') || `<tr><td colspan="${CAMPOS.length + 2}" class="vacio">No hay ingresos recientes por registrar. Marca «Mostrar a todos» para agregar a alguien.</td></tr>`}
+      </tbody></table></div>
+      <div class="error-msg" id="nb-err" hidden></div>
+      <div class="fila"><button class="btn" id="nb-txt"${marcadas.length ? '' : ' disabled'}>Generar TXT de nuevos beneficiarios</button></div></section>`;
+  panel.querySelector('[data-om-volver]').addEventListener('click', () => irOmega(panel, { vista: 'inicio' }));
+  const persona = (k) => d.personas.find((x) => x.clave === k);
+  panel.querySelectorAll('[data-fila] [data-k]').forEach((i) => i.addEventListener('change', () => { persona(i.closest('[data-fila]').dataset.fila)[i.dataset.k] = i.value.trim(); }));
+  panel.querySelectorAll('[data-sel]').forEach((c) => c.addEventListener('change', () => { if (c.checked) nuevosUI.sel[c.dataset.sel] = true; else delete nuevosUI.sel[c.dataset.sel]; vistaNuevosBeneficiarios(panel); }));
+  panel.querySelector('#nb-todos').addEventListener('change', (ev) => { nuevosUI.todos = ev.target.checked; vistaNuevosBeneficiarios(panel); });
+  panel.querySelector('#nb-emp').addEventListener('change', (ev) => { nuevosUI.empresa = ev.target.value; nuevosUI.datos = null; vistaNuevosBeneficiarios(panel); });
+  panel.querySelector('#nb-serv').addEventListener('change', (ev) => { nuevosUI.servicio = ev.target.value; });
+  panel.querySelector('#nb-txt').addEventListener('click', (ev) => conBoton(ev.currentTarget, async () => {
+    const err = panel.querySelector('#nb-err'); errorEn(err, '');
+    panel.querySelectorAll('[data-fila]').forEach((tr) => tr.querySelectorAll('[data-k]').forEach((i) => { persona(tr.dataset.fila)[i.dataset.k] = i.value.trim(); }));
+    const hoy = new Date(), sel = d.personas.filter((x) => nuevosUI.sel[x.clave]);
+    const r = window.Omega.archivoBeneficiarios({ empresa: panel.querySelector('#nb-nom').value, rif: panel.querySelector('#nb-rif').value, correo: panel.querySelector('#nb-correo').value,
+      servicio: nuevosUI.servicio, fecha: { y: hoy.getFullYear(), m: hoy.getMonth() + 1, d: hoy.getDate() }, filas: sel });
+    panel.querySelectorAll('[data-fila]').forEach((tr) => tr.classList.remove('fila-error'));
+    if (r.error) {
+      (r.errores || []).forEach((x) => panel.querySelector(`[data-fila="${CSS.escape(sel[x.fila - 1].clave)}"]`)?.classList.add('fila-error'));
+      return errorEn(err, r.errores ? 'Revisa: ' + [...new Set(r.errores.map((x) => `${sel[x.fila - 1].nombre}: ${x.texto}`))].slice(0, 8).join(' · ') : r.error);
+    }
+    descargarTexto(r.nombre, r.contenido);
+    if (confirm(`Se descargó «${r.nombre}» con ${r.beneficiarios} beneficiario(s). ¿Marcarlos como registrados en Omega para que no se vuelvan a proponer?`)) {
+      const x = await llamar('omegaMarcarRegistrados', { empresa: nuevosUI.empresa, claves: sel.map((p) => p.clave), archivo: r.nombre, correo: panel.querySelector('#nb-correo').value, nombreArchivo: panel.querySelector('#nb-nom').value });
+      if (!x.ok) return toast(x.message);
+      nuevosUI.datos = null; toast('Listo: quedaron marcados como registrados.'); vistaNuevosBeneficiarios(panel);
+    }
+  }));
 }

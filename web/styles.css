@@ -444,3 +444,7 @@ details.item[open] { gap: var(--s3); }
 @media (max-width: 420px) { .bloque { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 88px); } }
 .recuadro-anticipo { display: grid; gap: var(--s3); background: var(--espera-velo); border-radius: var(--radio-sm); padding: var(--s3) var(--s4); }
 .recuadro-anticipo b { color: var(--espera); }
+/* Omega: nuevos beneficiarios */
+.tabla-nb td { padding: 4px 4px; } .tabla-nb td:first-child { min-width: 0; width: 28px; } .tabla-nb td:nth-child(2) { min-width: 180px; }
+.tabla-nb input { min-height: 34px; padding: 4px 6px; font-size: 13px; }
+.tabla-nb tr.fila-error td { background: var(--error-velo); }

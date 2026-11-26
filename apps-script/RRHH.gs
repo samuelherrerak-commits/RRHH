@@ -1568,7 +1568,7 @@ var Omega = (function () {
       var PARAMETROS = { cestaticket: 40, comision: 0.013, iva: 0.16, retencion: 0.75 };
       var EMPRESAS = {
         PCA: { razonSocial: 'PROSEIN PROVEEDURIA Y SERVICIO INDUSTRIAL CA', rif: 'J001417710' },
-        AIV: { razonSocial: 'AUSTRAL IMPORT DE VENEZUELA CA', rif: '' },
+        AIV: { razonSocial: 'AUSTRAL IMPORT DE VENEZUELA CA', rif: 'J003266191' },
       };
       var LOTES = [
         { id: 'CT-PCA', tipo: 'CESTATICKET', empresa: 'PCA', nombre: 'Cestaticket PCA' },
@@ -1694,6 +1694,55 @@ var Omega = (function () {
         return { nombre: 'DEP' + empresa.replace(/ /g, '') + aammdd + '.txt', contenido: control + '\r\n' + det.join('\r\n'), beneficiarios: lineas.length, total: total / 100 };
       }
     
+      function filtrar(t, validos, mayus) {
+        return String(t == null ? '' : t).replace(/\u00a0/g, ' ').split('').filter(function (c) { return c === ' ' || validos.indexOf(c.toUpperCase()) !== -1; }).join('').replace(/\s+/g, ' ').trim()[mayus ? 'toUpperCase' : 'toString']();
+      }
+      var LETRAS = 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÄËÏÖÜ', ALFA = '0123456789' + LETRAS + '-', IMPRIMIBLES = ALFA + '(),@.';
+      /** Teléfono como la macro: solo dígitos, sin el 0 inicial, 10 dígitos (si no, vacío). */
+      function telefonoOmega(t) { var d = String(t || '').replace(/\D/g, ''); if (d.charAt(0) === '0') d = d.slice(1); return d.length === 10 ? d : ''; }
+    
+      /**
+       * Archivo de nuevos beneficiarios de Omega (igual que la macro «Formato de registro de beneficiarios V10.1»):
+       *   control: '255' + aammdd + RIF (10) + n.º de beneficiarios (5) + '007' + aaaammdd + 18 ceros + TAB + correo de la empresa (mayúsculas)
+       *   detalle: n.º, tipo doc., cédula, 1er nombre, 1er apellido, 2do nombre, 2do apellido, sexo, nacimiento ddmmaaaa, correo, celular,
+       *            teléfono, dirección, código de localidad, código de beneficiario, cuenta (cada uno seguido de TAB), con CRLF; la última sin salto.
+       * datos: { empresa, rif, correo, servicio: 'TRANSFERENCIA'|'TARJETA', fecha: { y, m, d }, filas: [{ tipo, cedula, nombre1, nombre2, apellido1, apellido2,
+       *          sexo, nacimiento: 'aaaa-mm-dd', correo, celular, telefono, direccion, localidad, codigo, cuenta }] }
+       * Devuelve { nombre, contenido, beneficiarios } o { error, errores: [{ fila, texto }] }.
+       */
+      function archivoBeneficiarios(datos) {
+        var empresa = filtrar(datos.empresa, ALFA, true);
+        if (!empresa) return { error: 'Indica el nombre de la empresa.' };
+        var rif = String(datos.rif || '').replace(/-/g, '').trim().toUpperCase();
+        if (!/^[JGVE]\d{9}$/.test(rif)) return { error: 'El RIF debe comenzar con J, G, V o E y tener 9 dígitos luego de la letra. Ejemplo: J001417710.' };
+        var servicio = String(datos.servicio || 'TRANSFERENCIA').toUpperCase(), correoEmp = String(datos.correo || '').trim().toUpperCase();
+        if (servicio === 'TRANSFERENCIA' && !correoEmp) return { error: 'Indica el correo electrónico de la empresa.' };
+        var errores = [], filas = datos.filas || [];
+        if (!filas.length) return { error: 'Agrega al menos un beneficiario.' };
+        var det = filas.map(function (f, i) {
+          var n = i + 1, mal = function (t) { errores.push({ fila: n, texto: t }); };
+          var tipo = filtrar(f.tipo, LETRAS, true) || 'V';
+          if ('VEJ'.indexOf(tipo.charAt(0)) === -1) mal('tipo de documento (V, E o J)');
+          var ced = Number(String(f.cedula || '').replace(/\D/g, ''));
+          if (!(ced > 0)) mal('cédula');
+          var n1 = filtrar(f.nombre1, LETRAS), a1 = filtrar(f.apellido1, LETRAS);
+          if (!n1) mal('primer nombre'); if (!a1) mal('primer apellido');
+          var sx = String(f.sexo || '').trim().toUpperCase().charAt(0); if (sx !== 'F' && sx !== 'M') sx = '';
+          var nac = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(f.nacimiento || ''));
+          if (!nac) mal('fecha de nacimiento');
+          var correo = filtrar(f.correo, IMPRIMIBLES);
+          if (!correo) mal('correo electrónico');
+          var cuenta = String(f.cuenta || '').replace(/\D/g, '').slice(0, 20);
+          if (servicio === 'TRANSFERENCIA' && cuenta.length < 20) mal('cuenta de 20 dígitos');
+          return [n, tipo, ced, n1, a1, filtrar(f.nombre2, LETRAS), filtrar(f.apellido2, LETRAS), sx, nac ? nac[3] + nac[2] + nac[1] : '', correo,
+            telefonoOmega(f.celular), telefonoOmega(f.telefono), filtrar(f.direccion, IMPRIMIBLES), filtrar(f.localidad, ALFA), filtrar(f.codigo, ALFA), cuenta].join('\t') + '\t';
+        });
+        if (errores.length) return { error: errores.length + ' dato(s) por corregir.', errores: errores };
+        var fch = datos.fecha, dos = function (x) { return ('0' + x).slice(-2); }, aammdd = String(fch.y).slice(2) + dos(fch.m) + dos(fch.d);
+        var control = '255' + aammdd + (rif + '               ').slice(0, 10) + ('0000' + filas.length).slice(-5) + '007' + fch.y + dos(fch.m) + dos(fch.d) + '000000000000000000' + '\t' + correoEmp;
+        return { nombre: 'EMP' + empresa.replace(/ /g, '') + aammdd + '.txt', contenido: control + '\r\n' + det.join('\r\n'), beneficiarios: filas.length };
+      }
+    
       /**
        * Lee el Excel de beneficios de Omega Transferencia (encabezados en las primeras filas):
        * «Cédula», «Nombre…», «Monto de complemento de alimentación aprobado», «Ayuda de vehículo», «Bono especial», «Comisiones garantizadas».
@@ -1740,7 +1789,7 @@ var Omega = (function () {
     
       var api = { PARAMETROS: PARAMETROS, EMPRESAS: EMPRESAS, LOTES: LOTES, ADICIONALES: ADICIONALES, r2: r2, esMes: esMes, idQuincena: idQuincena, lote: lote,
         diasCestaticket: diasCestaticket, ingresoEnElMes: ingresoEnElMes, ingresoTrasPrimeraQuincena: ingresoTrasPrimeraQuincena, montosDelMes: montosDelMes,
-        montoQuincena: montoQuincena, lineasQuincena: lineasQuincena, totalesOmega: totalesOmega, revisarLinea: revisarLinea, archivoDeposito: archivoDeposito,
+        montoQuincena: montoQuincena, lineasQuincena: lineasQuincena, totalesOmega: totalesOmega, revisarLinea: revisarLinea, archivoDeposito: archivoDeposito, archivoBeneficiarios: archivoBeneficiarios, telefonoOmega: telefonoOmega,
         leerExcelBeneficios: leerExcelBeneficios, soloAlfanumerico: soloAlfanumerico, quincenaDePagoVacaciones: quincenaDePagoVacaciones };
       if (typeof module !== 'undefined' && module.exports) module.exports = api;
       else raiz.Omega = api;
@@ -3836,6 +3885,45 @@ var Servicio = (function () {
         });
       }
     
+      /* Nuevos beneficiarios de Omega (formato de registro V10.1): quiénes faltan por registrar y sus datos para el TXT */
+      var NOMBRE_ARCHIVO_OMEGA = { PCA: 'PROSEIN', AIV: 'AUSTRAL' };
+      function registradosOmega(repo, empresa) { try { return JSON.parse(repo.omegaConfig()['registrados_' + empresa] || '{}'); } catch (e) { return {}; } }
+      function partirNombre(nombre) {
+        var p = String(nombre || '').trim().split(/\s+/);
+        if (p.length >= 4) return { nombre1: p[0], nombre2: p.slice(1, p.length - 2).join(' '), apellido1: p[p.length - 2], apellido2: p[p.length - 1] };
+        if (p.length === 3) return { nombre1: p[0], nombre2: '', apellido1: p[1], apellido2: p[2] };
+        return { nombre1: p[0] || '', nombre2: '', apellido1: p[1] || '', apellido2: '' };
+      }
+      function omegaNuevosBeneficiarios(repo, ctx, token, empresa) {
+        if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+        if (!Omega.EMPRESAS[empresa]) return err('VALIDACION', 'Elige la empresa.');
+        var cfg = configOmega(repo), c = repo.omegaConfig(), reg = registradosOmega(repo, empresa), sin = repo.omegaSinTarjeta(), hoy = hoyCaracas(ctx);
+        var hace60 = Vacaciones.sumarDiasTxt(hoy, -60);
+        var personas = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina && Empleados.empresaFideicomiso(e) === empresa; }).map(function (e) {
+          var k = Empleados.claveCedula(e), pf = repo.perfil ? repo.perfil(k) : null, dat = (pf && pf.datos) || {}, f = e.fechaIngreso, n = e.fechaNacimiento;
+          var ingreso = f ? fechaIso(f) : '';
+          return Object.assign({ clave: k, nombre: e.nombre, tipo: e.cedulaLetra || 'V', cedula: e.cedulaNumero, sexo: /^F/i.test(e.genero || '') ? 'F' : /^M/i.test(e.genero || '') ? 'M' : '',
+            nacimiento: n ? fechaIso(n) : '', correo: (dat.contacto && dat.contacto.correo) || '', celular: (dat.contacto && dat.contacto.telefono) || '', cuenta: (dat.personales && dat.personales.cuenta) || '',
+            ingreso: ingreso, reciente: !!ingreso && ingreso >= hace60, sinTarjeta: !!sin[k], registrado: reg[k] || null }, partirNombre(e.nombre));
+        }).sort(function (a, b) { return (b.ingreso || '') < (a.ingreso || '') ? -1 : 1; });
+        return ok({ empresa: { id: empresa, nombreArchivo: c['nombreArchivo_' + empresa] || NOMBRE_ARCHIVO_OMEGA[empresa], rif: cfg.empresas[empresa].rif, correo: c.correoBeneficiarios || 'GESTIONHUMANA@PROSEIN.COM' },
+          personas: personas });
+      }
+      /** Después de generar el TXT: quedan marcadas como registradas en Omega (ya no se proponen). */
+      function omegaMarcarRegistrados(repo, ctx, token, empresa, claves, archivo, opciones) {
+        var s = sesionRRHH(ctx, token);
+        if (!s) return err('SESION', 'No autorizado.');
+        if (!Omega.EMPRESAS[empresa]) return err('VALIDACION', 'Elige la empresa.');
+        var reg = registradosOmega(repo, empresa), cuando = hoyCaracas(ctx), cambio = {};
+        (claves || []).slice(0, 500).forEach(function (k) { if (repo.empleadoPorClave(k)) reg[k] = { fecha: cuando, archivo: String(archivo || '').slice(0, 60) }; });
+        cambio['registrados_' + empresa] = JSON.stringify(reg);
+        if (opciones && opciones.correo) cambio.correoBeneficiarios = String(opciones.correo).trim().toUpperCase().slice(0, 80);
+        if (opciones && opciones.nombreArchivo) cambio['nombreArchivo_' + empresa] = String(opciones.nombreArchivo).trim().toUpperCase().slice(0, 40);
+        repo.guardarOmegaConfig(cambio);
+        repo.log('OMEGA_BENEFICIARIOS', s.clave, empresa + ' · ' + (claves || []).length + ' · ' + archivo);
+        return ok({ registrados: (claves || []).length });
+      }
+    
       function omegaGuardarConfig(repo, ctx, token, d) {
         var s = sesionRRHH(ctx, token);
         if (!s) return err('SESION', 'No autorizado.');
@@ -4574,7 +4662,7 @@ var Servicio = (function () {
         rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
         quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,
         omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
-        omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaAnticipo1Q: omegaAnticipo1Q, omegaEliminarQuincena: omegaEliminarQuincena,
+        omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaNuevosBeneficiarios: omegaNuevosBeneficiarios, omegaMarcarRegistrados: omegaMarcarRegistrados, omegaAnticipo1Q: omegaAnticipo1Q, omegaEliminarQuincena: omegaEliminarQuincena,
         omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,
         omegaImportarBeneficios: omegaImportarBeneficios, omegaBeneficios: omegaBeneficios, omegaEditarBeneficio: omegaEditarBeneficio,
         iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
@@ -4619,7 +4707,7 @@ var Servicio = (function () {
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-25.1';
+var VERSION = '2026-11-26.3';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -4802,6 +4890,8 @@ var RUTAS_RRHH = {
   omegaMarcarTarjeta: function (repo, ctx, d) { return Servicio.omegaMarcarTarjeta(repo, ctx, d.token, d.claves, !!d.sinTarjeta); },
   omegaAbrirQuincena: function (repo, ctx, d) { return Servicio.omegaAbrirQuincena(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
   omegaQuincena: function (repo, ctx, d) { return Servicio.omegaQuincena(repo, ctx, d.token, d.id); },
+  omegaNuevosBeneficiarios: function (repo, ctx, d) { return Servicio.omegaNuevosBeneficiarios(repo, ctx, d.token, d.empresa); },
+  omegaMarcarRegistrados: function (repo, ctx, d) { return Servicio.omegaMarcarRegistrados(repo, ctx, d.token, d.empresa, d.claves, d.archivo, d); },
   omegaCambiarTasa: function (repo, ctx, d) { return Servicio.omegaCambiarTasa(repo, ctx, d.token, d.id, d.tasa); },
   omegaAnticipo1Q: function (repo, ctx, d) { return Servicio.omegaAnticipo1Q(repo, ctx, d.token, d.id, d.tasa1Q); },
   omegaEliminarQuincena: function (repo, ctx, d) { return Servicio.omegaEliminarQuincena(repo, ctx, d.token, d.id); },
@@ -4838,7 +4928,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, omegaNuevosBeneficiarios: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };
