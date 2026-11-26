@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-26.1';
+var VERSION = '2026-11-26.2';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Perfil', 'Ari', 'Servicio'];
 
@@ -208,6 +208,8 @@ var RUTAS_RRHH = {
   omegaMarcarTarjeta: function (repo, ctx, d) { return Servicio.omegaMarcarTarjeta(repo, ctx, d.token, d.claves, !!d.sinTarjeta); },
   omegaAbrirQuincena: function (repo, ctx, d) { return Servicio.omegaAbrirQuincena(repo, ctx, d.token, d.mes, d.quincena, d.tasa); },
   omegaQuincena: function (repo, ctx, d) { return Servicio.omegaQuincena(repo, ctx, d.token, d.id); },
+  omegaNuevosBeneficiarios: function (repo, ctx, d) { return Servicio.omegaNuevosBeneficiarios(repo, ctx, d.token, d.empresa); },
+  omegaMarcarRegistrados: function (repo, ctx, d) { return Servicio.omegaMarcarRegistrados(repo, ctx, d.token, d.empresa, d.claves, d.archivo, d); },
   omegaCambiarTasa: function (repo, ctx, d) { return Servicio.omegaCambiarTasa(repo, ctx, d.token, d.id, d.tasa); },
   omegaAnticipo1Q: function (repo, ctx, d) { return Servicio.omegaAnticipo1Q(repo, ctx, d.token, d.id, d.tasa1Q); },
   omegaEliminarQuincena: function (repo, ctx, d) { return Servicio.omegaEliminarQuincena(repo, ctx, d.token, d.id); },
@@ -244,7 +246,7 @@ var LECTURAS = {
   login: 1, loginAdmin: 1, estadoDeCuenta: 1, datosAnticipo: 1, listarAperturas: 1,
   estadoAporte: 1, prepararAporte: 1, archivoAporte: 1, candidatosCancelacion: 1, listarCancelaciones: 1, misConstancias: 1, verificarConstancia: 1, datosVacaciones: 1, equipoVacaciones: 1,
   bandejaAnticipos: 1, bandejaVacaciones: 1, listarEmpleados: 1, listarConstancias: 1, listarUsuariosJefes: 1, saldoVacacionesEmpleado: 1,
-  misNotificaciones: 1, historialSalarios: 1, empresasIvss: 1, miAri: 1, listarAri: 1, panelAri: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
+  misNotificaciones: 1, historialSalarios: 1, empresasIvss: 1, omegaNuevosBeneficiarios: 1, miAri: 1, listarAri: 1, panelAri: 1, miCelebracion: 1, celebracionesDelMes: 1, miPerfil: 1, listarCampanasDatos: 1, panelCampanaDatos: 1, datosPersonal: 1, misRecibos: 1, panelSaldosVacaciones: 1, listarPlanificacionesVac: 1, panelPlanificacionVac: 1, listarNominasEspeciales: 1, datosCruceNomina: 1, quincenaListar: 1, quincenaVer: 1, previaDetalle: 1, vacacionesQuincena: 1, omegaInicio: 1, omegaTarjetas: 1, omegaQuincena: 1, omegaLote: 1, omegaBeneficios: 1, miPlanificacion: 1, equipoPlanificacion: 1, asignarRecibos: 1, listarLotes: 1, detalleLote: 1, verReciboRRHH: 1,
   // Guarda los PDF en Drive (lento) sin hacer esperar a los demás; solo bloquea un instante al anotar las filas.
   subirRecibos: 1,
 };

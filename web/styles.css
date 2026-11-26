@@ -458,3 +458,7 @@ details.item[open] { gap: var(--s3); }
 .desglose b { text-align: right; color: var(--carbon); font-variant-numeric: tabular-nums; }
 .resultado-ari { display: grid; justify-items: center; gap: 2px; background: var(--marca); color: #fff; border-radius: var(--radio); padding: var(--s4); text-align: center; }
 .resultado-ari span { font-size: 14px; opacity: .8; } .resultado-ari b { font-size: 40px; font-weight: 700; line-height: 1.1; } .resultado-ari small { font-size: 12px; opacity: .75; }
+/* Omega: nuevos beneficiarios */
+.tabla-nb td { padding: 4px 4px; } .tabla-nb td:first-child { min-width: 0; width: 28px; } .tabla-nb td:nth-child(2) { min-width: 180px; }
+.tabla-nb input { min-height: 34px; padding: 4px 6px; font-size: 13px; }
+.tabla-nb tr.fila-error td { background: var(--error-velo); }

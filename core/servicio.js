@@ -1683,6 +1683,45 @@
     });
   }
 
+  /* Nuevos beneficiarios de Omega (formato de registro V10.1): quiénes faltan por registrar y sus datos para el TXT */
+  var NOMBRE_ARCHIVO_OMEGA = { PCA: 'PROSEIN', AIV: 'AUSTRAL' };
+  function registradosOmega(repo, empresa) { try { return JSON.parse(repo.omegaConfig()['registrados_' + empresa] || '{}'); } catch (e) { return {}; } }
+  function partirNombre(nombre) {
+    var p = String(nombre || '').trim().split(/\s+/);
+    if (p.length >= 4) return { nombre1: p[0], nombre2: p.slice(1, p.length - 2).join(' '), apellido1: p[p.length - 2], apellido2: p[p.length - 1] };
+    if (p.length === 3) return { nombre1: p[0], nombre2: '', apellido1: p[1], apellido2: p[2] };
+    return { nombre1: p[0] || '', nombre2: '', apellido1: p[1] || '', apellido2: '' };
+  }
+  function omegaNuevosBeneficiarios(repo, ctx, token, empresa) {
+    if (!sesionRRHH(ctx, token)) return err('SESION', 'No autorizado.');
+    if (!Omega.EMPRESAS[empresa]) return err('VALIDACION', 'Elige la empresa.');
+    var cfg = configOmega(repo), c = repo.omegaConfig(), reg = registradosOmega(repo, empresa), sin = repo.omegaSinTarjeta(), hoy = hoyCaracas(ctx);
+    var hace60 = Vacaciones.sumarDiasTxt(hoy, -60);
+    var personas = repo.todosEmpleados().filter(function (e) { return e.estado !== 'Inactivo' && !e.fueraNomina && Empleados.empresaFideicomiso(e) === empresa; }).map(function (e) {
+      var k = Empleados.claveCedula(e), pf = repo.perfil ? repo.perfil(k) : null, dat = (pf && pf.datos) || {}, f = e.fechaIngreso, n = e.fechaNacimiento;
+      var ingreso = f ? fechaIso(f) : '';
+      return Object.assign({ clave: k, nombre: e.nombre, tipo: e.cedulaLetra || 'V', cedula: e.cedulaNumero, sexo: /^F/i.test(e.genero || '') ? 'F' : /^M/i.test(e.genero || '') ? 'M' : '',
+        nacimiento: n ? fechaIso(n) : '', correo: (dat.contacto && dat.contacto.correo) || '', celular: (dat.contacto && dat.contacto.telefono) || '', cuenta: (dat.personales && dat.personales.cuenta) || '',
+        ingreso: ingreso, reciente: !!ingreso && ingreso >= hace60, sinTarjeta: !!sin[k], registrado: reg[k] || null }, partirNombre(e.nombre));
+    }).sort(function (a, b) { return (b.ingreso || '') < (a.ingreso || '') ? -1 : 1; });
+    return ok({ empresa: { id: empresa, nombreArchivo: c['nombreArchivo_' + empresa] || NOMBRE_ARCHIVO_OMEGA[empresa], rif: cfg.empresas[empresa].rif, correo: c.correoBeneficiarios || 'GESTIONHUMANA@PROSEIN.COM' },
+      personas: personas });
+  }
+  /** Después de generar el TXT: quedan marcadas como registradas en Omega (ya no se proponen). */
+  function omegaMarcarRegistrados(repo, ctx, token, empresa, claves, archivo, opciones) {
+    var s = sesionRRHH(ctx, token);
+    if (!s) return err('SESION', 'No autorizado.');
+    if (!Omega.EMPRESAS[empresa]) return err('VALIDACION', 'Elige la empresa.');
+    var reg = registradosOmega(repo, empresa), cuando = hoyCaracas(ctx), cambio = {};
+    (claves || []).slice(0, 500).forEach(function (k) { if (repo.empleadoPorClave(k)) reg[k] = { fecha: cuando, archivo: String(archivo || '').slice(0, 60) }; });
+    cambio['registrados_' + empresa] = JSON.stringify(reg);
+    if (opciones && opciones.correo) cambio.correoBeneficiarios = String(opciones.correo).trim().toUpperCase().slice(0, 80);
+    if (opciones && opciones.nombreArchivo) cambio['nombreArchivo_' + empresa] = String(opciones.nombreArchivo).trim().toUpperCase().slice(0, 40);
+    repo.guardarOmegaConfig(cambio);
+    repo.log('OMEGA_BENEFICIARIOS', s.clave, empresa + ' · ' + (claves || []).length + ' · ' + archivo);
+    return ok({ registrados: (claves || []).length });
+  }
+
   function omegaGuardarConfig(repo, ctx, token, d) {
     var s = sesionRRHH(ctx, token);
     if (!s) return err('SESION', 'No autorizado.');
@@ -2723,7 +2762,7 @@
     rechazarNominaEspecial: rechazarNominaEspecial, cancelarNominaEspecial: cancelarNominaEspecial, datosCruceNomina: datosCruceNomina, guardarAliasNombre: guardarAliasNombre, guardarVerificacionNomina: guardarVerificacionNomina,
     quincenaListar: quincenaListar, quincenaVer: quincenaVer, quincenaAbrir: quincenaAbrir, quincenaPaso: quincenaPaso, previaDetalle: previaDetalle, vacacionesQuincena: vacacionesQuincena,
     omegaInicio: omegaInicio, omegaGuardarConfig: omegaGuardarConfig, omegaTarjetas: omegaTarjetas, omegaMarcarTarjeta: omegaMarcarTarjeta,
-    omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaAnticipo1Q: omegaAnticipo1Q, omegaEliminarQuincena: omegaEliminarQuincena,
+    omegaAbrirQuincena: omegaAbrirQuincena, omegaQuincena: omegaQuincena, omegaCambiarTasa: omegaCambiarTasa, omegaNuevosBeneficiarios: omegaNuevosBeneficiarios, omegaMarcarRegistrados: omegaMarcarRegistrados, omegaAnticipo1Q: omegaAnticipo1Q, omegaEliminarQuincena: omegaEliminarQuincena,
     omegaLote: omegaLote, omegaAjustarLinea: omegaAjustarLinea, omegaValidarLote: omegaValidarLote, omegaReabrirLote: omegaReabrirLote,
     omegaImportarBeneficios: omegaImportarBeneficios, omegaBeneficios: omegaBeneficios, omegaEditarBeneficio: omegaEditarBeneficio,
     iniciarSesion: iniciarSesion, iniciarSesionAdmin: iniciarSesionAdmin,
