@@ -6,7 +6,7 @@
    ========================================================== */
 
 // Cambia este número cuando publiques una versión nueva; así se comprueba desde el navegador cuál está activa.
-var VERSION = '2026-11-26.3';
+var VERSION = '2026-11-27.1';
 var AVISO_CODIGO = 'El proyecto de Apps Script no tiene el código completo. Copia el archivo apps-script/RRHH.gs del repositorio (más de 80 KB y 1.500 líneas; no uses src/api.gs), pégalo como único archivo y publica una nueva versión.';
 var MODULOS = ['Calculo', 'Empleados', 'Prestaciones', 'Exportes', 'Constancia', 'Vacaciones', 'Aportes', 'Recibos', 'Planificacion', 'Omega', 'Comisiones', 'Servicio'];
 
@@ -472,12 +472,19 @@ function fechaIngresoConstancia_(f) {
   return f.fechaIngreso instanceof Date ? Utilities.formatDate(f.fechaIngreso, 'America/Caracas', 'dd/MM/yyyy') : t;
 }
 
+/** Salario guardado en la constancia. Si se escribió en dólares a mano (p. ej. «USD 5000»), se toma el número y la moneda aparte. */
+function salarioConstancia_(v) {
+  if (typeof v === 'number') return v;
+  var t = texto_(v).replace(/USD|\$/gi, '').trim();
+  return /,\d{1,2}$/.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : Number(t.replace(/,/g, ''));
+}
+
 var constanciasCache = null;
 function constancias_() {
   return constanciasCache || (constanciasCache = leer_('CONSTANCIAS').map(function (f) {
     return {
       _fila: f._fila, id: texto_(f.id), clave: texto_(f.clave), nombre: texto_(f.nombre), cedula: texto_(f.cedula), empresa: texto_(f.empresa),
-      cargo: texto_(f.cargo), organizacion: texto_(f.organizacion), fechaIngreso: fechaIngresoConstancia_(f), salario: Number(f.salario),
+      cargo: texto_(f.cargo), organizacion: texto_(f.organizacion), fechaIngreso: fechaIngresoConstancia_(f), salario: salarioConstancia_(f.salario), moneda: /USD|\$/i.test(texto_(f.salario)) ? 'USD' : '',
       emision: Number(f.emision), vence: Number(f.vence), estado: texto_(f.estado) || 'VIGENTE', emitidaPor: texto_(f.emitidaPor), destinatario: texto_(f.destinatario),
     };
   }));

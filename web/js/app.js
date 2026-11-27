@@ -1340,7 +1340,7 @@ async function vistaVerificar(id) {
       <tr><th>Cargo</th><td>${esc(c.cargo)}</td></tr>
       <tr><th>Dirigida a</th><td>${esc(c.destinatario || 'A quien pueda interesar')}</td></tr>
       <tr><th>Fecha de ingreso</th><td>${esc(c.fechaIngreso)}</td></tr>
-      <tr><th>Salario mensual</th><td>${bs(c.salario)}</td></tr>
+      <tr><th>Salario mensual</th><td>${c.moneda === 'USD' ? 'USD ' + Number(c.salario || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : bs(c.salario)}</td></tr>
       <tr><th>Fecha de emisión</th><td>${fechaCaracas(c.emision)}</td></tr>
       <tr><th>Fecha de vencimiento</th><td>${fechaCaracas(c.vence)}</td></tr>
       <tr><th>Código</th><td>${esc(c.id)}</td></tr>
